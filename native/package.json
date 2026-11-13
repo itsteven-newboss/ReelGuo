@@ -1,0 +1,17 @@
+{
+  "name": "@reelguo/native",
+  "version": "0.6.0",
+  "private": true,
+  "description": "Desktop and Android shells for the ReelGuo web app (Tauri 2)",
+  "scripts": {
+    "tauri": "tauri",
+    "app:dev": "tauri dev",
+    "app:build": "tauri build",
+    "android:init": "tauri android init",
+    "android:dev": "tauri android dev",
+    "android:build": "tauri android build --apk"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.0"
+  }
+}

@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: ffmpeg (media pipeline tests)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: dotnet tool restore
+      - run: dotnet build backend/ReelGuo.slnx -c Release
+      - name: OpenAPI document is committed and up to date
+        run: git diff --exit-code -- backend/openapi
+      - name: No model changes without a migration
+        run: dotnet ef migrations has-pending-model-changes --project backend/src/ReelGuo.Data --startup-project backend/src/ReelGuo.Data
+      - name: Tests (database tests use Docker via Testcontainers; pipeline tests use ffmpeg)
+        working-directory: backend
+        run: dotnet test -c Release --no-build
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Generated API client matches the OpenAPI document
+        run: |
+          pnpm --filter @reelguo/api-client gen
+          git diff --exit-code -- web/packages/api-client/src/schema.d.ts
+      - run: pnpm -r typecheck
+      - run: pnpm -r test
+      - run: pnpm -r build

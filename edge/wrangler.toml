@@ -1,0 +1,16 @@
+# Cloudflare Worker for the media host (e.g. media.example.com). Deploy with `npx wrangler deploy`.
+# Secrets (never commit them):
+#   npx wrangler secret put MEDIA_SIGNING_KEY   # same base64 key as the API's Media__SigningKey
+#   npx wrangler secret put EDGE_SECRET         # same value as the API's Edge__Secret
+name = "reelguo-media-edge"
+main = "src/worker.ts"
+compatibility_date = "2026-11-01"
+
+[vars]
+API_ORIGIN = "https://app.example.com"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "reelguo-media"
+
+# routes = [{ pattern = "media.example.com/*", zone_name = "example.com" }]

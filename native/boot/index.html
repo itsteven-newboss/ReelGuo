@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ReelGuo</title>
+  <link rel="stylesheet" href="boot.css">
+  <script src="boot.js" defer></script>
+</head>
+<body>
+  <!-- Bundled start page of the native app: shown while the shell connects to the server, and when it can't. -->
+  <main>
+    <img src="icon.svg" alt="" class="logo" width="72" height="72">
+    <div class="name">ReelGuo</div>
+
+    <div id="connecting" class="state">
+      <div class="spinner" role="progressbar" aria-label="正在连接"></div>
+      <p>正在连接…</p>
+    </div>
+
+    <div id="failed" class="state" hidden>
+      <p class="title">无法连接服务器</p>
+      <p class="sub">请检查网络连接后重试。如果你所在的网络限制访问，可以切换网络后再试。</p>
+      <button id="retry" type="button">重试</button>
+    </div>
+  </main>
+  <p class="notice">本 App 仅面向年满 18 周岁的成年人</p>
+</body>
+</html>

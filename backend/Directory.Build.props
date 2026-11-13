@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <!-- Nullable warnings are bugs here, so fail the build on them. -->
+    <WarningsAsErrors>$(WarningsAsErrors);nullable</WarningsAsErrors>
+  </PropertyGroup>
+</Project>

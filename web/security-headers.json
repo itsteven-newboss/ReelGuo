@@ -1,0 +1,9 @@
+{
+  "//": "Response headers for the built web apps. Kept in sync by hand with infra/Caddyfile (production); vite preview uses this file so a production build can be tested with the same policy. Media may come from a CDN host, hence https: for images, media and fetches; blob: is hls.js (MSE).",
+  "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https:; font-src 'self' data:; worker-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "X-Frame-Options": "DENY",
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+}

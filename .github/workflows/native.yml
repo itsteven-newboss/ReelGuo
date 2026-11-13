@@ -1,0 +1,136 @@
+name: Native apps
+
+# Builds the desktop installers (signed for the in-app updater) and the Android APK, and uploads them as artifacts.
+# Runs on demand and for app-v* tags. Publishing a build to viewers stays a human step: upload the files to the
+# download host, then add the release in Admin → App 版本 (docs/RUNBOOK.md §9).
+#
+# Needs, in the repository settings:
+#   variable REELGUO_ORIGINS                    the app's server addresses, comma-separated, preferred first
+#   secrets  TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) the updater signing key (.tools/signing/reelguo-updater.key)
+#            ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS   the APK signing key
+on:
+  workflow_dispatch:
+  push:
+    tags: ["app-v*"]
+
+env:
+  REELGUO_ORIGINS: ${{ vars.REELGUO_ORIGINS }}
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            bundles: nsis
+            args: ""
+          # One universal build serves both darwin-aarch64 and darwin-x86_64 releases.
+          - os: macos-latest
+            bundles: app,dmg
+            args: --target universal-apple-darwin
+          - os: ubuntu-22.04
+            bundles: appimage
+            args: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Server addresses are set
+        shell: bash
+        run: test -n "$REELGUO_ORIGINS" || { echo "::error::Set the REELGUO_ORIGINS repository variable"; exit 1; }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: native/src-tauri -> target
+      - name: Linux build dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: pnpm install --frozen-lockfile
+      - name: Shell unit tests
+        working-directory: native/src-tauri
+        run: cargo test --lib
+      - name: Build
+        working-directory: native
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm tauri build --bundles ${{ matrix.bundles }} ${{ matrix.args }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: |
+            native/src-tauri/target/**/release/bundle/nsis/*.exe
+            native/src-tauri/target/**/release/bundle/nsis/*.sig
+            native/src-tauri/target/**/release/bundle/macos/*.tar.gz
+            native/src-tauri/target/**/release/bundle/macos/*.sig
+            native/src-tauri/target/**/release/bundle/dmg/*.dmg
+            native/src-tauri/target/**/release/bundle/appimage/*.AppImage
+            native/src-tauri/target/**/release/bundle/appimage/*.sig
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Server addresses are set
+        run: test -n "$REELGUO_ORIGINS" || { echo "::error::Set the REELGUO_ORIGINS repository variable"; exit 1; }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - name: Android NDK
+        run: |
+          sdkmanager --install "ndk;27.2.12479018"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: native/src-tauri -> target
+      - run: pnpm install --frozen-lockfile
+      # The Android project needs no hand edits (wry already allows autoplay and fullscreen video), so it is
+      # generated fresh for every build.
+      - name: Generate the Android project
+        working-directory: native
+        run: |
+          pnpm tauri android init --ci
+          pnpm tauri icon ../web/apps/client/public/icon.svg
+      - name: Build APK
+        working-directory: native
+        run: pnpm tauri android build --apk --target aarch64 armv7 x86_64
+      - name: Sign APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          VERSION=$(node -p "require('./native/src-tauri/tauri.conf.json').version")
+          APK=$(ls native/src-tauri/gen/android/app/build/outputs/apk/universal/release/*-unsigned.apk)
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/zipalign" -p -f 4 "$APK" "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" sign --ks "$RUNNER_TEMP/release.jks" --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --ks-key-alias "$ANDROID_KEY_ALIAS" --out "ReelGuo_${VERSION}.apk" "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" verify "ReelGuo_${VERSION}.apk"
+          sha256sum "ReelGuo_${VERSION}.apk" | tee "ReelGuo_${VERSION}.apk.sha256"
+          rm "$RUNNER_TEMP/release.jks"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: |
+            ReelGuo_*.apk
+            ReelGuo_*.apk.sha256

@@ -1,0 +1,14 @@
+{
+  "name": "@reelguo/edge",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker serving the R2 media bucket with signed URLs and country blocking.",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vitest": "^5.1.0"
+  }
+}

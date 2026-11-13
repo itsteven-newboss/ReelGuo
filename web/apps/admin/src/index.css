@@ -1,0 +1,17 @@
+@import "tailwindcss";
+@import "@reelguo/ui/tokens.css";
+@source "../../../packages/ui/src";
+
+html, body, #root { height: 100%; }
+
+/* Chart series color (data-viz reference palette, slot 1, validated against the card surface #222226). */
+:root { --series-1: #3987e5; }
+.theme-light { --series-1: #2a78d6; }
+
+/* Markdown preview: same look as the app's article body */
+.article-preview p { margin: 9px 0; }
+.article-preview img { display: block; max-width: 100%; border-radius: 10px; margin: 10px 0; }
+.article-preview a { color: var(--p-primary); text-decoration: underline; }
+.article-preview h2, .article-preview h3, .article-preview h4 { font-size: 14.5px; font-weight: 700; margin: 14px 0 6px; }
+.article-preview ul, .article-preview ol { padding-left: 18px; list-style: revert; }
+.article-preview blockquote { margin: 10px 0; padding: 8px 12px; border-left: 3px solid var(--p-primary); background: var(--p-hover); border-radius: 6px; }

@@ -1,0 +1,123 @@
+# Local environment.
+#   pnpm db:up                                  -> just the databases, for `pnpm dev`
+#   docker compose -f infra/docker-compose.yml --profile app up --build
+#                                               -> everything in containers, production-style:
+#                                                  app on http://localhost:8080, admin on http://localhost:8081
+#
+# Media storage here is a shared volume (filesystem provider). Production uses S3-compatible storage
+# (Storage__Provider=S3) behind the CDN edge in edge/. Meilisearch arrives with search (Phase 2).
+#
+# Required for the app profile (put them in infra/.env, never commit real values):
+#   REELGUO_MEDIA_KEY      base64 of 32 random bytes (openssl rand -base64 32)
+#   REELGUO_JWT_KEY        base64 of 32 random bytes, signs viewer sign-in tokens (openssl rand -base64 32)
+#   REELGUO_ADMIN_PASSWORD first admin's password (account "admin"); remove after the first sign-in
+name: reelguo
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: reelguo
+      POSTGRES_PASSWORD: reelguo
+      POSTGRES_DB: reelguo
+      # The seed data is Chinese; the database must be UTF-8.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reelguo -d reelguo"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    ports: ["6379:6379"]
+
+  api:
+    profiles: [app]
+    build:
+      context: ../backend
+      dockerfile: src/ReelGuo.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: Host=postgres;Port=5432;Database=reelguo;Username=reelguo;Password=reelguo
+      Database__MigrateOnStartup: "true"
+      Admin__BootstrapUsername: admin
+      Admin__BootstrapPassword: ${REELGUO_ADMIN_PASSWORD:?set REELGUO_ADMIN_PASSWORD}
+      Media__SigningKey: ${REELGUO_MEDIA_KEY:?set REELGUO_MEDIA_KEY}
+      Auth__JwtKey: ${REELGUO_JWT_KEY:?set REELGUO_JWT_KEY}
+      # Caddy (web) reaches the API over the Docker network and sets X-Forwarded-For to the visitor's IP.
+      # Behind Cloudflare, also set Network__ClientIpHeader: CF-Connecting-IP and Geo__TrustCountryHeader: "true".
+      # Paid episodes and the store; off until a payment provider is connected (docs/RUNBOOK.md §8).
+      Billing__Enabled: ${REELGUO_BILLING_ENABLED:-false}
+      Billing__Provider: ${REELGUO_PAYMENT_PROVIDER:-}
+      Billing__BillingDescriptor: ${REELGUO_BILLING_DESCRIPTOR:-}
+      Billing__AppBaseUrl: ${REELGUO_APP_URL:-}
+      Network__TrustedProxies__0: 172.16.0.0/12
+      Network__TrustedProxies__1: 192.168.0.0/16
+      Media__PublicBaseUrl: /media
+      Storage__Provider: FileSystem
+      Storage__FileSystemRoot: /data/storage
+      # Search-engine pages: the app's HTML comes from the web container. Indexing stays off unless
+      # REELGUO_ALLOW_INDEXING=true (production only; staging must stay out of search results).
+      Seo__TemplateUrl: http://web:8080/index.html
+      Seo__AllowIndexing: ${REELGUO_ALLOW_INDEXING:-false}
+      Seo__PublicBaseUrl: ${REELGUO_APP_URL:-}
+    volumes: [media:/data]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  worker:
+    profiles: [app]
+    build:
+      context: ../backend
+      dockerfile: src/ReelGuo.Worker/Dockerfile
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      ConnectionStrings__Default: Host=postgres;Port=5432;Database=reelguo;Username=reelguo;Password=reelguo
+      Storage__Provider: FileSystem
+      Storage__FileSystemRoot: /data/storage
+    volumes: [media:/data]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  # Nightly database backup to the `backups` volume (and off-site when REELGUO_BACKUP_REMOTE is set); see infra/backup.
+  # Restore test:  docker compose -f infra/docker-compose.yml --profile app run --rm backup "sh /scripts/restore-test.sh"
+  backup:
+    profiles: [app]
+    image: postgres:17-alpine
+    environment:
+      PGHOST: postgres
+      PGUSER: reelguo
+      PGPASSWORD: reelguo
+      PGDATABASE: reelguo
+      BACKUP_KEEP_DAYS: "14"
+      BACKUP_REMOTE: ${REELGUO_BACKUP_REMOTE:-}
+      BACKUP_PING_URL: ${REELGUO_BACKUP_PING_URL:-}
+    # rclone remote settings (RCLONE_CONFIG_<NAME>_*) for the off-site copy go in infra/backup.env (see backup.sh).
+    env_file:
+      - path: ./backup.env
+        required: false
+    volumes:
+      - ./backup:/scripts:ro
+      - backups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["apk add --no-cache rclone > /dev/null && while true; do sh /scripts/backup.sh || echo 'BACKUP FAILED'; sleep 86400; done"]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  web:
+    profiles: [app]
+    build:
+      context: ..
+      dockerfile: infra/web.Dockerfile
+    ports:
+      - "8080:8080"   # app
+      - "8081:8081"   # admin
+    depends_on: [api]
+
+volumes:
+  pgdata:
+  media:
+  backups:

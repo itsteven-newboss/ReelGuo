@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ReelGuo.Api/ReelGuo.Api.csproj" />
+    <Project Path="src/ReelGuo.Data/ReelGuo.Data.csproj" />
+    <Project Path="src/ReelGuo.Worker/ReelGuo.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ReelGuo.Api.Tests/ReelGuo.Api.Tests.csproj" />
+  </Folder>
+</Solution>

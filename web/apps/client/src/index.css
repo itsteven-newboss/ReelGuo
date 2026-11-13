@@ -1,0 +1,87 @@
+@import "tailwindcss";
+@import "@reelguo/ui/tokens.css";
+@source "../../../packages/ui/src";
+
+/* The portal is a normal scrolling page (the phone player and dialogs are fixed layers over it).
+ * Sizes written in rem follow the reference: a 14 px root, 16 px on wide screens. */
+html { font-size: 14px; }
+@media (min-width: 1680px) { html { font-size: 16px; } }
+html, body { background: #0b0b0d; }
+/* A 10 px dark page scrollbar, as on the reference (it also sets the desktop column to 100% − 10 px). */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #0b0b0d; }
+::-webkit-scrollbar-thumb { background: #3a3a3e; border-radius: 10px; border: 2px solid #0b0b0d; }
+#root { position: relative; min-height: 100dvh; }
+body { -webkit-tap-highlight-color: transparent; font-size: 14px; }
+
+/* Content column: 13 px gutters on phones, 96 px margins on desktop, at most 1440 px. */
+.rg-wrap { width: calc(100% - 26px); margin-inline: auto; }
+@media (min-width: 1024px) { .rg-wrap { width: min(calc(100% - 192px), 1440px); } }
+
+/* Surfaces, as on the reference site. */
+:root:not(.theme-light) {
+  --p-canvas: #0b0b0d;
+  --p-bg: #0b0b0d;
+  --p-s1: #141414;
+  --p-s2: #1a1a1a;
+  --p-s3: #232323;
+  --p-s4: #2d2d2d;
+}
+
+/* Server-rendered page text (#seo, see backend Seo/): readable without JavaScript; hidden once the app runs, except
+ * beneath the 18+ gate, which covers it. */
+.rg-ssr { max-width: 1238px; margin: 0 auto; padding: 24px 16px 48px; color: #d9d9d9; font: 14px/1.7 Arial, Helvetica, "PingFang SC", "Microsoft YaHei", sans-serif; }
+.rg-ssr a { color: #ffd321; }
+.rg-ssr h1 { font-size: 24px; color: #fff; margin: 16px 0 8px; }
+.rg-ssr h2 { font-size: 18px; color: #fff; margin: 20px 0 8px; }
+.rg-ssr ul, .rg-ssr ol { padding-left: 20px; }
+.rg-ssr small { color: #999; }
+.rg-ssr header nav a, .rg-ssr footer a { margin-right: 10px; }
+.rg-ssr .article img { max-width: 100%; height: auto; }
+html.rg-js .rg-ssr { display: none; }
+html.rg-js.gate-shown .rg-ssr { display: block; }
+html.gate-shown { overflow: hidden; }
+
+/* 公告 bar: the line scrolls continuously (two copies side by side). */
+@keyframes rg-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.rg-marquee { animation: rg-marquee 38s linear infinite; }
+.rg-marquee:hover { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .rg-marquee { animation: none; } }
+input, textarea { user-select: text; }
+
+/* ---- Player overlays: fixed light-on-dark in both themes, because they sit on video. ---- */
+.ov-ink { color: #fff; }
+.ov-ink-2 { color: rgba(255, 255, 255, .92); }
+.ov-ink-3 { color: rgba(255, 255, 255, .78); }
+.ov-ink-4 { color: rgba(255, 255, 255, .6); }
+.ov-chip { background: rgba(0, 0, 0, .45); color: #fff; }
+.ov-chip-strong { background: rgba(0, 0, 0, .62); color: #fff; }
+.ov-shadow { text-shadow: 0 1px 8px rgba(0, 0, 0, .7); filter: drop-shadow(0 1px 6px rgba(0, 0, 0, .45)); }
+.no-bar { scrollbar-width: none; }
+.no-bar::-webkit-scrollbar { display: none; }
+
+/* Mobile immersive fullscreen: fixed to the viewport, outside the scroll container. */
+.fs-immersive { position: fixed; inset: 0; width: 100dvw; height: 100dvh; z-index: 45; background: #000; overflow: hidden; }
+/* Landscape video while the device stays portrait: rotate the stage 90° with CSS. */
+.fs-landscape {
+  position: fixed; top: 50%; left: 50%; width: 100dvh; height: 100dvw; z-index: 45; background: #000; overflow: hidden;
+  transform: translate(-50%, -50%) rotate(90deg); transform-origin: center center;
+}
+
+/* Desktop player: rounded panel; overlays fade out after 2.8 s without mouse movement. */
+.player-desktop { border-radius: 12px; background: #15181d; clip-path: inset(0 round 12px); }
+.player-desktop .desktop-fade { transition: opacity .28s ease; }
+.player-desktop.is-idle .desktop-fade { opacity: 0; pointer-events: none; }
+.player-desktop.is-idle { cursor: none; }
+
+/* 吃瓜 article body */
+.article-body { font-size: 13px; line-height: 1.85; color: color-mix(in srgb, var(--p-on) 84%, transparent); word-break: break-word; user-select: text; }
+.article-body p { margin: 9px 0; }
+.article-body img { display: block; width: 100%; border-radius: 10px; margin: 10px 0; }
+.article-body a { color: var(--p-primary); text-decoration: underline; }
+.article-body h2, .article-body h3, .article-body h4 { font-size: 14.5px; font-weight: 700; margin: 14px 0 6px; color: var(--p-on); }
+.article-body ul, .article-body ol { padding-left: 18px; margin: 8px 0; list-style: revert; }
+.article-body li { margin: 4px 0; }
+.article-body blockquote { margin: 10px 0; padding: 8px 12px; border-left: 3px solid var(--p-primary); background: var(--p-hover); border-radius: 6px; }
+.article-body hr { border: 0; border-top: 1px solid var(--p-s4); margin: 14px 0; }
+.article-body code { font-family: ui-monospace, monospace; font-size: 12px; background: var(--p-s3); padding: 1px 4px; border-radius: 4px; }

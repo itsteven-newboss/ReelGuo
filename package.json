@@ -1,0 +1,22 @@
+{
+  "name": "reelguo",
+  "private": true,
+  "packageManager": "pnpm@10.34.9",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,worker,client,admin -c blue,yellow,magenta,green \"dotnet watch run --project backend/src/ReelGuo.Api\" \"dotnet run --project backend/src/ReelGuo.Worker\" \"pnpm --filter @reelguo/client dev\" \"pnpm --filter @reelguo/admin dev\"",
+    "dev:web": "concurrently -k -n client,admin -c magenta,green \"pnpm --filter @reelguo/client dev\" \"pnpm --filter @reelguo/admin dev\"",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "gen:api": "dotnet build backend/src/ReelGuo.Api && pnpm --filter @reelguo/api-client gen",
+    "test": "dotnet test --project backend/tests/ReelGuo.Api.Tests && pnpm -r typecheck && pnpm -r test",
+    "db:up": "docker compose -f infra/docker-compose.yml up -d postgres redis",
+    "db:down": "docker compose -f infra/docker-compose.yml down",
+    "seed:demo": "node scripts/seed-demo.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7"
+  }
+}

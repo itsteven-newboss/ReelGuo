@@ -1,0 +1,62 @@
+# Staging: the production setup of docker-compose.yml (profile "app") on one server, behind Cloudflare.
+# Always used together with the base file, the project name reelguo-staging and infra/staging.env:
+#
+#   docker compose -p reelguo-staging --env-file infra/staging.env -f infra/docker-compose.yml \
+#     -f infra/docker-compose.staging.yml --profile app [--profile tunnel] <command>
+#
+# scripts/staging/*.ps1 run exactly that; see docs/STAGING.md. Needs Docker Compose 2.24.4 or newer (!reset / !override).
+#
+# How visitors arrive:
+#   Tunnel mode (recommended): Cloudflare -> cloudflared (this file) -> web:8080 (app) / web:8081 (admin).
+#     No port is opened on the server; the web ports are bound to 127.0.0.1 for checks on the server itself.
+#   Public-port mode: Cloudflare (proxied DNS) -> server port 80 -> web:8080. Allow only Cloudflare's IP ranges
+#     through the server firewall, or anyone could reach the server directly and fake Cloudflare's headers.
+
+services:
+  postgres:
+    restart: unless-stopped
+    ports: !reset []        # never reachable from outside the server
+
+  redis:
+    restart: unless-stopped
+    ports: !reset []
+
+  api:
+    restart: unless-stopped
+    environment:
+      # Every request comes through Cloudflare: the visitor's IP and country are in its headers.
+      Network__ClientIpHeader: CF-Connecting-IP
+      Geo__TrustCountryHeader: "true"
+      # The apps' address list, and links in payment returns.
+      App__Mirrors__0: ${REELGUO_APP_URL:?set REELGUO_APP_URL in infra/staging.env}
+      Site__PermanentDomain: ${REELGUO_PERMANENT_DOMAIN:-}
+      Site__Telegram: ${REELGUO_TELEGRAM:-}
+      Site__Email: ${REELGUO_CONTACT_EMAIL:-}
+      # Off unless set: the sandbox payment provider, for testing the store on staging (anyone can "pay").
+      Billing__AllowSandboxOutsideDevelopment: ${REELGUO_ALLOW_SANDBOX_PAYMENTS:-false}
+      Billing__SandboxSecret: ${REELGUO_SANDBOX_SECRET:-}
+
+  worker:
+    restart: unless-stopped
+
+  backup:
+    restart: unless-stopped
+
+  web:
+    restart: unless-stopped
+    ports: !override
+      # App: 127.0.0.1:8080 in tunnel mode; 0.0.0.0:80 in public-port mode (REELGUO_WEB_BIND).
+      - "${REELGUO_WEB_BIND:-127.0.0.1:8080}:8080"
+      # Admin console: only on the server itself; publish it through the tunnel behind Cloudflare Access if needed.
+      - "${REELGUO_ADMIN_BIND:-127.0.0.1:8081}:8081"
+
+  # Cloudflare Tunnel: an outbound connection to Cloudflare, so the server needs no open inbound port.
+  # Public hostnames (app -> http://web:8080, admin -> http://web:8081) are set in the Cloudflare dashboard.
+  cloudflared:
+    profiles: [tunnel]
+    image: ${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:latest}
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on: [web]

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "boot",
+  "description": "The bundled start page: read the connection state and retry. (The web app gets its own, narrower capability at runtime for the server it loads from: fullscreen and opening links externally.)",
+  "windows": ["main"],
+  "permissions": ["allow-boot-status", "allow-retry"]
+}
