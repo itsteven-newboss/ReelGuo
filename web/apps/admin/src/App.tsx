@@ -106,7 +106,7 @@ function Layout({ session }: { session: AdminSession }) {
     <div className="h-full flex bg-canvas text-on">
       <aside className="w-[220px] shrink-0 flex flex-col p-3 gap-1">
         <div className="flex items-center gap-2 px-2.5 py-3">
-          <BrandMark height={22} />
+          <BrandMark fit={24} />
           <span className="text-[14px] font-bold">{BRAND}</span>
           <span className="text-[11px] text-dim">后台</span>
         </div>

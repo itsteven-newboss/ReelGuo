@@ -12,7 +12,7 @@
 // The source is trimmed to the picture itself (transparent margins removed) and scaled with Lanczos. The page
 // images are lossless WebP: pixel for pixel what was drawn, and still smaller than PNG.
 //
-//   node scripts/brand-icons.mjs [--source Assets/HuangyueDingDing.png] [--quality 95] [--no-native]
+//   node scripts/brand-icons.mjs [--source Assets/huangyueai-moon-icon.png] [--quality 95] [--no-native]
 //     --quality N   lossy WebP at quality N (1-100) instead of lossless: smaller files, slightly softer
 //     --no-native   skip the app icons (and `tauri icon`)
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -24,10 +24,14 @@ import sharp from "sharp";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
 const opt = (name, fallback) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : fallback; };
-const source = resolve(repo, opt("source", "Assets/HuangyueDingDing.png"));
+const source = resolve(repo, opt("source", "Assets/huangyueai-moon-icon.png"));
 const quality = opt("quality") ? Number(opt("quality")) : null;
 const native = !args.includes("--no-native");
 if (quality !== null && !(quality >= 1 && quality <= 100)) throw new Error("--quality must be 1-100");
+
+// Small images: no cache and one thread keep memory use low, at no real cost in time.
+sharp.cache(false);
+sharp.concurrency(1);
 
 const webp = quality === null ? { lossless: true, effort: 6 } : { quality, alphaQuality: 100, smartSubsample: true, effort: 6 };
 const clear = { r: 0, g: 0, b: 0, alpha: 0 };
@@ -48,6 +52,12 @@ const aspect = srcW / srcH;
 const art = trimmed.data;
 
 const scaled = (o) => sharp(art).resize({ ...o, kernel: "lanczos3" });
+
+// Round artwork (a badge whose bounding-box corners are transparent) can fill far more of a circular crop than a
+// rectangle can: it only has to fit the circle, not have its corners inside it.
+const corners = await sharp(art).extractChannel("alpha").raw().toBuffer();
+const alphaAt = (fx, fy) => corners[Math.min(srcH - 1, Math.round(fy * (srcH - 1))) * srcW + Math.min(srcW - 1, Math.round(fx * (srcW - 1)))];
+const round = [[0.08, 0.08], [0.92, 0.08], [0.08, 0.92], [0.92, 0.92]].every(([x, y]) => alphaAt(x, y) < 16);
 
 // The mark placed on a square: `fill` is the share of the side its longer edge takes.
 async function tile(size, fill, background = clear) {
@@ -93,9 +103,9 @@ save("web/apps/admin/public/favicon.ico", favicon);
 save("web/apps/client/public/icons/icon-192.png", await tile(192, 0.94));
 save("web/apps/client/public/icons/icon-512.png", await tile(512, 0.94));
 // Maskable: Android may cut the icon to a circle of 80% of the side, so the whole mark stays inside it.
-const safe = 0.8 / Math.sqrt(1 + (aspect >= 1 ? 1 / aspect ** 2 : aspect ** 2));
+const safe = round ? 0.8 : 0.8 / Math.sqrt(1 + (aspect >= 1 ? 1 / aspect ** 2 : aspect ** 2));
 save("web/apps/client/public/icons/maskable-512.png", await tile(512, Math.min(0.9, safe * 0.96), black));
-save("web/apps/client/public/icons/apple-touch-icon.png", await tile(180, 0.8, black));
+save("web/apps/client/public/icons/apple-touch-icon.png", await tile(180, round ? 0.88 : 0.8, black));
 
 // 3. The desktop / Android app: start page and the source for `tauri icon` (which writes native/src-tauri/icons).
 if (native) {
@@ -104,7 +114,10 @@ if (native) {
   save("native/app-icon.json", Buffer.from(JSON.stringify({ default: "app-icon.png", bg_color: "#000000", android_fg_scale: 85 }, null, 2) + "\n"));
 }
 
-console.log(`source ${source} (${srcW} x ${srcH} after trimming, ${quality === null ? "lossless" : `quality ${quality}`} WebP)`);
+console.log(`source ${source} (${srcW} x ${srcH} after trimming, ${round ? "round" : "rectangular"} artwork, ${quality === null ? "lossless" : `quality ${quality}`} WebP)`);
+if (native && Math.max(srcW, srcH) < 880) {
+  console.log(`  note: the app icon is drawn at 880 px but the picture is ${Math.max(srcW, srcH)} px, so the largest app icons are enlarged (a 1024 px source is sharper)`);
+}
 for (const [rel, bytes] of written) console.log(`  ${rel.padEnd(52)} ${(bytes / 1024).toFixed(1).padStart(7)} KB`);
 
 if (native) {

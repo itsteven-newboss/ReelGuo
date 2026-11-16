@@ -3,11 +3,18 @@ import { markAspect, markFiles } from "./brand/mark";
 
 export { BRAND, BRAND_SHORT } from "./brand/name";
 
+export { markAspect };
+
 /**
- * The brand mark (黄约短剧). Give its displayed width or height in CSS px; the browser picks the sharpest of the
- * generated files for that size and the screen's pixel density. To change the mark: `pnpm brand:icons`.
+ * The brand mark (黄约短剧). Give its displayed width or height in CSS px, or `fit`: the largest size that fits a square
+ * of that many px whatever the mark's shape. The browser picks the sharpest of the generated files for that size and
+ * the screen's pixel density. To change the mark: `pnpm brand:icons`.
  */
-export function BrandMark({ width, height, className, style }: { width?: number; height?: number; className?: string; style?: CSSProperties }) {
+export function BrandMark({ width, height, fit, className, style }: { width?: number; height?: number; fit?: number; className?: string; style?: CSSProperties }) {
+  if (fit !== undefined) {
+    width = markAspect >= 1 ? fit : fit * markAspect;
+    height = undefined;
+  }
   const w = Math.round(width ?? (height ?? 32) * markAspect);
   const h = Math.round(height ?? w / markAspect);
   return (

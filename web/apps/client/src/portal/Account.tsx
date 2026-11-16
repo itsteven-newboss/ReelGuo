@@ -71,7 +71,7 @@ export function AccountPage() {
           {signedIn && monetization && <WalletStrip />}
           {!nativeApp && (
             <Link to={href.download()} className="rounded-[14px] bg-[#141414] border border-white/[.06] p-4 flex items-center gap-3 hover:border-primary/40">
-              <span className="w-10 h-10 shrink-0 flex items-center justify-center"><BrandMark width={40} /></span>
+              <span className="w-10 h-10 shrink-0 flex items-center justify-center"><BrandMark fit={40} /></span>
               <span className="flex-1"><span className="block text-[14px] font-bold text-on">下载{BRAND} App</span><span className="block text-[12px] text-dim">安卓 · Windows · iPhone 添加到主屏幕</span></span>
             </Link>
           )}

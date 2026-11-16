@@ -28,7 +28,7 @@ body { -webkit-tap-highlight-color: transparent; font-size: 14px; }
 .rg-logo { position: relative; display: block; width: 16em; height: 5.87em; color: #f3f3f3; user-select: none; }
 .rg-logo > * { position: absolute; white-space: nowrap; }
 .rg-logo > * > span { display: block; }
-.rg-logo__mark { left: 0; top: .95em; width: 5.6em; height: auto; }
+/* .rg-logo__mark: position and size come from the mark's shape (chrome.tsx MARK). */
 .rg-logo__name { left: 5.81em; top: 1.55em; }
 .rg-logo__name > span { font: 900 2.1em/1 "RG Wordmark", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; letter-spacing: .05em; }
 .rg-logo__hl, .rg-logo__wt { -webkit-background-clip: text; background-clip: text; color: transparent; }

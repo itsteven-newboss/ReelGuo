@@ -40,7 +40,7 @@ Purchases in development use a sandbox payment provider: 充值 (top up) opens a
 | Regenerate the TS client after API changes | `pnpm gen:api` |
 | Add a migration | `dotnet ef migrations add <Name> --project backend/src/ReelGuo.Data --startup-project backend/src/ReelGuo.Data` |
 | Everything in containers | `REELGUO_MEDIA_KEY=… REELGUO_JWT_KEY=… REELGUO_ADMIN_PASSWORD=… docker compose -f infra/docker-compose.yml --profile app up --build` |
-| Change the brand icon | Replace `Assets/HuangyueDingDing.png` (any transparent PNG; or `pnpm brand:icons --source <file>`), run `pnpm brand:icons`, commit what it writes. It makes the page logo (lossless WebP), favicons, install icons and the app icons. |
+| Change the brand icon | Replace `Assets/huangyueai-moon-icon.png` (any transparent PNG, any shape; 1024 px or more keeps the app icons sharp; or `pnpm brand:icons --source <file>`), run `pnpm brand:icons`, commit what it writes. It makes the page logo (lossless WebP), favicons, install icons and the app icons. |
 | Deploy the media edge | see `edge/wrangler.toml` |
 | Takedown drill | `node scripts/takedown-drill.mjs --series <test id> --restore` (RUNBOOK §3) |
 | Staging: first setup / update / rollback | `scripts\staging\setup.ps1` / `update.ps1` / `rollback.ps1` (docs/STAGING.md) |

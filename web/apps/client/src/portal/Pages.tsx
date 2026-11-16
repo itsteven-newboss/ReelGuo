@@ -332,7 +332,7 @@ export function WayHomePage() {
         <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(45% 60% at 50% 45%, rgba(255,210,28,.12), transparent 70%)" }} />
         <div className="rg-wrap relative pt-10 lg:pt-[42px] pb-10 lg:pb-[43px] text-center">
           <span className="inline-flex h-9 px-[34px] rounded-[12px] bg-[#111] border border-[#ffd21c]/50 text-[#ffd21c] text-[13px] lg:text-[14px] font-medium items-center">官方权威发布 · 永久有效入口</span>
-          <div className="mt-10 lg:mt-[56px] flex justify-center"><BrandMark width={104} /></div>
+          <div className="mt-10 lg:mt-[56px] flex justify-center"><BrandMark fit={88} /></div>
           <h1 className="mt-6 lg:mt-[33px] text-[22px] lg:text-[2.25rem] font-semibold leading-[34px] text-white">{BRAND} · 官方最新地址发布页</h1>
           <p className="mt-[15px] mx-auto max-w-[665px] text-[14px] lg:text-[1.25rem] font-medium leading-[21px] text-white/50">本页面由{BRAND}官方维护，实时同步最新可用线路与备用入口，方便在不同网络环境下快速返回。</p>
           <div className="mt-8 lg:mt-[76px] flex flex-wrap items-center justify-center gap-4 lg:gap-[37px]">

@@ -1,4 +1,4 @@
-import { BrandMark, Img } from "@reelguo/ui";
+import { BrandMark, Img, markAspect } from "@reelguo/ui";
 import { ArrowUpToLine, ChevronDown, ChevronRight, History, Menu, Search as SearchIcon, Trash2, UserRound, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useCategories, useRanks, useSeries, useSite, useSuggest } from "../api";
@@ -54,13 +54,27 @@ function useNavItems(): NavItem[] {
 }
 
 /**
+ * Where the mark sits in the lockup, in em: as large as fits a 5.6 × 4.6 box left of the text, centred in it, so any
+ * shape of icon works (a wide picture is limited by the width, a round badge by the height).
+ */
+const MARK = (() => {
+  const box = { left: 0, top: 0.65, width: 5.6, height: 4.6 };
+  const width = Math.min(box.width, box.height * markAspect);
+  const height = width / markAspect;
+  return {
+    width,
+    style: { left: `${box.left + (box.width - width) / 2}em`, top: `${box.top + (box.height - height) / 2}em`, width: `${width}em`, height: `${height}em` },
+  };
+})();
+
+/**
  * Brand lockup, laid out like the reference's logo: the mark, 黄约短剧 with a small AI, and the address under it.
  * `scale` is px per em: 10 gives 160 × 58.7. Styles: .rg-logo in index.css.
  */
 export function Wordmark({ scale = 10 }: { scale?: number }) {
   return (
     <span className="rg-logo" style={{ fontSize: scale }} aria-hidden="true">
-      <BrandMark width={Math.round(5.6 * scale)} className="rg-logo__mark" />
+      <BrandMark width={Math.round(MARK.width * scale)} className="rg-logo__mark" style={MARK.style} />
       <span className="rg-logo__name"><span><span className="rg-logo__hl">黄约</span><span className="rg-logo__wt">短剧</span></span></span>
       <span className="rg-logo__ai"><span>AI</span></span>
       <span className="rg-logo__domain"><span>huangyue<b>ai</b>.com</span></span>
@@ -404,7 +418,7 @@ export function FloatDock() {
         <div className="relative">
           <Link to={href.download()} className="w-[88px] h-[92px] rounded-[10px] border border-white/10 flex flex-col items-center pt-[5px]"
             style={{ background: "linear-gradient(149.42deg, rgba(71,66,46,.72) 19.3%, rgba(46,43,30,.72) 46.4%, rgba(43,40,25,.72) 80.5%)" }}>
-            <span className="w-[60px] h-[59px] flex items-center justify-center"><BrandMark width={58} /></span>
+            <span className="w-[60px] h-[59px] flex items-center justify-center"><BrandMark fit={58} /></span>
             <span className="-mt-[5px] h-6 px-2 rounded-full text-[12px] font-medium text-black flex items-center"
               style={{ background: "linear-gradient(90deg,#ffd21c,#f5a623)" }}>下载 APP</span>
           </Link>

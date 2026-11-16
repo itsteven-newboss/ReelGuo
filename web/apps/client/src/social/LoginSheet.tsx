@@ -54,7 +54,7 @@ export function LoginSheet(_props: { wide?: boolean }) {
   const body = (
     <form className="relative px-6 pb-6 pt-7" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <span className="absolute right-4 top-4"><CloseButton onClick={closeLogin} /></span>
-      <div className="flex justify-center"><BrandMark width={72} /></div>
+      <div className="flex justify-center"><BrandMark fit={60} /></div>
       <h2 className="mt-4 text-center text-[20px] font-bold text-on">用户登录注册</h2>
 
       <div className="mt-5 flex bg-white/[.06] rounded-full p-1" role="tablist">
