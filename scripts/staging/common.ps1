@@ -65,7 +65,7 @@ function Invoke-Checked([string]$What, [string]$Exe, [string[]]$Arguments) {
 function Read-Settings {
     $map = @{}
     if (-not (Test-Path $SettingsFile)) { return $map }
-    foreach ($line in [System.IO.File]::ReadAllLines($SettingsFile)) {
+    foreach ($line in @(Read-SettingsLines)) {
         $t = $line.Trim()
         if ($t -eq '' -or $t.StartsWith('#')) { continue }
         $i = $t.IndexOf('=')
@@ -88,7 +88,10 @@ function Get-AdminHost {
 
 function Set-Setting([string]$Key, [string]$Value) {
     $lines = New-Object System.Collections.Generic.List[string]
-    if (Test-Path $SettingsFile) { $lines.AddRange([string[]][System.IO.File]::ReadAllLines($SettingsFile)) }
+    if (Test-Path $SettingsFile) {
+        $existing = @(Read-SettingsLines)
+        if ($existing.Count -gt 0) { $lines.AddRange([string[]]$existing) }
+    }
     $done = $false
     for ($i = 0; $i -lt $lines.Count; $i++) {
         if ($lines[$i] -match "^\s*$([regex]::Escape($Key))\s*=") { $lines[$i] = "$Key=$Value"; $done = $true; break }
@@ -120,10 +123,36 @@ function New-Password([int]$Length = 24) {
 }
 
 # The staging folder holds secrets: only SYSTEM and Administrators (by SID, so it works on any Windows language).
+# The folder gets those two entries, and everything inside is reset to inherit them. (Giving the entries to every file
+# with icacls /T would not work: it strips each file's inherited entries but can't put the folder-style ones on a
+# file, which leaves files nobody can open. Earlier versions of this script did that; this also repairs it.)
 function Protect-StagingHome {
-    & icacls $StagingHome /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' /T /C /Q | Out-Null
-    if ($LASTEXITCODE -eq 0) { Write-Ok "$StagingHome is limited to SYSTEM and Administrators" }
-    else { Write-Warn "Could not restrict access to $StagingHome (icacls exit code $LASTEXITCODE)" }
+    & icacls $StagingHome /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' /C /Q | Out-Null
+    $code = $LASTEXITCODE
+    if ($code -eq 0 -and @(Get-ChildItem $StagingHome -Force -ErrorAction SilentlyContinue).Count -gt 0) {
+        & icacls (Join-Path $StagingHome '*') /reset /T /C /Q | Out-Null
+        $code = $LASTEXITCODE
+    }
+    if ($code -eq 0) { Write-Ok "$StagingHome is limited to SYSTEM and Administrators" }
+    else { Write-Warn "Could not restrict access to $StagingHome (icacls exit code $code)" }
+}
+
+# The settings file's lines. If access is denied (files locked by an earlier version of Protect-StagingHome), the
+# folder's permissions are repaired once and the file is read again.
+function Read-SettingsLines {
+    try { return [System.IO.File]::ReadAllLines($SettingsFile) }
+    catch {
+        $e = $_.Exception
+        while ($e.InnerException) { $e = $e.InnerException }
+        if ($e -isnot [System.UnauthorizedAccessException]) { throw }
+        $p = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+        if (-not $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+            Stop-WithError "Access to $SettingsFile was denied. Run PowerShell as Administrator."
+        }
+        Write-Note "access to $SettingsFile was denied: repairing the permissions of $StagingHome"
+        Protect-StagingHome
+        return [System.IO.File]::ReadAllLines($SettingsFile)
+    }
 }
 
 function Test-SettingsReady {
@@ -167,7 +196,7 @@ function Add-NewSettings {
         if ($line -match '^\s*([A-Z0-9_]+)\s*=(.*)$' -and -not $have.ContainsKey($Matches[1])) { $added.Add($line.Trim()) }
     }
     if ($added.Count -eq 0) { return }
-    $text = [System.IO.File]::ReadAllText($SettingsFile).TrimEnd() + "`r`n`r`n# Added by the update on $(Get-Date -Format 'yyyy-MM-dd'); see infra\staging\staging.env.example for what each one does.`r`n" + ($added -join "`r`n") + "`r`n"
+    $text = ((@(Read-SettingsLines)) -join "`r`n").TrimEnd() + "`r`n`r`n# Added by the update on $(Get-Date -Format 'yyyy-MM-dd'); see infra\staging\staging.env.example for what each one does.`r`n" + ($added -join "`r`n") + "`r`n"
     Write-TextFile $SettingsFile $text
     Write-Note "new settings added to ${SettingsFile}: $(($added | ForEach-Object { ($_ -split '=')[0] }) -join ', ')"
 }
