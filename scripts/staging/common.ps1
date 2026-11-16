@@ -374,9 +374,27 @@ SELECT format('CREATE DATABASE %I OWNER %I ENCODING ''UTF8'' LC_COLLATE ''C'' LC
 ALTER SYSTEM SET listen_addresses = 'localhost';
 "@
     Write-Ok "database '$db' and login '$user' ready (UTF-8)"
-    # listen_addresses takes effect on restart; harmless when unchanged.
-    Restart-Service $PgService
-    Write-Ok 'PostgreSQL listens on this server only'
+    # listen_addresses takes effect on a restart, which is needed only the first time (the installer's default is every
+    # address). -Force: on later runs ReelGuoApi and ReelGuoWorker depend on PostgreSQL; they are started again later.
+    if ((Get-PsqlValue 'SHOW listen_addresses') -ne 'localhost') {
+        Restart-Service $PgService -Force
+        Write-Ok 'PostgreSQL restarted: it listens on this server only'
+    } else {
+        Write-Ok 'PostgreSQL listens on this server only'
+    }
+}
+
+# One value from PostgreSQL, as the superuser (for example SHOW listen_addresses).
+function Get-PsqlValue([string]$Sql) {
+    $env:PGPASSWORD = Get-Setting 'REELGUO_PG_SUPERPASSWORD'
+    try {
+        $out = & (Join-Path $PgBin 'psql.exe') -h 127.0.0.1 -p 5432 -U postgres -d postgres -X -t -A -c $Sql
+        $code = $LASTEXITCODE
+    } finally {
+        Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+    }
+    if ($code -ne 0) { Stop-WithError "A database query failed (psql exit code $code): $Sql" }
+    return ($out | Out-String).Trim()
 }
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -611,10 +629,15 @@ function Stop-ReelGuo {
 }
 
 function Start-ReelGuo {
-    foreach ($s in @($PgService, $ApiService, $WorkerService, $WebService)) {
-        if (Get-Service $s -ErrorAction SilentlyContinue) { Start-Service $s }
+    $names = @($PgService, $ApiService, $WorkerService, $WebService)
+    if ((Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -eq 'tunnel') { $names += $TunnelService }
+    foreach ($s in $names) {
+        if (-not (Get-Service $s -ErrorAction SilentlyContinue)) { continue }
+        # A service that doesn't start is reported here and by the readiness check that follows, which prints its
+        # logs; the script doesn't stop on Windows' bare error message.
+        try { Start-Service $s -ErrorAction Stop }
+        catch { Write-Warn "service $s did not start: $($_.Exception.Message)" }
     }
-    if ((Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -eq 'tunnel' -and (Get-Service $TunnelService -ErrorAction SilentlyContinue)) { Start-Service $TunnelService }
 }
 
 # Caddy (ReelGuoWeb) needs the app port to itself. Another web server on it, typically IIS, would keep the site from
