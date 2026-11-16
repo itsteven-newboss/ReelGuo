@@ -3,6 +3,8 @@
 # infra/Caddyfile (the Docker / production setup): keep the two in sync.
 {
 	admin off
+	# Plain HTTP only: Cloudflare (or the tunnel) handles HTTPS for visitors, so Caddy never manages certificates.
+	auto_https off
 	log {
 		output file {{LOG_DIR}}/caddy.log {
 			roll_size 20MiB
@@ -60,9 +62,8 @@
 	}
 }
 
-# Admin console: on the server only (or through the tunnel behind Cloudflare Access).
-:{{ADMIN_PORT}} {
-	bind 127.0.0.1 [::1]
+# Admin console (the web console and the API behind it).
+(admin_console) {
 	encode zstd gzip
 	import security_headers
 	handle /api/* {
@@ -77,3 +78,10 @@
 		file_server
 	}
 }
+
+# On this server: http://localhost:8081 (tunnel mode also publishes it through the tunnel, behind Cloudflare Access).
+:{{ADMIN_PORT}} {
+	bind 127.0.0.1 [::1]
+	import admin_console
+}
+{{ADMIN_HOST_SITE}}

@@ -30,6 +30,9 @@
 .PARAMETER TunnelToken
     The Cloudflare Tunnel token (tunnel mode). Asked for when missing.
 
+.PARAMETER AdminHost
+    Public-port mode: the admin console's own address through Cloudflare, e.g. admin.example.com (REELGUO_ADMIN_HOST).
+
 .PARAMETER SkipDemo
     Do not load the demo content.
 #>
@@ -37,6 +40,7 @@ param(
     [string]$AppUrl,
     [ValidateSet('tunnel', 'public-port')][string]$Mode,
     [string]$TunnelToken,
+    [string]$AdminHost,
     [switch]$SkipDemo,
     [int]$DemoSeries = 4,
     [int]$DemoEpisodes = 5
@@ -85,7 +89,9 @@ if ($stagingMode -eq 'tunnel') {
     Write-Ok 'mode: Cloudflare Tunnel (no open ports on this server)'
 } else {
     if ((Get-Setting 'REELGUO_WEB_PORT' '8080') -eq '8080') { Set-Setting 'REELGUO_WEB_PORT' '80' }
+    if ($AdminHost) { Set-Setting 'REELGUO_ADMIN_HOST' $AdminHost.Trim() }
     Write-Ok "mode: public port $(Get-Setting 'REELGUO_WEB_PORT') (open to Cloudflare's addresses only)"
+    if (Get-AdminHost) { Write-Ok "admin console address: $(Get-AdminHost)" }
 }
 
 # Secrets: generated once, never replaced.
@@ -152,6 +158,12 @@ if ($stagingMode -eq 'tunnel') {
     Write-Host '  Next, in Cloudflare Zero Trust -> Networks -> Tunnels -> your tunnel -> Public hostname:'
     Write-Host "    $(([uri]$siteUrl).Host)  ->  HTTP  localhost:$(Get-Setting 'REELGUO_WEB_PORT' '8080')"
     Write-Host "    (optional) an admin hostname  ->  HTTP  localhost:$(Get-Setting 'REELGUO_ADMIN_PORT' '8081'), protected by a Cloudflare Access policy"
+} else {
+    Write-Host '  Next, in Cloudflare for your domain:'
+    Write-Host "    DNS: A records (Proxied, orange cloud) to this server's public IP for $(([uri]$siteUrl).Host)$(if (Get-AdminHost) { " and $(Get-AdminHost)" })"
+    Write-Host '    SSL/TLS: Flexible (this server speaks plain HTTP; Cloudflare speaks HTTPS to visitors)'
+    if (Get-AdminHost) { Write-Host "    Zero Trust -> Access -> Applications: protect $(Get-AdminHost) (only your team's emails)" }
+    Write-Host '    Cloud security group: allow TCP 80 only from Cloudflare (https://www.cloudflare.com/ips/)'
 }
 Write-Host '  Updates later: .\scripts\staging\update.ps1        Guide: docs\STAGING.md'
 if (-not $siteOk) { Write-Warn 'Some checks failed (see above).'; exit 2 }

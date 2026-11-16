@@ -81,6 +81,11 @@ function Get-Setting([string]$Key, [string]$Default = '') {
     return $Default
 }
 
+# The admin console's own address (REELGUO_ADMIN_HOST), as a bare host name: "https://Admin.x.com/" -> "admin.x.com".
+function Get-AdminHost {
+    return (((Get-Setting 'REELGUO_ADMIN_HOST').Trim().ToLowerInvariant()) -replace '^https?://', '' -replace '/.*$', '')
+}
+
 function Set-Setting([string]$Key, [string]$Value) {
     $lines = New-Object System.Collections.Generic.List[string]
     if (Test-Path $SettingsFile) { $lines.AddRange([string[]][System.IO.File]::ReadAllLines($SettingsFile)) }
@@ -126,8 +131,19 @@ function Test-SettingsReady {
     foreach ($k in @('REELGUO_APP_URL', 'REELGUO_MEDIA_KEY', 'REELGUO_JWT_KEY', 'REELGUO_ADMIN_PASSWORD', 'REELGUO_PG_SUPERPASSWORD', 'REELGUO_DB_PASSWORD')) {
         if ((Get-Setting $k) -eq '') { Stop-WithError "$k is empty in $SettingsFile." }
     }
-    if ((Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -eq 'tunnel' -and (Get-Setting 'CLOUDFLARE_TUNNEL_TOKEN') -eq '') {
+    $mode = Get-Setting 'REELGUO_STAGING_MODE' 'tunnel'
+    if ($mode -notin @('tunnel', 'public-port')) { Stop-WithError "REELGUO_STAGING_MODE must be tunnel or public-port (it is '$mode')." }
+    if ($mode -eq 'tunnel' -and (Get-Setting 'CLOUDFLARE_TUNNEL_TOKEN') -eq '') {
         Stop-WithError "CLOUDFLARE_TUNNEL_TOKEN is empty in $SettingsFile (tunnel mode)."
+    }
+    $adminHost = Get-AdminHost
+    if ($adminHost -and $adminHost -notmatch '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$') {
+        Stop-WithError "REELGUO_ADMIN_HOST must be a host name such as admin.yourdomain.com (it is '$adminHost')."
+    }
+    if ($adminHost) {
+        $appHost = ''
+        try { $appHost = ([uri](Get-Setting 'REELGUO_APP_URL')).Host } catch { $appHost = '' }
+        if ($adminHost -eq $appHost) { Stop-WithError 'REELGUO_ADMIN_HOST must differ from the site address (REELGUO_APP_URL).' }
     }
     $provider = Get-Setting 'REELGUO_VIDEO_PROVIDER' 'Hls'
     if ($provider -notin @('Hls', 'Cos')) { Stop-WithError "REELGUO_VIDEO_PROVIDER must be Hls or Cos (it is '$provider')." }
@@ -449,9 +465,18 @@ function Write-ReleaseConfig([string]$Dir) {
 
     # Caddy: paths with forward slashes; through the "current" link, so a release switch needs no new service.
     $tunnel = (Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -eq 'tunnel'
+    $appPort = Get-Setting 'REELGUO_WEB_PORT' $(if ($tunnel) { '8080' } else { '80' })
+    # Public-port mode: the admin console can have its own address through Cloudflare (REELGUO_ADMIN_HOST). It is
+    # served on the app's port and told apart by the host name; every other host name gets the app.
+    $adminSite = ''
+    $adminHost = Get-AdminHost
+    if (-not $tunnel -and $adminHost) {
+        $adminSite = "`n# The admin console through Cloudflare (public-port mode, REELGUO_ADMIN_HOST): the app's port, chosen by host name.`nhttp://${adminHost}:$appPort {`n`tbind 0.0.0.0`n`timport admin_console`n}`n"
+    }
     $caddy = [System.IO.File]::ReadAllText($CaddyTemplate)
-    $caddy = $caddy.Replace('{{APP_PORT}}', (Get-Setting 'REELGUO_WEB_PORT' $(if ($tunnel) { '8080' } else { '80' })))
+    $caddy = $caddy.Replace('{{APP_PORT}}', $appPort)
     $caddy = $caddy.Replace('{{APP_BIND}}', $(if ($tunnel) { '127.0.0.1 [::1]' } else { '0.0.0.0' }))
+    $caddy = $caddy.Replace('{{ADMIN_HOST_SITE}}', $adminSite)
     $caddy = $caddy.Replace('{{ADMIN_PORT}}', (Get-Setting 'REELGUO_ADMIN_PORT' '8081'))
     $caddy = $caddy.Replace('{{API}}', "127.0.0.1:$apiPort")
     $caddy = $caddy.Replace('{{WEB_ROOT}}', ((Join-Path $CurrentLink 'web') -replace '\\', '/'))
@@ -573,6 +598,13 @@ function Set-CloudflareFirewall {
     Get-NetFirewallRule -DisplayName 'ReelGuo staging (Cloudflare only)' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
     New-NetFirewallRule -DisplayName 'ReelGuo staging (Cloudflare only)' -Direction Inbound -Protocol TCP -LocalPort $port -RemoteAddress $ranges -Action Allow | Out-Null
     Write-Ok "port $port open to Cloudflare's $($ranges.Count) address ranges only"
+    # Some cloud images (Tencent's among them) ship with Windows Firewall switched off; the rule above then does nothing.
+    $off = @(Get-NetFirewallProfile -ErrorAction SilentlyContinue | Where-Object { -not $_.Enabled } | ForEach-Object { $_.Name })
+    if ($off.Count -gt 0) {
+        Write-Warn "Windows Firewall is OFF ($($off -join ', ')), so port $port is open to everyone, not only Cloudflare."
+        Write-Warn "Allow TCP $port only from Cloudflare's addresses in the cloud security group (docs\STAGING.md, public port, step 2),"
+        Write-Warn 'or turn Windows Firewall on (check that Remote Desktop stays allowed first).'
+    }
 }
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -630,6 +662,13 @@ function Test-Site {
     if ($config.Status -eq 200) { Write-Ok 'API answers (/api/v1/config)' } else { Write-Warn "API /api/v1/config: HTTP $($config.Status)"; $ok = $false }
     $admin = Invoke-Http "$(Get-AdminBase)/"
     if ($admin.Status -eq 200) { Write-Ok "admin console on this server: $((Get-AdminBase).Replace('127.0.0.1', 'localhost'))" } else { Write-Warn "admin console: HTTP $($admin.Status)"; $ok = $false }
+    $adminHost = Get-AdminHost
+    if ((Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -eq 'public-port' -and $adminHost) {
+        # What Cloudflare gets for the admin address: the console (no server-rendered page content), not the app.
+        $page = (& curl.exe -s --max-time 10 -H "Host: $adminHost" "$base/") -join "`n"
+        if ($page -match 'id="root"' -and $page -notmatch 'id="seo"') { Write-Ok "admin console for $adminHost on port $(Get-Setting 'REELGUO_WEB_PORT' '80')" }
+        else { Write-Warn "requests for $adminHost do not get the admin console"; $ok = $false }
+    }
     if ((Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -eq 'tunnel') {
         $t = Get-Service $TunnelService -ErrorAction SilentlyContinue
         if ($t -and $t.Status -eq 'Running') { Write-Ok 'Cloudflare tunnel connector running (its connection status is on the tunnel page in Cloudflare)' }

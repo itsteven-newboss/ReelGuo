@@ -58,8 +58,9 @@ Staging is a copy of production for testing and review:
   - **winget** (App Installer). It is built into Windows Server 2025 and Windows 11.
   - Internet access to GitHub, nuget.org, the npm registry, caddyserver.com, gyan.dev (ffmpeg),
     enterprisedb.com (PostgreSQL) and Cloudflare.
-- **Cloudflare.** The domain is on Cloudflare, and Cloudflare Zero Trust is set up (the free plan is enough). No
-  inbound port has to be opened on the server or in the cloud firewall.
+- **Cloudflare.** The domain is on Cloudflare, and Cloudflare Zero Trust is set up (the free plan is enough). With a
+  tunnel, no inbound port has to be opened. Without one, proxied DNS records point at the server and port 80 is open
+  to Cloudflare only (see "Without a tunnel" in §2).
 - **The code.** Read access to the ReelGuo repository from the server (a read-only deploy key or access token), and
   the version to deploy pushed to a branch, for example `main`.
 
@@ -164,17 +165,35 @@ application → Self-hosted**, for that hostname, with a policy that allows only
 - Keep a copy of `C:\reelguo-staging\staging.env` in your password manager. Without its keys and passwords, a
   rebuilt server can't continue where this one left off.
 
-### Without a tunnel (public port)
+### Without a tunnel: Cloudflare DNS straight to the server (public port)
 
-If the tunnel can't be used, Cloudflare can reach the server directly on port 80:
+If the domain's DNS records already point at the server through Cloudflare, no tunnel is needed. Cloudflare connects
+to the server on port 80, and Caddy tells the site and the admin console apart by host name. Use this instead of
+steps 1, 3 and 4 above.
 
-1. Run `setup.ps1 -Mode public-port -AppUrl https://staging.yourdomain.com`. Caddy then listens on port 80 on every
-   network interface. The script adds a Windows Firewall rule that lets **only Cloudflare's addresses** reach it.
-2. In the cloud provider's firewall (security group), allow inbound TCP 80. Allowing only Cloudflare's ranges
-   (https://www.cloudflare.com/ips/) is safer.
-3. In Cloudflare **DNS**, add an `A` record `staging` → the server's public IP, **Proxied** (orange cloud). Under
-   **SSL/TLS**, choose **Flexible**: the server itself speaks plain HTTP.
-4. From another machine, check that `http://<server IP>/` does **not** answer.
+1. **Cloudflare DNS:** `A` records to the server's public IP, both **Proxied** (orange cloud): one for the site (for
+   example `@` or `staging`) and one for the admin console (for example `admin`).
+2. **Cloud security group** (Tencent: 安全组): allow inbound **TCP 80 only from Cloudflare's addresses**
+   (https://www.cloudflare.com/ips/; an IP address group / 参数模板 makes them one entry), and RDP 3389 only from your
+   own IP. Tencent's Windows images often ship with Windows Firewall turned off, so the security group is what stops
+   others from reaching the server directly. They could otherwise pretend to be Cloudflare and fake a visitor's
+   country.
+3. **Setup:**
+
+   ```powershell
+   .\scripts\staging\setup.ps1 -Mode public-port -AppUrl https://yourdomain.com -AdminHost admin.yourdomain.com
+   ```
+
+   Caddy listens on port 80 on every network interface. Requests for the admin address (`REELGUO_ADMIN_HOST`) get the
+   admin console; every other host name gets the site. On the server the console also stays at http://localhost:8081.
+   The script adds a Windows Firewall rule for Cloudflare's addresses, and warns if Windows Firewall is off.
+4. **SSL/TLS → Overview → Flexible.** The server speaks plain HTTP; visitors still get HTTPS from Cloudflare. With
+   Full or Full (strict), Cloudflare tries HTTPS to the server and fails with error 521 or 525.
+5. **Protect the admin address:** **Zero Trust → Access → Applications → Add an application → Self-hosted** →
+   `admin.yourdomain.com`, policy *Allow* for your team's email addresses. Do this before anyone else knows the
+   address; without it, only the admin password stands in front of the console.
+6. Then continue with steps 5 to 7 above. Also check from another machine that `http://<server IP>/` does **not**
+   answer: the security group must block it.
 
 ---
 
@@ -322,7 +341,7 @@ the browser with a CORS error and no useful message.
 
 | Field | Value |
 |---|---|
-| Origin | Every address the admin console is opened from, exactly: `https://staging-admin.yourdomain.com` and `http://localhost:8081` (the console on the server itself). If the bucket is Viora's, add these to its existing rule. |
+| Origin | Every address the admin console is opened from, exactly: its Cloudflare address (for example `https://admin.yourdomain.com`) and `http://localhost:8081` (the console on the server itself). If the bucket is Viora's, add these to its existing rule. |
 | Methods | `PUT`, `GET`, `HEAD` |
 | Allow-Headers | `*` |
 | Expose-Headers | `ETag`, `Content-Length` |
@@ -411,6 +430,7 @@ about US$12 for a month.
 |---|---|
 | `REELGUO_APP_URL` | The staging address (`https://…`, no trailing slash). Used for canonical links, payment returns and the apps' address list. |
 | `REELGUO_STAGING_MODE` | `tunnel` (default) or `public-port`. |
+| `REELGUO_ADMIN_HOST` | Public-port mode: the admin console's own address, for example `admin.yourdomain.com` (a proxied DNS record to this server). Empty: the console is only on the server (localhost:8081). Protect it with Cloudflare Access. |
 | `CLOUDFLARE_TUNNEL_TOKEN` | The tunnel connector's token (tunnel mode). After changing it, run `ops.ps1 config`. |
 | `REELGUO_WEB_PORT`, `REELGUO_ADMIN_PORT`, `REELGUO_API_PORT` | Local ports: the app (8080, or 80 in public-port mode), the admin console (8081), the API (5080). |
 | `REELGUO_MEDIA_KEY`, `REELGUO_JWT_KEY` | Signing keys, generated once. Changing them signs everyone out and breaks issued media links. |
@@ -445,7 +465,9 @@ After editing the file, run `ops.ps1 config`.
 | "The site did not become ready" | Read the printed logs, or `ops.ps1 logs api`. Common causes: PostgreSQL isn't running (`ops.ps1 logs postgres`), or the disk is full. |
 | Cloudflare error **1033** | The tunnel isn't connected. Check `ops.ps1 logs tunnel` and the tunnel's page in Cloudflare; usually a wrong or old token. Put the new token in `CLOUDFLARE_TUNNEL_TOKEN`, then run `ops.ps1 config`. If the tunnel still won't connect, check that the server allows outbound traffic on port 7844. |
 | Cloudflare **502 Bad Gateway** | The public hostname's service is wrong. It must be `HTTP` and `localhost:8080` (admin: `localhost:8081`). Also check that the service `ReelGuoWeb` is running. |
-| Cloudflare **521** (public-port mode) | The server isn't reachable on port 80. Check the cloud firewall, the Windows Firewall rule "ReelGuo staging (Cloudflare only)", and that `REELGUO_WEB_PORT` is 80. |
+| Cloudflare **521** (public-port mode) | The server isn't reachable on port 80. Check the cloud firewall, the Windows Firewall rule "ReelGuo staging (Cloudflare only)", and that `REELGUO_WEB_PORT` is 80. Also check that SSL/TLS is **Flexible**. |
+| Cloudflare **525** or **526** (public-port mode) | SSL/TLS is set to Full or Full (strict). Set it to **Flexible**: the server speaks plain HTTP. |
+| `admin.yourdomain.com` shows the site, not the admin console | `REELGUO_ADMIN_HOST` is empty or different. Set it in `staging.env` to exactly that host name, then run `ops.ps1 config`. |
 | Every visitor's country is "XX", or country rules don't apply | IP Geolocation is off in Cloudflare (Network settings). |
 | Can't stay signed in to the admin console on the server | Open `http://localhost:8081`, not `127.0.0.1`. The sign-in cookie needs a secure address, and browsers count `localhost` as one. |
 | `seed-demo.ps1` fails | Check `ops.ps1 logs worker` (it encodes the clips). If the admin password was changed, pass it with `-AdminPassword`. |
@@ -462,8 +484,10 @@ After editing the file, run `ops.ps1 config`.
 - **The services run as LocalSystem.** That keeps setup simple on a dedicated staging server. Don't run other
   people's software on it.
 - **PostgreSQL listens on this server only.** The app's database login can only reach its own database.
-- **The admin console is local-only:** port 8081 on the loopback addresses (`127.0.0.1` and `::1`). Publish it only
-  through the tunnel, behind a Cloudflare Access policy.
+- **The admin console is local-only** (port 8081 on `127.0.0.1` and `::1`) unless you publish it. Publish it through
+  the tunnel, or as `REELGUO_ADMIN_HOST` in public-port mode, and always behind a Cloudflare Access policy.
+- **Public-port mode:** port 80 must be open to Cloudflare only (security group). Otherwise anyone can reach the server
+  directly and send fake Cloudflare headers, for example a false visitor country.
 - **Staging stays out of search engines.** Check after changes that `/robots.txt` says `Disallow: /`.
 - **The COS key can write to the bucket.** It is only in `staging.env` and the generated release settings. Keep it
   limited to the one bucket (§6, step 3), and rotate it in CAM if it leaks.
