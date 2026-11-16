@@ -617,6 +617,28 @@ function Start-ReelGuo {
     if ((Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -eq 'tunnel' -and (Get-Service $TunnelService -ErrorAction SilentlyContinue)) { Start-Service $TunnelService }
 }
 
+# Caddy (ReelGuoWeb) needs the app port to itself. Another web server on it, typically IIS, would keep the site from
+# starting, so this stops early and says what holds the port. IIS is not needed: Caddy is the web server.
+function Test-WebPortFree {
+    $port = [int](Get-Setting 'REELGUO_WEB_PORT' '8080')
+    $owners = @(Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique)
+    foreach ($id in $owners) {
+        $process = Get-Process -Id $id -ErrorAction SilentlyContinue
+        if ($process -and $process.ProcessName -eq 'caddy') { continue }
+        if ($id -eq 4) {
+            # PID 4 is Windows' own HTTP listener (HTTP.sys), which IIS and some other Windows services use.
+            $hint = 'Windows HTTP.sys (usually IIS).'
+            if (Get-Service W3SVC -ErrorAction SilentlyContinue) {
+                $hint += ' IIS is installed and not needed. Stop it: Stop-Service W3SVC -Force; Set-Service W3SVC -StartupType Disabled  (or remove it: Uninstall-WindowsFeature Web-Server). Then run this script again.'
+            }
+        } else {
+            $hint = "process $id ($(if ($process) { $process.ProcessName } else { 'unknown' })). Stop it or move it to another port, then run this script again."
+        }
+        Stop-WithError "Port $port is already in use by $hint"
+    }
+    Write-Ok "port $port is free for the web server"
+}
+
 # Public-port mode: Windows Firewall lets only Cloudflare reach the app port.
 function Set-CloudflareFirewall {
     if ((Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -ne 'public-port') { return }

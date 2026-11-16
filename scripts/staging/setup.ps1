@@ -115,6 +115,7 @@ $release = New-Release
 $releaseId = Split-Path $release -Leaf
 
 Stop-ReelGuo
+Test-WebPortFree
 Set-CurrentRelease $releaseId
 Install-ReelGuoServices
 Install-TunnelService

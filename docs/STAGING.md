@@ -466,6 +466,7 @@ After editing the file, run `ops.ps1 config`.
 | Cloudflare error **1033** | The tunnel isn't connected. Check `ops.ps1 logs tunnel` and the tunnel's page in Cloudflare; usually a wrong or old token. Put the new token in `CLOUDFLARE_TUNNEL_TOKEN`, then run `ops.ps1 config`. If the tunnel still won't connect, check that the server allows outbound traffic on port 7844. |
 | Cloudflare **502 Bad Gateway** | The public hostname's service is wrong. It must be `HTTP` and `localhost:8080` (admin: `localhost:8081`). Also check that the service `ReelGuoWeb` is running. |
 | Cloudflare **521** (public-port mode) | The server isn't reachable on port 80. Check the cloud firewall, the Windows Firewall rule "ReelGuo staging (Cloudflare only)", and that `REELGUO_WEB_PORT` is 80. Also check that SSL/TLS is **Flexible**. |
+| "Port 80 is already in use by Windows HTTP.sys (usually IIS)" | IIS isn't needed (Caddy is the web server). Stop it: `Stop-Service W3SVC -Force; Set-Service W3SVC -StartupType Disabled`, or remove it with `Uninstall-WindowsFeature Web-Server`, then run `setup.ps1` again. |
 | Cloudflare **525** or **526** (public-port mode) | SSL/TLS is set to Full or Full (strict). Set it to **Flexible**: the server speaks plain HTTP. |
 | `admin.yourdomain.com` shows the site, not the admin console | `REELGUO_ADMIN_HOST` is empty or different. Set it in `staging.env` to exactly that host name, then run `ops.ps1 config`. |
 | Every visitor's country is "XX", or country rules don't apply | IP Geolocation is off in Cloudflare (Network settings). |
