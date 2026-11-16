@@ -38,8 +38,9 @@ type FormState = {
 const EMPTY: FormState = {
   category_slug: "", title: "", description: "", tags: "", score: "0", total_episodes: "0",
   is_finished: false, is_original: true, author_name: "", external_id: "",
-  rights_holder: "", contract_ref: "", licence_start: "", licence_end: "", territories: "",
-  ai_generated: "", has_real_person: "", consent_ref: "", recommend_weight: "0", episode_price: "0", free_episodes: "3",
+  // 版权与合规 is optional; a new series starts as the server's defaults (PublishRules.ApplyNewSeriesDefaults).
+  rights_holder: "huangyueai", contract_ref: "", licence_start: "", licence_end: "", territories: "*",
+  ai_generated: "no", has_real_person: "no", consent_ref: "", recommend_weight: "0", episode_price: "0", free_episodes: "3",
 };
 
 const tri = (v: boolean | null | undefined): FormState["ai_generated"] => (v === true ? "yes" : v === false ? "no" : "");
@@ -224,13 +225,13 @@ export function SeriesEditor({ id, onBack, onCreated }: { id: number | "new"; on
           <Card className="p-5 grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <div className="text-[14px] font-semibold">版权与合规</div>
-              <p className="text-[11.5px] text-dim mt-0.5">全部填写后才能发布。授权地区之外的用户看不到这部剧。</p>
+              <p className="text-[11.5px] text-dim mt-0.5">选填，不影响发布。设置了授权地区时，地区之外的用户看不到这部剧；选择「出现真实人物」时，须填写授权同意书编号才能发布。</p>
             </div>
-            <Field label="版权方"><input value={form.rights_holder} onChange={(e) => set("rights_holder", e.target.value)} className={inputClass} /></Field>
+            <Field label="版权方" hint="默认 huangyueai"><input value={form.rights_holder} onChange={(e) => set("rights_holder", e.target.value)} placeholder="huangyueai" className={inputClass} /></Field>
             <Field label="合同编号"><input value={form.contract_ref} onChange={(e) => set("contract_ref", e.target.value)} className={inputClass} /></Field>
-            <Field label="授权开始"><input type="date" value={form.licence_start} onChange={(e) => set("licence_start", e.target.value)} className={inputClass} /></Field>
+            <Field label="授权开始" hint="留空表示立即生效"><input type="date" value={form.licence_start} onChange={(e) => set("licence_start", e.target.value)} className={inputClass} /></Field>
             <Field label="授权结束" hint="留空表示长期"><input type="date" value={form.licence_end} onChange={(e) => set("licence_end", e.target.value)} className={inputClass} /></Field>
-            <Field label="授权地区" hint="ISO 国家代码，用逗号分隔（如 US, JP, MY），或 * 表示全球" className="col-span-2">
+            <Field label="授权地区" hint="ISO 国家代码，用逗号分隔（如 US, JP, MY）；* 或留空表示全球" className="col-span-2">
               <input value={form.territories} onChange={(e) => set("territories", e.target.value)} placeholder="*" className={inputClass} />
             </Field>
             <TriState label="是否为 AI 生成内容" value={form.ai_generated} onChange={(v) => set("ai_generated", v)} />

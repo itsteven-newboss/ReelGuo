@@ -392,11 +392,11 @@ export function LibraryPage({ onOpenSeries }: { onOpenSeries: (id: number) => vo
         {cfg?.warning && <p className="mt-3 text-[12px] text-danger">{cfg.warning}</p>}
         {plan?.warning && <p className="mt-3 text-[12px] text-star">{plan.warning}</p>}
         <details className="mt-3 text-[12px] text-mut">
-          <summary className="cursor-pointer">新剧的版权信息（可选，只填入剧集中还空着的项）</summary>
+          <summary className="cursor-pointer">新剧的版权信息（可选，只填入剧集中还空着的项；留空时版权方为 huangyueai、地区为全球、其余为否）</summary>
           <div className="mt-3 grid grid-cols-3 gap-4">
             {([["rights_holder", "版权方"], ["contract_ref", "合同编号"]] as const).map(([k, label]) => (
               <Field key={k} label={label}>
-                <input value={rights[k] ?? ""} className={inputClass}
+                <input value={rights[k] ?? ""} placeholder={k === "rights_holder" ? "huangyueai" : undefined} className={inputClass}
                   onChange={(e) => { const r = { ...rights, [k]: e.target.value }; setRights(r); writePref("rg.library.rights", JSON.stringify(r)); }} />
               </Field>
             ))}
@@ -405,14 +405,14 @@ export function LibraryPage({ onOpenSeries }: { onOpenSeries: (id: number) => vo
                 onChange={(e) => { const r = { ...rights, licence_start: e.target.value || null }; setRights(r); writePref("rg.library.rights", JSON.stringify(r)); }} />
             </Field>
             <Field label="授权地区" hint="ISO 代码用逗号分隔，* 表示全球">
-              <input value={(rights.territories ?? []).join(",")} className={inputClass}
+              <input value={(rights.territories ?? []).join(",")} placeholder="*" className={inputClass}
                 onChange={(e) => { const r = { ...rights, territories: e.target.value.split(/[,，|\s]+/).filter(Boolean) }; setRights(r); writePref("rg.library.rights", JSON.stringify(r)); }} />
             </Field>
             {([["ai_generated", "AI 生成内容"], ["has_real_person", "出现真实人物"]] as const).map(([k, label]) => (
               <Field key={k} label={label}>
                 <select value={rights[k] == null ? "" : rights[k] ? "yes" : "no"} className={inputClass}
                   onChange={(e) => { const r = { ...rights, [k]: e.target.value === "" ? null : e.target.value === "yes" }; setRights(r); writePref("rg.library.rights", JSON.stringify(r)); }}>
-                  <option value="">未填写</option><option value="yes">是</option><option value="no">否</option>
+                  <option value="">默认（否）</option><option value="yes">是</option><option value="no">否</option>
                 </select>
               </Field>
             ))}

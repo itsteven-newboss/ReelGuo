@@ -29,7 +29,7 @@ export function SeriesListPage({ onOpen }: { onOpen: (id: number | "new") => voi
     <>
       <PageHeader
         title="内容管理"
-        sub="剧集需要填写完整的版权与合规信息、并至少有一集处理完成，才能发布。"
+        sub="剧集至少有一集处理完成，才能发布。"
         actions={<Button variant="primary" onClick={() => onOpen("new")}><Plus size={15} className="inline -mt-0.5 mr-1" />新建剧集</Button>}
       />
 

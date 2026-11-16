@@ -179,6 +179,7 @@ public static class AdminCatalogEndpoints
         if (error is not null) return error.Value.Conflict
             ? TypedResults.Conflict(error.Value.Body)
             : TypedResults.BadRequest(error.Value.Body);
+        PublishRules.ApplyNewSeriesDefaults(series);
 
         db.Series.Add(series);
         await db.SaveChangesAsync(ct);

@@ -357,10 +357,13 @@ A failed job retries with back-off (3 attempts). A ready episode whose replaceme
 **Publish rules** (`PublishRules`), all listed at once in admin:
 - the channel is open;
 - at least one episode is ready;
-- the rights holder, contract ref and licence start are filled in, and the licence hasn't expired;
-- territories are set;
-- AI-generated and real-person are both explicitly declared;
-- a consent reference is present if a real person appears.
+- if licence dates are set, the licence hasn't expired and doesn't end before it starts;
+- a consent reference is present if a real person is marked as appearing.
+
+The rights fields (版权与合规) are optional (decided 2026-11-16). A new series, from the editor, the folder upload or
+the CSV import, gets rights holder `huangyueai`, territories `*` (worldwide), and "no" for AI-generated and real
+person, unless given (`PublishRules.ApplyNewSeriesDefaults`). For visitors (`VisibleTo`), no licence start means
+available now, and no territories means worldwide. Set territories still hide a series outside them.
 
 ### 9.2 Playback
 

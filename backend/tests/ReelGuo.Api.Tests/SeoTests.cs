@@ -197,6 +197,30 @@ public sealed class SeoTests(PostgresFixture db) : IClassFixture<PostgresFixture
     }
 
     [Fact]
+    public async Task A_series_without_licence_dates_or_territories_is_shown_everywhere()
+    {
+        await using var api = Api();
+        var id = await SeedAsync(api, "没有授权资料的剧");
+        await using (var scope = api.Services.CreateAsyncScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<ReelGuoDbContext>();
+            var series = await ctx.Series.FirstAsync(s => s.Id == id, Ct);
+            series.LicenceStart = null;
+            series.Territories = [];
+            series.RightsHolder = null;
+            series.ContractRef = null;
+            await ctx.SaveChangesAsync(Ct);
+        }
+
+        foreach (var country in new[] { "US", "JP", "SG" })
+        {
+            var (status, html, _) = await Page(api, $"/video/{id}", country);
+            Assert.True(status == HttpStatusCode.OK, $"{country}: HTTP {(int)status}");
+            Assert.Contains("<h1>没有授权资料的剧</h1>", html);
+        }
+    }
+
+    [Fact]
     public async Task Listing_pages_render_under_the_brand_name()
     {
         await using var api = Api();

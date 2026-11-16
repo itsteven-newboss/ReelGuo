@@ -149,10 +149,29 @@ public sealed class PublishRulesTests
     public void Complete_series_passes() => Assert.Empty(PublishRules.Check(Complete(), Open, 1, Today));
 
     [Fact]
-    public void Missing_rights_data_and_episodes_are_all_reported()
+    public void Rights_fields_are_optional_and_a_processed_episode_is_required()
     {
-        var problems = PublishRules.Check(new Series { Title = "t" }, Open, 0, Today);
-        Assert.Equal(7, problems.Count);
+        Assert.Empty(PublishRules.Check(new Series { Title = "t" }, Open, 1, Today));
+        Assert.Equal(new[] { "至少需要一集处理完成的视频" }, PublishRules.Check(new Series { Title = "t" }, Open, 0, Today));
+    }
+
+    [Fact]
+    public void New_series_get_the_default_rights_holder_worldwide_and_no_for_the_questions()
+    {
+        var empty = new Series { Title = "t" };
+        PublishRules.ApplyNewSeriesDefaults(empty);
+        Assert.Equal("huangyueai", empty.RightsHolder);
+        Assert.Equal(new[] { "*" }, empty.Territories);
+        Assert.False(empty.AiGenerated);
+        Assert.False(empty.HasRealPerson);
+
+        // What was filled in is kept.
+        var given = new Series { Title = "t", RightsHolder = "Studio", Territories = ["JP"], AiGenerated = true, HasRealPerson = true };
+        PublishRules.ApplyNewSeriesDefaults(given);
+        Assert.Equal("Studio", given.RightsHolder);
+        Assert.Equal(new[] { "JP" }, given.Territories);
+        Assert.True(given.AiGenerated);
+        Assert.True(given.HasRealPerson);
     }
 
     [Fact]

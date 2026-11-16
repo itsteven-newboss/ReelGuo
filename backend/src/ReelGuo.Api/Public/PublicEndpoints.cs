@@ -94,13 +94,16 @@ public static class PublicEndpoints
         return v1;
     }
 
-    /// <summary>Series a visitor from <paramref name="country"/> may see today.</summary>
+    /// <summary>
+    /// Series a visitor from <paramref name="country"/> may see today. The rights fields are optional (PublishRules): no
+    /// territories means worldwide and no licence start means available now.
+    /// </summary>
     internal static IQueryable<Series> VisibleTo(this IQueryable<Series> query, string country, DateOnly today) =>
         query.Where(s => s.Status == SeriesStatus.Published
             && s.Category.Status == CategoryStatus.Active
             && s.EpisodeCount > 0
-            && (s.Territories.Contains(PublishRules.Worldwide) || s.Territories.Contains(country))
-            && s.LicenceStart <= today
+            && (s.Territories.Count == 0 || s.Territories.Contains(PublishRules.Worldwide) || s.Territories.Contains(country))
+            && (s.LicenceStart == null || s.LicenceStart <= today)
             && (s.LicenceEnd == null || s.LicenceEnd >= today));
 
     internal static DateOnly Today(TimeProvider time) => DateOnly.FromDateTime(time.GetUtcNow().UtcDateTime);

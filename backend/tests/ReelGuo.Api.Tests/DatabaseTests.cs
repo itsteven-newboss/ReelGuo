@@ -249,18 +249,22 @@ public sealed class DatabaseTests(PostgresFixture db) : IClassFixture<PostgresFi
     }
 
     [Fact]
-    public async Task Publishing_lists_every_missing_requirement()
+    public async Task New_series_get_rights_defaults_and_publishing_needs_only_a_processed_episode()
     {
         await using var api = db.CreateApi();
         var client = await AdminClient.SignInAsync(api);
         var series = await client.AdminSendAsync(HttpMethod.Post, "/api/admin/series",
             new { category_slug = "ai-duanju", title = "缺资料的剧", score = 0, total_episodes = 0 }).OkJsonAsync();
+        Assert.Equal("huangyueai", series.GetProperty("rights_holder").GetString());
+        Assert.Equal(new[] { "*" }, series.GetProperty("territories").EnumerateArray().Select(t => t.GetString()));
+        Assert.False(series.GetProperty("ai_generated").GetBoolean());
+        Assert.False(series.GetProperty("has_real_person").GetBoolean());
 
         var publish = await client.AdminSendAsync(HttpMethod.Post, $"/api/admin/series/{series.GetProperty("id").GetInt64()}/publish");
         Assert.Equal(HttpStatusCode.BadRequest, publish.StatusCode);
         var error = (await publish.JsonAsync()).GetProperty("error");
         Assert.Equal("publish_blocked", error.GetProperty("code").GetString());
-        Assert.True(error.GetProperty("details").GetArrayLength() >= 6);
+        Assert.Equal(new[] { "至少需要一集处理完成的视频" }, error.GetProperty("details").EnumerateArray().Select(d => d.GetString()));
     }
 }
 

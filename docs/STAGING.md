@@ -380,8 +380,8 @@ Admin console → **文件夹上传**:
    - **存储文件夹:** pick a folder under `videos/` that is already in the bucket (with Viora's bucket, the one its
      delivery used), or type a new name.
    - **新剧放入频道:** the channel new series go to.
-   - **版权信息** (optional): copied into each new series that has none, so they can be published without editing
-     each one.
+   - **版权信息** (optional): copied into each new series that has none. Left empty, a new series gets rights holder
+     `huangyueai`, worldwide, and "no" for AI-generated and real person. None of it is required to publish.
 2. **选择文件夹:** pick the whole delivery folder (`VideoDetails/`, `Images/`, `Videos/<title>/<title>_<n>.mp4`).
    Chrome and Edge remember it; other browsers ask each time.
 3. The page reads each file's header (a few KB per file) and labels each title: new, has updates, in sync, or needs

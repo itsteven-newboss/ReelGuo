@@ -284,6 +284,7 @@ public static class AdminLibraryEndpoints
         if (series.Territories.Count == 0 && territories.Count > 0) series.Territories = territories;
         if (series.AiGenerated is null && rights?.AiGenerated is { } ai) series.AiGenerated = ai;
         if (series.HasRealPerson is null && rights?.HasRealPerson is { } person) series.HasRealPerson = person;
+        if (created) PublishRules.ApplyNewSeriesDefaults(series);
         series.UpdatedAt = now;
 
         db.AddAudit(now, AdminActor.From(http), created ? "library.series_create" : "library.series_update", "series",

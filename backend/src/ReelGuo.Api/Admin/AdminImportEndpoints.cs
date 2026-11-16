@@ -131,12 +131,15 @@ public static class AdminImportEndpoints
         var seriesByExternalId = new Dictionary<string, Series>(StringComparer.Ordinal);
         foreach (var plan in seriesPlans.Values)
         {
+            var created = false;
             if (!existingSeries.TryGetValue(plan.ExternalId, out var series))
             {
                 series = new Series { Title = "", Status = SeriesStatus.Draft, ExternalId = plan.ExternalId, CreatedAt = now };
                 db.Series.Add(series);
+                created = true;
             }
             await ApplySeriesFieldsAsync(series, plan.Fields, categories, db, now, ct);
+            if (created) PublishRules.ApplyNewSeriesDefaults(series);
             series.UpdatedAt = now;
             seriesByExternalId[plan.ExternalId] = series;
         }
