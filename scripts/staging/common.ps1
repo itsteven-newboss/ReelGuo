@@ -1,19 +1,40 @@
-# Shared helpers for the staging scripts (setup.ps1, update.ps1, rollback.ps1, seed-demo.ps1, ops.ps1).
-# Dot-sourced by them; not meant to be run on its own. Works in Windows PowerShell 5.1 and PowerShell 7.
+# Shared helpers for the staging scripts (setup.ps1, update.ps1, rollback.ps1, ops.ps1, seed-demo.ps1, backup.ps1).
+# Staging runs natively on Windows (no Docker): PostgreSQL, the API, the worker and Caddy are Windows services,
+# Cloudflare Tunnel too. Dot-sourced by the scripts; not run on its own. Windows PowerShell 5.1 and PowerShell 7.
 # Keep this file ASCII-only: Windows PowerShell 5.1 misreads non-ASCII characters in files without a BOM.
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
 
-$RepoRoot    = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$EnvFile     = Join-Path $RepoRoot 'infra\staging.env'
-$EnvExample  = Join-Path $RepoRoot 'infra\staging.env.example'
-$DeployLog   = Join-Path $RepoRoot 'infra\staging.deploy.log'
-$ComposeBase = Join-Path $RepoRoot 'infra\docker-compose.yml'
-$ComposeStg  = Join-Path $RepoRoot 'infra\docker-compose.staging.yml'
-$Project     = 'reelguo-staging'
-$Network     = 'reelguo-staging_default'
-$AppImages   = @('reelguo-staging-api', 'reelguo-staging-worker', 'reelguo-staging-web')
+# ---------------------------------------------------------------------------------------------------------------
+# Locations and names
+# ---------------------------------------------------------------------------------------------------------------
+
+$RepoRoot        = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$StagingHome     = if ($env:REELGUO_STAGING_HOME) { $env:REELGUO_STAGING_HOME } else { 'C:\reelguo-staging' }
+$SettingsFile    = Join-Path $StagingHome 'staging.env'
+$SettingsExample = Join-Path $RepoRoot 'infra\staging\staging.env.example'
+$CaddyTemplate   = Join-Path $RepoRoot 'infra\staging\Caddyfile.template'
+$ReleasesDir     = Join-Path $StagingHome 'releases'
+$CurrentLink     = Join-Path $StagingHome 'current'
+$ToolsDir        = Join-Path $StagingHome 'tools'
+$StorageDir      = Join-Path $StagingHome 'data\storage'
+$BackupDir       = Join-Path $StagingHome 'backups'
+$LogDir          = Join-Path $StagingHome 'logs'
+$DeployLog       = Join-Path $StagingHome 'deploy.log'
+$CaddyExe        = Join-Path $ToolsDir 'caddy\caddy.exe'
+$FfmpegBin       = Join-Path $ToolsDir 'ffmpeg\bin'
+$PgPrefix        = 'C:\Program Files\PostgreSQL\17'
+$PgBin           = Join-Path $PgPrefix 'bin'
+$PgData          = Join-Path $PgPrefix 'data'
+$PgService       = 'postgresql-x64-17'
+$ApiService      = 'ReelGuoApi'
+$WorkerService   = 'ReelGuoWorker'
+$WebService      = 'ReelGuoWeb'
+$TunnelService   = 'cloudflared'
+$BackupTaskName  = 'ReelGuo staging backup'
+$KeepReleases    = 5
 
 # ---------------------------------------------------------------------------------------------------------------
 # Output
@@ -30,14 +51,21 @@ function Stop-WithError([string]$Text) {
     exit 1
 }
 
+# Runs a program and stops the script when it fails. Arguments without spaces or quotes are passed as they are.
+function Invoke-Checked([string]$What, [string]$Exe, [string[]]$Arguments) {
+    # Output goes to the screen, not into the caller's return value.
+    & $Exe @Arguments | Out-Host
+    if ($LASTEXITCODE -ne 0) { Stop-WithError "$What failed (exit code $LASTEXITCODE)." }
+}
+
 # ---------------------------------------------------------------------------------------------------------------
-# Settings file (infra/staging.env): KEY=VALUE lines, comments kept as they are
+# Settings (C:\reelguo-staging\staging.env): KEY=VALUE lines, comments kept as they are
 # ---------------------------------------------------------------------------------------------------------------
 
 function Read-Settings {
     $map = @{}
-    if (-not (Test-Path $EnvFile)) { return $map }
-    foreach ($line in [System.IO.File]::ReadAllLines($EnvFile)) {
+    if (-not (Test-Path $SettingsFile)) { return $map }
+    foreach ($line in [System.IO.File]::ReadAllLines($SettingsFile)) {
         $t = $line.Trim()
         if ($t -eq '' -or $t.StartsWith('#')) { continue }
         $i = $t.IndexOf('=')
@@ -53,32 +81,20 @@ function Get-Setting([string]$Key, [string]$Default = '') {
     return $Default
 }
 
-# Sets KEY=VALUE in the settings file, replacing the existing line or adding one at the end.
 function Set-Setting([string]$Key, [string]$Value) {
     $lines = New-Object System.Collections.Generic.List[string]
-    if (Test-Path $EnvFile) { $lines.AddRange([string[]][System.IO.File]::ReadAllLines($EnvFile)) }
+    if (Test-Path $SettingsFile) { $lines.AddRange([string[]][System.IO.File]::ReadAllLines($SettingsFile)) }
     $done = $false
     for ($i = 0; $i -lt $lines.Count; $i++) {
         if ($lines[$i] -match "^\s*$([regex]::Escape($Key))\s*=") { $lines[$i] = "$Key=$Value"; $done = $true; break }
     }
     if (-not $done) { $lines.Add("$Key=$Value") }
-    Write-TextFile $EnvFile (($lines -join "`n") + "`n")
+    Write-TextFile $SettingsFile (($lines -join "`r`n") + "`r`n")
 }
 
-# UTF-8 without a byte-order mark, LF line ends (docker compose reads a BOM as part of the first key).
+# UTF-8 without a byte-order mark.
 function Write-TextFile([string]$Path, [string]$Text) {
     [System.IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding($false)))
-}
-
-# Limits the settings file to the current user and the Administrators group (it holds secrets).
-function Protect-SettingsFile {
-    try {
-        $who = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-        & icacls $EnvFile /inheritance:r /grant:r "${who}:(F)" /grant:r '*S-1-5-32-544:(F)' | Out-Null
-        if ($LASTEXITCODE -eq 0) { Write-Ok 'infra\staging.env is readable only by you and Administrators' }
-    } catch {
-        Write-Warn "Could not restrict access to infra\staging.env: $($_.Exception.Message)"
-    }
 }
 
 function New-Base64Secret([int]$Bytes = 32) {
@@ -88,8 +104,8 @@ function New-Base64Secret([int]$Bytes = 32) {
     return [Convert]::ToBase64String($b)
 }
 
-# Letters and digits without look-alikes (0/O, 1/l/I), so it can be read out and typed.
-function New-Password([int]$Length = 20) {
+# Letters and digits without look-alikes (0/O, 1/l/I): safe in SQL, connection strings and the command line.
+function New-Password([int]$Length = 24) {
     $alphabet = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
     $b = New-Object byte[] ($Length * 2)
     $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
@@ -98,76 +114,474 @@ function New-Password([int]$Length = 20) {
     return -join $chars
 }
 
+# The staging folder holds secrets: only SYSTEM and Administrators (by SID, so it works on any Windows language).
+function Protect-StagingHome {
+    & icacls $StagingHome /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' /T /C /Q | Out-Null
+    if ($LASTEXITCODE -eq 0) { Write-Ok "$StagingHome is limited to SYSTEM and Administrators" }
+    else { Write-Warn "Could not restrict access to $StagingHome (icacls exit code $LASTEXITCODE)" }
+}
+
+function Test-SettingsReady {
+    if (-not (Test-Path $SettingsFile)) { Stop-WithError "$SettingsFile does not exist yet. Run .\scripts\staging\setup.ps1 first." }
+    foreach ($k in @('REELGUO_APP_URL', 'REELGUO_MEDIA_KEY', 'REELGUO_JWT_KEY', 'REELGUO_ADMIN_PASSWORD', 'REELGUO_PG_SUPERPASSWORD', 'REELGUO_DB_PASSWORD')) {
+        if ((Get-Setting $k) -eq '') { Stop-WithError "$k is empty in $SettingsFile." }
+    }
+    if ((Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -eq 'tunnel' -and (Get-Setting 'CLOUDFLARE_TUNNEL_TOKEN') -eq '') {
+        Stop-WithError "CLOUDFLARE_TUNNEL_TOKEN is empty in $SettingsFile (tunnel mode)."
+    }
+    $provider = Get-Setting 'REELGUO_VIDEO_PROVIDER' 'Hls'
+    if ($provider -notin @('Hls', 'Cos')) { Stop-WithError "REELGUO_VIDEO_PROVIDER must be Hls or Cos (it is '$provider')." }
+    if ($provider -eq 'Cos') {
+        foreach ($k in @('REELGUO_COS_SECRET_ID', 'REELGUO_COS_SECRET_KEY', 'REELGUO_COS_BUCKET', 'REELGUO_COS_REGION')) {
+            if ((Get-Setting $k) -eq '') { Stop-WithError "$k is empty in $SettingsFile (REELGUO_VIDEO_PROVIDER=Cos)." }
+        }
+        if ((Get-Setting 'REELGUO_COS_BUCKET') -notmatch '^[a-z0-9][a-z0-9-]*-[0-9]{5,}$') {
+            Stop-WithError 'REELGUO_COS_BUCKET must be the full bucket name including the APPID, for example reelguo-1300000000.'
+        }
+    }
+}
+
+# Adds settings that a newer staging.env.example has and this server's staging.env lacks, with their default values,
+# so an update never runs with a setting missing. Existing values are never touched.
+function Add-NewSettings {
+    if (-not (Test-Path $SettingsFile) -or -not (Test-Path $SettingsExample)) { return }
+    $have = Read-Settings
+    $added = New-Object System.Collections.Generic.List[string]
+    foreach ($line in [System.IO.File]::ReadAllLines($SettingsExample)) {
+        if ($line -match '^\s*([A-Z0-9_]+)\s*=(.*)$' -and -not $have.ContainsKey($Matches[1])) { $added.Add($line.Trim()) }
+    }
+    if ($added.Count -eq 0) { return }
+    $text = [System.IO.File]::ReadAllText($SettingsFile).TrimEnd() + "`r`n`r`n# Added by the update on $(Get-Date -Format 'yyyy-MM-dd'); see infra\staging\staging.env.example for what each one does.`r`n" + ($added -join "`r`n") + "`r`n"
+    Write-TextFile $SettingsFile $text
+    Write-Note "new settings added to ${SettingsFile}: $(($added | ForEach-Object { ($_ -split '=')[0] }) -join ', ')"
+}
+
 # ---------------------------------------------------------------------------------------------------------------
-# Docker
+# Server checks and tools
 # ---------------------------------------------------------------------------------------------------------------
 
-function Test-Prerequisites([switch]$NeedGit) {
+function Test-Administrator {
+    $p = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+    if (-not $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        Stop-WithError 'Run PowerShell as Administrator (right-click -> Run as administrator): the scripts install Windows services.'
+    }
+}
+
+function Update-PathFromSystem {
+    $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH', 'User')
+    # npm's global folder, where corepack and its pnpm live when corepack was installed with npm (Node.js 25 and later).
+    if ($env:APPDATA) {
+        $npmGlobal = Join-Path $env:APPDATA 'npm'
+        if ((Test-Path $npmGlobal) -and (($env:PATH -split ';') -notcontains $npmGlobal)) { $env:PATH = "$env:PATH;$npmGlobal" }
+    }
+}
+
+# Start-Process joins its arguments with spaces and adds no quotes, so a value with a space (C:\Program Files\...)
+# would arrive as two arguments. This quotes such values.
+function ConvertTo-ProcessArgument([string]$Value) {
+    if ($Value -match '[\s"]') { return '"' + ($Value -replace '"', '\"') + '"' }
+    return $Value
+}
+
+# cloudflared from PATH, or where its MSI installs it (the installer does not always add it to PATH).
+function Get-CloudflaredExe {
+    $cmd = Get-Command cloudflared -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmd) { return $cmd.Source }
+    foreach ($dir in @(${env:ProgramFiles(x86)}, $env:ProgramFiles)) {
+        if ($dir -and (Test-Path (Join-Path $dir 'cloudflared\cloudflared.exe'))) { return (Join-Path $dir 'cloudflared\cloudflared.exe') }
+    }
+    return $null
+}
+
+function Test-Prerequisites {
     Write-Step 'Checking this server'
     if ($PSVersionTable.PSVersion -lt [version]'5.1') { Stop-WithError 'PowerShell 5.1 or newer is needed.' }
-    Write-Ok "PowerShell $($PSVersionTable.PSVersion)"
-
-    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Stop-WithError 'docker was not found. Install Docker (see docs/STAGING.md, "Server requirements").' }
-    $os = & docker info --format '{{.OSType}}'
-    if ($LASTEXITCODE -ne 0) { Stop-WithError 'Docker is installed but not running (docker info failed). Start Docker and try again.' }
-    if ($os -ne 'linux') { Stop-WithError "Docker runs $os containers. ReelGuo needs Linux containers (Docker Desktop: switch to Linux containers; or Docker Engine in WSL2)." }
-    Write-Ok 'Docker is running Linux containers'
-
-    $v = (& docker compose version --short) -replace '^v', ''
-    if ($LASTEXITCODE -ne 0 -or -not $v) { Stop-WithError 'docker compose (v2) is not available.' }
-    $core = ($v -split '[-+]')[0]
-    if ([version]$core -lt [version]'2.24.4') { Stop-WithError "docker compose $v is too old; 2.24.4 or newer is needed (for !reset / !override)." }
-    Write-Ok "docker compose $v"
-
-    if ($NeedGit) {
-        if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Stop-WithError 'git was not found (needed to fetch updates). Install Git for Windows, or use -SkipPull.' }
-        Write-Ok "git $((& git --version) -replace 'git version ', '')"
-    }
-
-    $drive = Get-PSDrive -Name ($RepoRoot.Substring(0, 1)) -ErrorAction SilentlyContinue
+    Test-Administrator
+    Write-Ok "PowerShell $($PSVersionTable.PSVersion), running as Administrator"
+    if ($StagingHome -match '\s') { Stop-WithError "The staging folder must not contain spaces: $StagingHome" }
+    $drive = Get-PSDrive -Name ($StagingHome.Substring(0, 1)) -ErrorAction SilentlyContinue
     if ($drive -and $drive.Free) {
         $freeGb = [math]::Round($drive.Free / 1GB, 1)
-        if ($freeGb -lt 15) { Write-Warn "Only $freeGb GB free on $($drive.Name): (images, media and backups need room; 30 GB or more is advised)" }
+        if ($freeGb -lt 15) { Write-Warn "Only $freeGb GB free on $($drive.Name): (30 GB or more is advised: tools, releases, media, backups)" }
         else { Write-Ok "$freeGb GB free on $($drive.Name):" }
+    }
+    Update-PathFromSystem
+}
+
+function Install-WingetPackage([string]$Id, [string]$Name, [scriptblock]$IsInstalled) {
+    if (& $IsInstalled) { Write-Ok "$Name is installed"; return }
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { Stop-WithError "winget is not available; install $Name by hand, then run this script again." }
+    Write-Note "installing $Name (winget $Id) ..."
+    & winget install --id $Id --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+    Update-PathFromSystem
+    if (-not (& $IsInstalled)) { Stop-WithError "$Name did not install (winget $Id). Install it by hand, then run this script again." }
+    Write-Ok "$Name installed"
+}
+
+function Test-DotnetSdk10 {
+    if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { return $false }
+    return [bool]((& dotnet --list-sdks) -match '^10\.')
+}
+
+# Node.js 22.12 or newer (package.json "engines").
+function Test-NodeReady {
+    if (-not (Get-Command node -ErrorAction SilentlyContinue)) { return $false }
+    $v = ((& node --version) -replace '^v', '').Trim()
+    try { return ([version]$v -ge [version]'22.12.0') } catch { return $false }
+}
+
+function Install-Tools {
+    Write-Step 'Tools (installed once)'
+    Install-WingetPackage 'Git.Git' 'Git' { [bool](Get-Command git -ErrorAction SilentlyContinue) }
+    Install-WingetPackage 'OpenJS.NodeJS.LTS' 'Node.js (22.12 or newer)' { Test-NodeReady }
+    Install-WingetPackage 'Microsoft.DotNet.SDK.10' '.NET 10 SDK' { Test-DotnetSdk10 }
+    if ((Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -eq 'tunnel') {
+        Install-WingetPackage 'Cloudflare.cloudflared' 'cloudflared' { [bool](Get-CloudflaredExe) }
+    }
+
+    # pnpm, at the version the repository asks for (package.json "packageManager"), through corepack. Node.js 24 and
+    # earlier include corepack; Node.js 25 and later (the LTS since October 2026) don't, so it is installed with npm.
+    $env:COREPACK_ENABLE_DOWNLOAD_PROMPT = '0'
+    if (-not (Get-Command corepack -ErrorAction SilentlyContinue)) {
+        Write-Note 'installing corepack with npm (Node.js 25 and later no longer include it) ...'
+        Invoke-Checked 'Installing corepack' 'npm' @('install', '--global', 'corepack@latest')
+        Update-PathFromSystem
+        if (-not (Get-Command corepack -ErrorAction SilentlyContinue)) { Stop-WithError 'corepack was installed but is not on PATH. Close PowerShell, open it again as Administrator and run setup.ps1 again.' }
+    }
+    Invoke-Checked 'corepack enable (pnpm)' 'corepack' @('enable')
+    Write-Ok "pnpm enabled (corepack), Node.js $(& node --version)"
+
+    New-Item -ItemType Directory -Force -Path (Join-Path $ToolsDir 'caddy'), $FfmpegBin | Out-Null
+    if (-not (Test-Path $CaddyExe)) {
+        Write-Note 'downloading Caddy (web server) ...'
+        Invoke-WebRequest 'https://caddyserver.com/api/download?os=windows&arch=amd64' -OutFile $CaddyExe -UseBasicParsing
+    }
+    Write-Ok "Caddy: $((& $CaddyExe version) -split ' ' | Select-Object -First 1)"
+
+    if (-not (Test-Path (Join-Path $FfmpegBin 'ffmpeg.exe'))) {
+        Write-Note 'downloading ffmpeg (gyan.dev release essentials) ...'
+        $zip = Join-Path $env:TEMP 'reelguo-ffmpeg.zip'
+        $tmp = Join-Path $env:TEMP 'reelguo-ffmpeg'
+        Invoke-WebRequest 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' -OutFile $zip -UseBasicParsing
+        if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
+        Expand-Archive $zip -DestinationPath $tmp -Force
+        $bin = Get-ChildItem $tmp -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+        if (-not $bin) { Stop-WithError 'The ffmpeg download did not contain ffmpeg.exe.' }
+        Copy-Item (Join-Path $bin.DirectoryName '*') $FfmpegBin -Force
+        Remove-Item $zip, $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    Write-Ok "ffmpeg: $(((& (Join-Path $FfmpegBin 'ffmpeg.exe') -version) | Select-Object -First 1) -replace 'Copyright.*', '')"
+}
+
+# ---------------------------------------------------------------------------------------------------------------
+# PostgreSQL
+# ---------------------------------------------------------------------------------------------------------------
+
+function Install-PostgreSql {
+    Write-Step 'PostgreSQL 17'
+    if (Get-Service $PgService -ErrorAction SilentlyContinue) { Write-Ok "service $PgService is installed"; return }
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { Stop-WithError 'winget is not available to download PostgreSQL.' }
+    $dir = Join-Path $env:TEMP 'reelguo-postgresql'
+    if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
+    Write-Note 'downloading the PostgreSQL 17 installer (EDB, through winget) ...'
+    & winget download --id PostgreSQL.PostgreSQL.17 --exact --source winget --download-directory $dir --accept-package-agreements --accept-source-agreements --disable-interactivity
+    $installer = Get-ChildItem $dir -Filter *.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $installer) { Stop-WithError 'Could not download the PostgreSQL installer. Download "PostgreSQL 17 Windows x86-64" from https://www.enterprisedb.com/downloads/postgres-postgresql-downloads, run it once (keep the defaults, note the password), put that password in REELGUO_PG_SUPERPASSWORD and run setup.ps1 again.' }
+    Write-Note 'installing PostgreSQL 17 (unattended, a few minutes) ...'
+    $arguments = @('--mode', 'unattended', '--unattendedmodeui', 'none',
+        '--superpassword', (Get-Setting 'REELGUO_PG_SUPERPASSWORD'), '--serverport', '5432',
+        '--servicename', $PgService, '--prefix', $PgPrefix, '--datadir', $PgData,
+        '--disable-components', 'pgAdmin,stackbuilder') | ForEach-Object { ConvertTo-ProcessArgument $_ }
+    $p = Start-Process -FilePath $installer.FullName -ArgumentList $arguments -Wait -PassThru
+    Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+    if ($p.ExitCode -ne 0 -or -not (Get-Service $PgService -ErrorAction SilentlyContinue)) {
+        Stop-WithError "The PostgreSQL installer failed (exit code $($p.ExitCode)). Its log is in $env:TEMP (install-postgresql.log)."
+    }
+    Write-Ok "PostgreSQL 17 installed (service $PgService, data in $PgData)"
+}
+
+function Invoke-Psql([string]$Sql, [string]$Database = 'postgres') {
+    $file = Join-Path $env:TEMP "reelguo-$([guid]::NewGuid().ToString('N')).sql"
+    Write-TextFile $file $Sql
+    $env:PGPASSWORD = Get-Setting 'REELGUO_PG_SUPERPASSWORD'
+    try {
+        & (Join-Path $PgBin 'psql.exe') -h 127.0.0.1 -p 5432 -U postgres -d $Database -v ON_ERROR_STOP=1 -q -X -f $file
+        $code = $LASTEXITCODE
+    } finally {
+        Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+        Remove-Item $file -Force -ErrorAction SilentlyContinue
+    }
+    if ($code -ne 0) { Stop-WithError "A database command failed (psql exit code $code)." }
+}
+
+# The app's login and database (UTF-8, C collation, as on production), listening on this server only.
+function Initialize-Database {
+    Write-Step 'Database'
+    Start-Service $PgService
+    $db = Get-Setting 'REELGUO_DB_NAME' 'reelguo'
+    $user = Get-Setting 'REELGUO_DB_USER' 'reelguo'
+    $pw = Get-Setting 'REELGUO_DB_PASSWORD'
+    Invoke-Psql @"
+SELECT format('CREATE ROLE %I LOGIN', '$user') WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$user')\gexec
+ALTER ROLE "$user" WITH LOGIN PASSWORD '$pw';
+SELECT format('CREATE DATABASE %I OWNER %I ENCODING ''UTF8'' LC_COLLATE ''C'' LC_CTYPE ''C'' TEMPLATE template0', '$db', '$user')
+  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '$db')\gexec
+ALTER SYSTEM SET listen_addresses = 'localhost';
+"@
+    Write-Ok "database '$db' and login '$user' ready (UTF-8)"
+    # listen_addresses takes effect on restart; harmless when unchanged.
+    Restart-Service $PgService
+    Write-Ok 'PostgreSQL listens on this server only'
+}
+
+# ---------------------------------------------------------------------------------------------------------------
+# Building a release: C:\reelguo-staging\releases\<yyyyMMdd-HHmmss>-<commit>\{api,worker,web\client,web\admin,Caddyfile}
+# ---------------------------------------------------------------------------------------------------------------
+
+function Get-Commit {
+    if (-not (Test-Path (Join-Path $RepoRoot '.git'))) { return 'nogit' }
+    $c = & git -C $RepoRoot rev-parse --short --verify --quiet HEAD
+    if ($LASTEXITCODE -ne 0 -or -not $c) { return 'nocommit' }
+    return $c
+}
+
+function New-Release {
+    $id = '{0:yyyyMMdd-HHmmss}-{1}' -f (Get-Date), (Get-Commit)
+    $dir = Join-Path $ReleasesDir $id
+    Write-Step "Building release $id (5 to 15 minutes the first time)"
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
+    $env:DOTNET_NOLOGO = '1'
+
+    Push-Location $RepoRoot
+    try {
+        Write-Note 'API (.NET publish) ...'
+        Invoke-Checked 'Building the API' 'dotnet' @('publish', 'backend\src\ReelGuo.Api\ReelGuo.Api.csproj', '-c', 'Release', '-o', (Join-Path $dir 'api'), '--nologo', '-v', 'quiet', '-p:OpenApiGenerateDocuments=false')
+        Write-Note 'worker (.NET publish) ...'
+        Invoke-Checked 'Building the worker' 'dotnet' @('publish', 'backend\src\ReelGuo.Worker\ReelGuo.Worker.csproj', '-c', 'Release', '-o', (Join-Path $dir 'worker'), '--nologo', '-v', 'quiet')
+        Write-Note 'web app and admin console (pnpm) ...'
+        $env:COREPACK_ENABLE_DOWNLOAD_PROMPT = '0'
+        Invoke-Checked 'Installing web packages' 'pnpm' @('install', '--frozen-lockfile')
+        Invoke-Checked 'Building the web apps' 'pnpm' @('--filter', './web/**', 'build')
+    } finally {
+        Pop-Location
+    }
+    New-Item -ItemType Directory -Force -Path (Join-Path $dir 'web') | Out-Null
+    Copy-Item (Join-Path $RepoRoot 'web\apps\client\dist') (Join-Path $dir 'web\client') -Recurse -Force
+    Copy-Item (Join-Path $RepoRoot 'web\apps\admin\dist') (Join-Path $dir 'web\admin') -Recurse -Force
+    Write-ReleaseConfig $dir
+    Write-Ok "release built: $dir"
+    return $dir
+}
+
+# Settings for the API and the worker (appsettings.Production.json) and the Caddyfile, from staging.env.
+function Write-ReleaseConfig([string]$Dir) {
+    $apiPort = Get-Setting 'REELGUO_API_PORT' '5080'
+    $connection = 'Host=127.0.0.1;Port=5432;Database={0};Username={1};Password={2}' -f (Get-Setting 'REELGUO_DB_NAME' 'reelguo'), (Get-Setting 'REELGUO_DB_USER' 'reelguo'), (Get-Setting 'REELGUO_DB_PASSWORD')
+    $appUrl = Get-Setting 'REELGUO_APP_URL'
+    $storage = @{ Provider = 'FileSystem'; FileSystemRoot = $StorageDir }
+    $logging = @{
+        LogLevel = @{ Default = 'Information'; 'Microsoft.AspNetCore' = 'Warning'; 'Microsoft.EntityFrameworkCore' = 'Warning' }
+    }
+
+    # Episode videos: Hls keeps them on this server (transcoded); Cos sends them from the admin's browser straight to a
+    # private Tencent COS bucket, laid out as videos/<folder>/<title>/<file>, and viewers play them from there.
+    $video = [ordered]@{
+        Provider = (Get-Setting 'REELGUO_VIDEO_PROVIDER' 'Hls')
+        Cos      = [ordered]@{
+            SecretId           = (Get-Setting 'REELGUO_COS_SECRET_ID')
+            SecretKey          = (Get-Setting 'REELGUO_COS_SECRET_KEY')
+            Bucket             = (Get-Setting 'REELGUO_COS_BUCKET')
+            Region             = (Get-Setting 'REELGUO_COS_REGION' 'ap-singapore')
+            Folder             = (Get-Setting 'REELGUO_COS_FOLDER' 'reelguo')
+            CdnHost            = (Get-Setting 'REELGUO_COS_CDN_HOST')
+            PlaybackUrlMinutes = [int](Get-Setting 'REELGUO_COS_PLAYBACK_MINUTES' '30')
+            UploadUrlMinutes   = [int](Get-Setting 'REELGUO_COS_UPLOAD_MINUTES' '360')
+        }
+    }
+
+    $site = @{}
+    foreach ($pair in @(@('PermanentDomain', 'REELGUO_PERMANENT_DOMAIN'), @('Telegram', 'REELGUO_TELEGRAM'), @('Email', 'REELGUO_CONTACT_EMAIL'))) {
+        $v = Get-Setting $pair[1]
+        if ($v -ne '') { $site[$pair[0]] = $v }
+    }
+
+    $api = [ordered]@{
+        Urls              = "http://127.0.0.1:$apiPort"
+        ConnectionStrings = @{ Default = $connection }
+        Database          = @{ MigrateOnStartup = $true }
+        Admin             = @{ BootstrapUsername = 'admin'; BootstrapPassword = (Get-Setting 'REELGUO_ADMIN_PASSWORD') }
+        Media             = @{ SigningKey = (Get-Setting 'REELGUO_MEDIA_KEY'); PublicBaseUrl = '/media' }
+        Auth              = @{ JwtKey = (Get-Setting 'REELGUO_JWT_KEY') }
+        Storage           = $storage
+        Video             = $video
+        # Every request comes from Caddy on this server; behind Cloudflare the visitor's IP and country are in its headers.
+        Network           = @{ TrustedProxies = @('127.0.0.1/32', '::1/128'); ClientIpHeader = 'CF-Connecting-IP' }
+        Geo               = @{ TrustCountryHeader = $true }
+        App               = @{ Mirrors = @($appUrl) }
+        Seo               = @{
+            TemplatePath   = (Join-Path $CurrentLink 'web\client\index.html')
+            AllowIndexing  = ((Get-Setting 'REELGUO_ALLOW_INDEXING' 'false') -eq 'true')
+            PublicBaseUrl  = $appUrl
+        }
+        Billing           = @{
+            Enabled                         = ((Get-Setting 'REELGUO_BILLING_ENABLED' 'false') -eq 'true')
+            Provider                        = (Get-Setting 'REELGUO_PAYMENT_PROVIDER')
+            BillingDescriptor               = (Get-Setting 'REELGUO_BILLING_DESCRIPTOR')
+            AppBaseUrl                      = $appUrl
+            AllowSandboxOutsideDevelopment  = ((Get-Setting 'REELGUO_ALLOW_SANDBOX_PAYMENTS' 'false') -eq 'true')
+            SandboxSecret                   = (Get-Setting 'REELGUO_SANDBOX_SECRET')
+        }
+        Logging           = $logging + @{ EventLog = @{ SourceName = 'ReelGuo.Api'; LogLevel = @{ Default = 'Information'; 'Microsoft.AspNetCore' = 'Warning'; 'Microsoft.EntityFrameworkCore' = 'Warning' } } }
+    }
+    if ($site.Count -gt 0) { $api['Site'] = $site }
+
+    $worker = [ordered]@{
+        ConnectionStrings = @{ Default = $connection }
+        Storage           = $storage
+        Video             = $video
+        Ffmpeg            = @{ BinDirectory = $FfmpegBin }
+        Logging           = $logging + @{ EventLog = @{ SourceName = 'ReelGuo.Worker'; LogLevel = @{ Default = 'Information' } } }
+    }
+
+    Write-TextFile (Join-Path $Dir 'api\appsettings.Production.json') ($api | ConvertTo-Json -Depth 10)
+    Write-TextFile (Join-Path $Dir 'worker\appsettings.Production.json') ($worker | ConvertTo-Json -Depth 10)
+
+    # Caddy: paths with forward slashes; through the "current" link, so a release switch needs no new service.
+    $tunnel = (Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -eq 'tunnel'
+    $caddy = [System.IO.File]::ReadAllText($CaddyTemplate)
+    $caddy = $caddy.Replace('{{APP_PORT}}', (Get-Setting 'REELGUO_WEB_PORT' $(if ($tunnel) { '8080' } else { '80' })))
+    $caddy = $caddy.Replace('{{APP_BIND}}', $(if ($tunnel) { '127.0.0.1 [::1]' } else { '0.0.0.0' }))
+    $caddy = $caddy.Replace('{{ADMIN_PORT}}', (Get-Setting 'REELGUO_ADMIN_PORT' '8081'))
+    $caddy = $caddy.Replace('{{API}}', "127.0.0.1:$apiPort")
+    $caddy = $caddy.Replace('{{WEB_ROOT}}', ((Join-Path $CurrentLink 'web') -replace '\\', '/'))
+    $caddy = $caddy.Replace('{{LOG_DIR}}', ($LogDir -replace '\\', '/'))
+    Write-TextFile (Join-Path $Dir 'Caddyfile') $caddy
+}
+
+function Get-CurrentRelease {
+    if (-not (Test-Path $CurrentLink)) { return $null }
+    $target = @((Get-Item $CurrentLink -Force).Target) | Select-Object -First 1
+    if (-not $target) { return $null }
+    return (Split-Path $target -Leaf)
+}
+
+function Get-Releases {
+    if (-not (Test-Path $ReleasesDir)) { return @() }
+    return @(Get-ChildItem $ReleasesDir -Directory | Sort-Object Name -Descending | ForEach-Object { $_.Name })
+}
+
+# Points "current" at a release. The services must be stopped (stop/start is done by Switch-Release).
+function Set-CurrentRelease([string]$Id) {
+    $target = Join-Path $ReleasesDir $Id
+    if (-not (Test-Path $target)) { Stop-WithError "No such release: $Id" }
+    if (Test-Path $CurrentLink) { [System.IO.Directory]::Delete($CurrentLink) }   # removes the link, not the release
+    New-Item -ItemType Junction -Path $CurrentLink -Target $target | Out-Null
+}
+
+function Switch-Release([string]$Id) {
+    Write-Step "Switching to release $Id"
+    Stop-ReelGuo
+    Set-CurrentRelease $Id
+    Start-ReelGuo
+    Write-Ok "running release $Id"
+}
+
+# Keeps the newest releases (and the current one), removes the rest.
+function Remove-OldReleases {
+    $current = Get-CurrentRelease
+    $all = Get-Releases
+    $keep = @($all | Select-Object -First $KeepReleases) + @($current)
+    foreach ($r in $all) {
+        if ($keep -notcontains $r) {
+            Remove-Item (Join-Path $ReleasesDir $r) -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Note "removed old release $r"
+        }
     }
 }
 
-function Get-ComposeArgs {
-    $list = @('compose', '-p', $Project, '--env-file', $EnvFile, '-f', $ComposeBase, '-f', $ComposeStg, '--profile', 'app')
-    if ((Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -eq 'tunnel') { $list += @('--profile', 'tunnel') }
-    return ,$list
+# ---------------------------------------------------------------------------------------------------------------
+# Windows services
+# ---------------------------------------------------------------------------------------------------------------
+
+function Set-ServiceDefinition([string]$Name, [string]$DisplayName, [string]$ImagePath, [string[]]$DependsOn, [string[]]$Environment) {
+    $key = "HKLM:\SYSTEM\CurrentControlSet\Services\$Name"
+    if (-not (Get-Service $Name -ErrorAction SilentlyContinue)) {
+        $params = @{ Name = $Name; BinaryPathName = $ImagePath; DisplayName = $DisplayName; StartupType = 'Automatic' }
+        if ($DependsOn) { $params['DependsOn'] = $DependsOn }
+        New-Service @params | Out-Null
+        Write-Ok "service $Name created"
+    } else {
+        Set-ItemProperty $key -Name ImagePath -Value $ImagePath
+        if ($DependsOn) { Set-ItemProperty $key -Name DependOnService -Type MultiString -Value $DependsOn }
+        Set-Service $Name -StartupType Automatic
+        Write-Ok "service $Name updated"
+    }
+    if ($Environment) { Set-ItemProperty $key -Name Environment -Type MultiString -Value $Environment }
+    # Restart after a crash: 5 s, 15 s, then every minute; the failure count resets after a day.
+    & sc.exe failure $Name reset= 86400 actions= restart/5000/restart/15000/restart/60000 | Out-Null
 }
 
-# docker compose with the staging files, project and settings. Stops the script when the command fails.
-function Invoke-Compose {
-    $all = (Get-ComposeArgs) + $args
-    & docker @all
-    if ($LASTEXITCODE -ne 0) { Stop-WithError "docker compose $($args -join ' ') failed (exit code $LASTEXITCODE)." }
+function Install-ReelGuoServices {
+    Write-Step 'Windows services'
+    Set-ServiceDefinition $ApiService 'ReelGuo API' (Join-Path $CurrentLink 'api\ReelGuo.Api.exe') @($PgService) @('ASPNETCORE_ENVIRONMENT=Production')
+    Set-ServiceDefinition $WorkerService 'ReelGuo worker' (Join-Path $CurrentLink 'worker\ReelGuo.Worker.exe') @($PgService) @('DOTNET_ENVIRONMENT=Production')
+    Set-ServiceDefinition $WebService 'ReelGuo web (Caddy)' ('{0} run --config {1} --adapter caddyfile' -f $CaddyExe, (Join-Path $CurrentLink 'Caddyfile')) @($ApiService) $null
 }
 
-# The same, returning standard output as text (progress messages still go to the screen).
-function Invoke-ComposeOutput {
-    $all = (Get-ComposeArgs) + $args
-    $out = & docker @all
-    if ($LASTEXITCODE -ne 0) { Stop-WithError "docker compose $($args -join ' ') failed (exit code $LASTEXITCODE)." }
-    return ($out -join "`n")
+# Cloudflare Tunnel connector as a Windows service (re-installed when the token changes).
+function Install-TunnelService {
+    if ((Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -ne 'tunnel') { return }
+    Write-Step 'Cloudflare Tunnel connector'
+    $token = Get-Setting 'CLOUDFLARE_TUNNEL_TOKEN'
+    $cloudflared = Get-CloudflaredExe
+    if (-not $cloudflared) { Stop-WithError 'cloudflared was not found. Run setup.ps1 (it installs it), or install it by hand: winget install --id Cloudflare.cloudflared' }
+    $existing = Get-Service $TunnelService -ErrorAction SilentlyContinue
+    if ($existing) {
+        $image = (Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$TunnelService").ImagePath
+        if ($image -like "*$token*") { Write-Ok 'cloudflared service is installed with this token'; return }
+        Write-Note 'the tunnel token changed: re-installing the connector'
+        & $cloudflared service uninstall | Out-Null
+        Start-Sleep -Seconds 3
+    }
+    & $cloudflared service install $token
+    if ($LASTEXITCODE -ne 0 -or -not (Get-Service $TunnelService -ErrorAction SilentlyContinue)) { Stop-WithError 'Could not install the cloudflared service (check the token).' }
+    Write-Ok 'cloudflared service installed'
+}
+
+function Stop-ReelGuo {
+    foreach ($s in @($WebService, $WorkerService, $ApiService)) {
+        if (Get-Service $s -ErrorAction SilentlyContinue) { Stop-Service $s -Force -ErrorAction SilentlyContinue }
+    }
+    Start-Sleep -Seconds 2
+}
+
+function Start-ReelGuo {
+    foreach ($s in @($PgService, $ApiService, $WorkerService, $WebService)) {
+        if (Get-Service $s -ErrorAction SilentlyContinue) { Start-Service $s }
+    }
+    if ((Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -eq 'tunnel' -and (Get-Service $TunnelService -ErrorAction SilentlyContinue)) { Start-Service $TunnelService }
+}
+
+# Public-port mode: Windows Firewall lets only Cloudflare reach the app port.
+function Set-CloudflareFirewall {
+    if ((Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -ne 'public-port') { return }
+    Write-Step 'Windows Firewall (public-port mode)'
+    $port = [int](Get-Setting 'REELGUO_WEB_PORT' '80')
+    $ranges = @((Invoke-RestMethod 'https://www.cloudflare.com/ips-v4') -split "`n") + @((Invoke-RestMethod 'https://www.cloudflare.com/ips-v6') -split "`n") |
+        ForEach-Object { $_.Trim() } | Where-Object { $_ }
+    Get-NetFirewallRule -DisplayName 'ReelGuo staging (Cloudflare only)' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+    New-NetFirewallRule -DisplayName 'ReelGuo staging (Cloudflare only)' -Direction Inbound -Protocol TCP -LocalPort $port -RemoteAddress $ranges -Action Allow | Out-Null
+    Write-Ok "port $port open to Cloudflare's $($ranges.Count) address ranges only"
 }
 
 # ---------------------------------------------------------------------------------------------------------------
-# Checks over HTTP, on this server (the web container's local port)
+# Checks over HTTP, on this server
 # ---------------------------------------------------------------------------------------------------------------
 
-function Get-LocalBase {
-    $bind = Get-Setting 'REELGUO_WEB_BIND' '127.0.0.1:8080'
-    $port = $bind.Substring($bind.LastIndexOf(':') + 1)
-    return "http://127.0.0.1:$port"
-}
-
-function Get-AdminBase {
-    $bind = Get-Setting 'REELGUO_ADMIN_BIND' '127.0.0.1:8081'
-    $port = $bind.Substring($bind.LastIndexOf(':') + 1)
-    return "http://127.0.0.1:$port"
-}
+function Get-LocalBase { return "http://127.0.0.1:$(Get-Setting 'REELGUO_WEB_PORT' '8080')" }
+function Get-AdminBase { return "http://127.0.0.1:$(Get-Setting 'REELGUO_ADMIN_PORT' '8081')" }
+function Get-ApiBase   { return "http://127.0.0.1:$(Get-Setting 'REELGUO_API_PORT' '5080')" }
 
 function Invoke-Http([string]$Url, [int]$TimeoutSec = 10) {
     try {
@@ -181,7 +595,6 @@ function Invoke-Http([string]$Url, [int]$TimeoutSec = 10) {
     }
 }
 
-# Waits until the API answers /health/ready through the web container (migrations run on the first start).
 function Wait-Healthy([int]$TimeoutSec = 300) {
     Write-Step "Waiting for the site to become ready (up to $([int]($TimeoutSec / 60)) minutes)"
     $url = "$(Get-LocalBase)/health/ready"
@@ -196,65 +609,104 @@ function Wait-Healthy([int]$TimeoutSec = 300) {
     return $false
 }
 
-# Quick checks that the site works and stays out of search results. Returns $true when all pass.
 function Test-Site {
     Write-Step 'Checking the site'
     $base = Get-LocalBase
     $ok = $true
-
+    foreach ($s in @($PgService, $ApiService, $WorkerService, $WebService)) {
+        $svc = Get-Service $s -ErrorAction SilentlyContinue
+        if ($svc -and $svc.Status -eq 'Running') { Write-Ok "service $s running" } else { Write-Warn "service $s is not running"; $ok = $false }
+    }
     $front = Invoke-Http "$base/"
     if ($front.Status -eq 200 -and $front.Body -match '<div id="seo"' -and $front.Body -match '<div id="root">') { Write-Ok 'home page: the app with its server-rendered content' }
     else { Write-Warn "home page: HTTP $($front.Status)"; $ok = $false }
-
     $robots = Invoke-Http "$base/robots.txt"
     $indexing = (Get-Setting 'REELGUO_ALLOW_INDEXING' 'false') -eq 'true'
     if ($robots.Status -eq 200 -and ($indexing -or $robots.Body -match 'Disallow: /\s*$')) {
         if ($indexing) { Write-Warn 'robots.txt allows search engines (REELGUO_ALLOW_INDEXING=true). Staging should keep it false.' }
         else { Write-Ok 'robots.txt keeps search engines out' }
     } else { Write-Warn "robots.txt: HTTP $($robots.Status)"; $ok = $false }
-
     $config = Invoke-Http "$base/api/v1/config"
     if ($config.Status -eq 200) { Write-Ok 'API answers (/api/v1/config)' } else { Write-Warn "API /api/v1/config: HTTP $($config.Status)"; $ok = $false }
-
     $admin = Invoke-Http "$(Get-AdminBase)/"
     if ($admin.Status -eq 200) { Write-Ok "admin console on this server: $((Get-AdminBase).Replace('127.0.0.1', 'localhost'))" } else { Write-Warn "admin console: HTTP $($admin.Status)"; $ok = $false }
-
     if ((Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -eq 'tunnel') {
-        $state = (& docker ps --filter "name=$Project-cloudflared" --format '{{.Status}}') -join ' '
-        if ($state -match '^Up') { Write-Ok "Cloudflare tunnel connector is running ($state)" }
-        else { Write-Warn "Cloudflare tunnel connector is not running: '$state'. Check: .\scripts\staging\ops.ps1 logs cloudflared"; $ok = $false }
+        $t = Get-Service $TunnelService -ErrorAction SilentlyContinue
+        if ($t -and $t.Status -eq 'Running') { Write-Ok 'Cloudflare tunnel connector running (its connection status is on the tunnel page in Cloudflare)' }
+        else { Write-Warn 'Cloudflare tunnel connector (service cloudflared) is not running'; $ok = $false }
     }
     return $ok
 }
 
-function Show-RecentLogs {
-    Write-Step 'Recent logs (api, worker, web)'
-    $all = (Get-ComposeArgs) + @('logs', '--no-color', '--tail', '60', 'api', 'worker', 'web')
-    & docker @all
+function Show-RecentLogs([int]$Count = 25) {
+    foreach ($source in @('ReelGuo.Api', 'ReelGuo.Worker')) {
+        Write-Step "Recent log: $source (Windows Event Log, Application)"
+        $events = Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = $source } -MaxEvents $Count -ErrorAction SilentlyContinue
+        if ($events) { $events | Sort-Object TimeCreated | ForEach-Object { Write-Host ('{0:HH:mm:ss} {1,-11} {2}' -f $_.TimeCreated, $_.LevelDisplayName, (($_.Message -split "`n")[0..2] -join ' ')) } }
+        else { Write-Note '(no entries)' }
+    }
+    $caddyLog = Join-Path $LogDir 'caddy.log'
+    if (Test-Path $caddyLog) { Write-Step 'Recent log: web (Caddy)'; Get-Content $caddyLog -Tail 10 }
 }
 
 # ---------------------------------------------------------------------------------------------------------------
-# Deploy record (infra/staging.deploy.log, git-ignored)
+# Backups (pg_dump, custom format) in C:\reelguo-staging\backups
 # ---------------------------------------------------------------------------------------------------------------
 
-function Get-Commit {
-    if (-not (Test-Path (Join-Path $RepoRoot '.git'))) { return '(no git)' }
-    $c = & git -C $RepoRoot rev-parse --short --verify --quiet HEAD
-    if ($LASTEXITCODE -ne 0 -or -not $c) { return '(no commit)' }
-    return $c
+function Invoke-Backup {
+    New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
+    $db = Get-Setting 'REELGUO_DB_NAME' 'reelguo'
+    $file = Join-Path $BackupDir ('{0}-{1:yyyyMMddTHHmmssZ}.dump' -f $db, (Get-Date).ToUniversalTime())
+    $env:PGPASSWORD = Get-Setting 'REELGUO_DB_PASSWORD'
+    try {
+        & (Join-Path $PgBin 'pg_dump.exe') -h 127.0.0.1 -p 5432 -U (Get-Setting 'REELGUO_DB_USER' 'reelguo') -d $db --format=custom --compress=6 --no-owner --no-privileges --file="$file.partial"
+        if ($LASTEXITCODE -ne 0) { Stop-WithError "pg_dump failed (exit code $LASTEXITCODE)." }
+        Move-Item "$file.partial" $file -Force
+        & (Join-Path $PgBin 'pg_restore.exe') --list $file | Out-Null
+        if ($LASTEXITCODE -ne 0) { Stop-WithError "The backup $file is not readable." }
+    } finally {
+        Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+    }
+    $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
+    Write-TextFile "$file.sha256" ("$hash  $(Split-Path $file -Leaf)`n")
+    $keepDays = [int](Get-Setting 'REELGUO_BACKUP_KEEP_DAYS' '14')
+    Get-ChildItem $BackupDir -File | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$keepDays) } | Remove-Item -Force
+    return (Split-Path $file -Leaf)
 }
+
+# Replaces the database with a backup, in one transaction. The API and worker must be stopped.
+function Invoke-Restore([string]$FileName) {
+    $file = Join-Path $BackupDir (Split-Path $FileName -Leaf)
+    if (-not (Test-Path $file)) { Stop-WithError "No such backup: $file" }
+    if (Test-Path "$file.sha256") {
+        $expected = ((Get-Content "$file.sha256" -Raw) -split '\s+')[0]
+        if ((Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { Stop-WithError "The backup $file does not match its checksum." }
+    }
+    $env:PGPASSWORD = Get-Setting 'REELGUO_DB_PASSWORD'
+    try {
+        & (Join-Path $PgBin 'pg_restore.exe') -h 127.0.0.1 -p 5432 -U (Get-Setting 'REELGUO_DB_USER' 'reelguo') -d (Get-Setting 'REELGUO_DB_NAME' 'reelguo') --clean --if-exists --no-owner --no-privileges --single-transaction --exit-on-error $file
+        if ($LASTEXITCODE -ne 0) { Stop-WithError "The restore failed (pg_restore exit code $LASTEXITCODE); the database was left as it was." }
+    } finally {
+        Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+    }
+}
+
+# Nightly backup at 03:30 server time, as SYSTEM.
+function Register-BackupTask {
+    $script = Join-Path $RepoRoot 'scripts\staging\backup.ps1'
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$script`""
+    $trigger = New-ScheduledTaskTrigger -Daily -At '03:30'
+    $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+    Register-ScheduledTask -TaskName $BackupTaskName -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
+    Write-Ok "nightly database backup scheduled (03:30, task '$BackupTaskName')"
+}
+
+# ---------------------------------------------------------------------------------------------------------------
+# Deploy record (C:\reelguo-staging\deploy.log)
+# ---------------------------------------------------------------------------------------------------------------
 
 function Add-DeployRecord([string]$Action, [string]$Result) {
-    $line = '{0:u} | {1,-8} | {2,-12} | {3}' -f (Get-Date).ToUniversalTime(), $Action, (Get-Commit), $Result
-    [System.IO.File]::AppendAllText($DeployLog, $line + "`n", (New-Object System.Text.UTF8Encoding($false)))
-}
-
-function Test-SettingsReady {
-    if (-not (Test-Path $EnvFile)) { Stop-WithError 'infra\staging.env does not exist yet. Run .\scripts\staging\setup.ps1 first.' }
-    foreach ($k in @('REELGUO_APP_URL', 'REELGUO_MEDIA_KEY', 'REELGUO_JWT_KEY', 'REELGUO_ADMIN_PASSWORD')) {
-        if ((Get-Setting $k) -eq '') { Stop-WithError "$k is empty in infra\staging.env." }
-    }
-    if ((Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -eq 'tunnel' -and (Get-Setting 'CLOUDFLARE_TUNNEL_TOKEN') -eq '') {
-        Stop-WithError 'CLOUDFLARE_TUNNEL_TOKEN is empty in infra\staging.env (tunnel mode).'
-    }
+    $line = '{0:u} | {1,-8} | {2,-30} | {3}' -f (Get-Date).ToUniversalTime(), $Action, (Get-CurrentRelease), $Result
+    New-Item -ItemType Directory -Force -Path $StagingHome | Out-Null
+    [System.IO.File]::AppendAllText($DeployLog, $line + "`r`n", (New-Object System.Text.UTF8Encoding($false)))
 }

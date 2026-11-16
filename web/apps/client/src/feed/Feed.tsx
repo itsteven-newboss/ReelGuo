@@ -24,6 +24,7 @@ import { closeOverlay, openOverlay } from "../state/nav";
 import { useUi } from "../state/ui";
 import { Sheet } from "../ui/Overlays";
 import { DetailPanel, EpisodeGrid, type LockedFn, type Panel } from "./DetailSheet";
+import { BRAND } from "../brand";
 import {
   ContextHeader, ControlsLock, DesktopContextHeader, DesktopControls, DesktopMeta, DesktopRail, ErrorCard, FullscreenControls,
   LockHint, MobileInfo, MobileRail, MobileTopChips, PauseIndicator, ScrubOverlay, SeekLine, SpeedChip,
@@ -647,7 +648,7 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
 
                 {showUi && !wide && (
                   <>
-                    <MobileRail bottom={`calc(var(--sab) + ${bottomInset + 92}px)`} author={v.author?.name ?? "ReelGuo"}
+                    <MobileRail bottom={`calc(var(--sab) + ${bottomInset + 92}px)`} author={v.author?.name ?? BRAND}
                       liked={isLiked(v.id)} likeCount={((isActive ? series.data?.counts.like : undefined) ?? v.like_count) + bump(isLiked(v.id))} onLike={onLike}
                       fav={isFav(v.id)} favCount={((isActive ? series.data?.counts.collect : undefined) ?? v.collect_count) + bump(isFav(v.id))} onFav={onFav}
                       comments={(isActive ? series.data?.counts.comment : undefined) ?? v.comment_count} onComments={onComments}
@@ -668,7 +669,7 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
                       comments={series.data?.counts.comment ?? v.comment_count} onComments={onComments}
                       fav={isFav(v.id)} favCount={(series.data?.counts.collect ?? v.collect_count) + bump(isFav(v.id))} onFav={onFav}
                       onEpisodes={() => openPanel("episodes")} onShare={onShare} />
-                    <DesktopMeta author={v.author?.name ?? "ReelGuo"} episode={curEp} total={episodes.length} score={v.score}
+                    <DesktopMeta author={v.author?.name ?? BRAND} episode={curEp} total={episodes.length} score={v.score}
                       title={info?.title ? `${v.title} · ${info.title}` : v.title} description={v.description} />
                   </>
                 )}

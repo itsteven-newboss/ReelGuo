@@ -50,9 +50,10 @@ public sealed record SeriesDetailDto(
     bool IsFinished, bool IsOriginal, string CategorySlug, string CategoryName, DateTimeOffset? PublishedAt,
     DateTimeOffset? LastEpisodeAt, RatingDto Rating);
 
+/// <param name="Kind">"hls" (packaged adaptive stream) or "mp4" (one file played as uploaded, from Tencent COS).</param>
 public sealed record PlayInfoDto(
     long Id, int EpNum, string Title, double Duration, string VideoUrl, DateTimeOffset ExpiresAt,
-    string? Poster, int Width, int Height);
+    string? Poster, int Width, int Height, string Kind);
 
 public static class PublicEndpoints
 {
@@ -195,11 +196,11 @@ public static class PublicEndpoints
     }
 
     private static async Task<Results<Ok<PlayInfoDto>, NotFound<ApiErrorResponse>, JsonHttpResult<ApiErrorResponse>>> Play(
-        long id, int ep, HttpContext http, ReelGuoDbContext db, ICountryResolver resolver, MediaUrlSigner signer, WalletService wallets,
-        IOptions<BillingOptions> billing, TimeProvider time, CancellationToken ct)
+        long id, int ep, HttpContext http, ReelGuoDbContext db, ICountryResolver resolver, MediaUrlSigner signer, CosVideoStore cos,
+        WalletService wallets, IOptions<BillingOptions> billing, TimeProvider time, CancellationToken ct)
     {
         var row = await db.Episodes.AsNoTracking()
-            .Where(e => e.EpisodeNumber == ep && e.Status == EpisodeStatus.Ready && e.HlsPrefix != null)
+            .Where(e => e.EpisodeNumber == ep && e.Status == EpisodeStatus.Ready && (e.HlsPrefix != null || e.VideoKey != null))
             .Where(e => db.Series.VisibleTo(resolver.Resolve(http), Today(time)).Any(s => s.Id == id && s.Id == e.SeriesId))
             .Select(e => new { Episode = e, e.Series.EpisodePrice, e.Series.FreeEpisodes })
             .FirstOrDefaultAsync(ct);
@@ -215,9 +216,15 @@ public static class PublicEndpoints
             return TypedResults.Json(ApiErrorResponse.Of("episode_locked", "本集需解锁后观看"), statusCode: StatusCodes.Status402PaymentRequired);
         }
 
-        var (url, expiresAt) = signer.PlaybackUrl(episode.HlsPrefix!);
+        // A COS video is played straight from the bucket with a short-lived signed GET; it cannot be revoked once handed
+        // out, so takedowns and country blocks apply here, when the link is issued, and the link expires soon after.
+        var fromCos = episode.VideoKey is not null && cos.Enabled;
+        if (episode.VideoKey is not null && !fromCos && episode.HlsPrefix is null)
+            return TypedResults.NotFound(ApiErrorResponse.Of("not_found", "该集暂时无法播放"));
+        var (url, expiresAt) = fromCos ? cos.PlaybackUrl(episode.VideoKey!) : signer.PlaybackUrl(episode.HlsPrefix!);
+        if (fromCos) http.Response.Headers.CacheControl = "no-store";
         return TypedResults.Ok(new PlayInfoDto(
             id, episode.EpisodeNumber, episode.Title, episode.DurationSeconds, url, expiresAt,
-            signer.PublicUrlOrNull(episode.PosterKey), episode.Width, episode.Height));
+            signer.PublicUrlOrNull(episode.PosterKey), episode.Width, episode.Height, fromCos ? "mp4" : "hls"));
     }
 }

@@ -142,7 +142,7 @@ public static class BillingEndpoints
         var uid = UserAuth.UserId(http);
         // Only what the viewer could actually watch here can be bought.
         var row = await db.Episodes.AsNoTracking()
-            .Where(e => e.SeriesId == id && e.EpisodeNumber == ep && e.Status == EpisodeStatus.Ready && e.HlsPrefix != null)
+            .Where(e => e.SeriesId == id && e.EpisodeNumber == ep && e.Status == EpisodeStatus.Ready && (e.HlsPrefix != null || e.VideoKey != null))
             .Where(e => db.Series.VisibleTo(resolver.Resolve(http), PublicEndpoints.Today(time)).Any(s => s.Id == e.SeriesId))
             .Select(e => new { e.IsFree, e.Series.EpisodePrice, e.Series.FreeEpisodes, e.Series.Title })
             .FirstOrDefaultAsync(ct);

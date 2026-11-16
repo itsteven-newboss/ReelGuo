@@ -113,10 +113,17 @@ public sealed class Episode
     public double DurationSeconds { get; set; }
     public EpisodeStatus Status { get; set; }
 
-    /// <summary>Object key of the original upload in the private raw bucket.</summary>
+    /// <summary>
+    /// Object key of the latest upload: in the private raw bucket ("uploads/…", "incoming/…"), or in the COS video
+    /// bucket ("videos/…", see <see cref="ReelGuo.Data.Media.CosKeys"/>).
+    /// </summary>
     public string? SourceKey { get; set; }
-    /// <summary>Path prefix of the packaged HLS in the media bucket, e.g. s/123/e/3/v2.</summary>
+    /// <summary>Path prefix of the packaged HLS in the media bucket, e.g. s/123/e/3/v2. Null when the episode plays from COS.</summary>
     public string? HlsPrefix { get; set; }
+    /// <summary>The COS object viewers play (an MP4 played as is). Null when the episode plays packaged HLS.</summary>
+    public string? VideoKey { get; set; }
+    /// <summary>Size of the COS object, as COS reported it when the upload was confirmed.</summary>
+    public long? VideoBytes { get; set; }
     /// <summary>Bumped on every re-encode so CDN caches never serve stale segments.</summary>
     public int MediaVersion { get; set; }
     /// <summary>Rendition ladder produced by the worker (jsonb).</summary>

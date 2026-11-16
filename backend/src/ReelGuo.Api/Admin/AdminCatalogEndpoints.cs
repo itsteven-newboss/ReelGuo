@@ -107,6 +107,7 @@ public static class AdminCatalogEndpoints
             .WithSummary("Receives an upload when storage cannot accept direct browser uploads (development).");
 
         admin.MapAdminImport();
+        admin.MapAdminLibrary();
         return admin;
     }
 
@@ -371,15 +372,19 @@ public static class AdminCatalogEndpoints
             : new UploadTicket("PUT", $"/api/admin/uploads/raw/{key}", new() { ["Content-Type"] = contentType, [AdminAuth.CsrfHeader] = "1" }, key);
     }
 
+    /// <summary>A COS key gets a pre-signed COS PUT; anything else goes to the raw bucket.</summary>
+    private static UploadTicket UploadTicketFor(StorageBuckets storage, CosVideoStore cos, string key, string? contentType) =>
+        CosKeys.IsCosKey(key) ? CosUploadKeys.Ticket(cos, key, contentType) : TicketFor(storage, key, contentType);
+
     internal static UploadTicket TicketFor(StorageBuckets storage, string key, string? contentType) =>
         Ticket(storage, key, string.IsNullOrWhiteSpace(contentType) ? StorageKeys.ContentTypeFor(key) : contentType);
 
-    private static string SourceKeyFor(long seriesId, string fileName) =>
+    internal static string SourceKeyFor(long seriesId, string fileName) =>
         $"uploads/{seriesId}/{Guid.NewGuid():N}/{StorageKeys.SanitizeFileName(fileName)}";
 
     private static async Task<Results<Ok<EpisodeUploadResponse>, NotFound<ApiErrorResponse>, BadRequest<ApiErrorResponse>, Conflict<ApiErrorResponse>>> CreateEpisode(
-        long id, CreateEpisodeRequest request, HttpContext http, ReelGuoDbContext db, StorageBuckets storage, MediaUrlSigner signer,
-        TimeProvider time, CancellationToken ct)
+        long id, CreateEpisodeRequest request, HttpContext http, ReelGuoDbContext db, StorageBuckets storage, CosVideoStore cos,
+        MediaUrlSigner signer, TimeProvider time, CancellationToken ct)
     {
         var series = await db.Series.FirstOrDefaultAsync(s => s.Id == id, ct);
         if (series is null) return TypedResults.NotFound(ApiErrorResponse.Of("not_found", "剧集不存在"));
@@ -392,7 +397,10 @@ public static class AdminCatalogEndpoints
             return TypedResults.Conflict(ApiErrorResponse.Of("episode_exists", $"第 {number} 集已存在"));
 
         var now = time.GetUtcNow();
-        var key = SourceKeyFor(id, request.FileName);
+        // With COS the file goes to "videos/{folder}/{series title}/{file}", the same layout as the folder upload.
+        var key = cos.Enabled
+            ? (await CosUploadKeys.ResolveAsync(db, cos, null, id, number, cos.DefaultFolder, series.Title, request.FileName, null, ct)).Key
+            : SourceKeyFor(id, request.FileName);
         var episode = new Episode
         {
             SeriesId = id,
@@ -406,7 +414,7 @@ public static class AdminCatalogEndpoints
         db.Episodes.Add(episode);
         db.AddAudit(now, AdminActor.From(http), "episode.create", "series", id.ToString(), new { episode = number });
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(new EpisodeUploadResponse(ToDto(episode, signer), TicketFor(storage, key, request.ContentType)));
+        return TypedResults.Ok(new EpisodeUploadResponse(ToDto(episode, signer), UploadTicketFor(storage, cos, key, request.ContentType)));
     }
 
     private static async Task<Results<Ok<AdminEpisodeDto>, NotFound<ApiErrorResponse>, BadRequest<ApiErrorResponse>>> UpdateEpisode(
@@ -425,30 +433,37 @@ public static class AdminCatalogEndpoints
     }
 
     private static async Task<Results<Ok<EpisodeUploadResponse>, NotFound<ApiErrorResponse>, BadRequest<ApiErrorResponse>>> ReplaceSource(
-        long id, ReplaceSourceRequest request, HttpContext http, ReelGuoDbContext db, StorageBuckets storage, MediaUrlSigner signer,
-        TimeProvider time, CancellationToken ct)
+        long id, ReplaceSourceRequest request, HttpContext http, ReelGuoDbContext db, StorageBuckets storage, CosVideoStore cos,
+        MediaUrlSigner signer, TimeProvider time, CancellationToken ct)
     {
-        var episode = await db.Episodes.FirstOrDefaultAsync(e => e.Id == id, ct);
+        var episode = await db.Episodes.Include(e => e.Series).FirstOrDefaultAsync(e => e.Id == id, ct);
         if (episode is null) return TypedResults.NotFound(ApiErrorResponse.Of("not_found", "分集不存在"));
         if (string.IsNullOrWhiteSpace(request.FileName))
             return TypedResults.BadRequest(ApiErrorResponse.Of("file_required", "请选择视频文件"));
 
-        // A ready episode keeps playing its current media until the new upload finishes processing.
-        episode.SourceKey = SourceKeyFor(episode.SeriesId, request.FileName);
+        // A ready episode keeps playing its current media until the new upload finishes processing; with COS the
+        // new file never takes the name of the object being played.
+        episode.SourceKey = cos.Enabled
+            ? (await CosUploadKeys.ResolveAsync(db, cos, episode, episode.SeriesId, episode.EpisodeNumber, cos.DefaultFolder,
+                episode.Series.Title, request.FileName, null, ct)).Key
+            : SourceKeyFor(episode.SeriesId, request.FileName);
         if (episode.Status != EpisodeStatus.Ready) episode.Status = EpisodeStatus.Uploading;
         episode.UpdatedAt = time.GetUtcNow();
         db.AddAudit(time, AdminActor.From(http), "episode.replace_source", "episode", id.ToString());
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(new EpisodeUploadResponse(ToDto(episode, signer), TicketFor(storage, episode.SourceKey, request.ContentType)));
+        return TypedResults.Ok(new EpisodeUploadResponse(ToDto(episode, signer), UploadTicketFor(storage, cos, episode.SourceKey, request.ContentType)));
     }
 
     private static async Task<Results<Ok<AdminEpisodeDto>, NotFound<ApiErrorResponse>, BadRequest<ApiErrorResponse>>> MarkUploaded(
-        long id, HttpContext http, ReelGuoDbContext db, StorageBuckets storage, MediaJobQueue queue, MediaUrlSigner signer,
-        TimeProvider time, CancellationToken ct)
+        long id, HttpContext http, ReelGuoDbContext db, StorageBuckets storage, CosVideoStore cos, MediaJobQueue queue,
+        MediaUrlSigner signer, TimeProvider time, CancellationToken ct)
     {
         var episode = await db.Episodes.FirstOrDefaultAsync(e => e.Id == id, ct);
         if (episode is null) return TypedResults.NotFound(ApiErrorResponse.Of("not_found", "分集不存在"));
-        if (episode.SourceKey is null || !await storage.Raw.ExistsAsync(episode.SourceKey, ct))
+        var found = episode.SourceKey is { } key && (CosKeys.IsCosKey(key)
+            ? cos.Enabled && await cos.SizeAsync(key, ct) is not null
+            : await storage.Raw.ExistsAsync(key, ct));
+        if (!found)
             return TypedResults.BadRequest(ApiErrorResponse.Of("source_missing", "没有找到上传的视频文件，请重新上传"));
 
         if (episode.Status != EpisodeStatus.Ready) episode.Status = EpisodeStatus.Processing;

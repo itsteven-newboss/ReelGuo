@@ -100,8 +100,13 @@ ReelGuo/
     packages/ui                  design tokens (tokens.css) and shared primitives
   edge/                          Cloudflare Worker for the media host (+ tests)
   native/                        Tauri 2 desktop and Android shell: boot/ (bundled start page), src-tauri/ (Rust)
+  Assets/                        brand source picture; scripts/brand-icons.mjs (`pnpm brand:icons`) makes the page
+                                 logo (web/packages/ui/src/brand, BrandMark), favicons, install and app icons from it
   scripts/seed-demo.mjs          generates labelled demo episodes and runs them through the real pipeline
-  infra/                         docker-compose, Caddyfile, web Dockerfile
+  scripts/staging/               staging on a Windows server, natively as Windows services (no Docker): setup,
+                                 update, rollback, ops, backup, demo content (docs/STAGING.md)
+  infra/                         docker-compose, Caddyfile, web Dockerfile; staging/ holds the native staging
+                                 Caddyfile template and settings example; backup/ the container backup scripts
   docs/                          this file, UI-REFERENCE.md
   .tools/ (git-ignored)          local ffmpeg, Rust toolchain and the updater signing key for development
   .data/  (git-ignored)          local media storage for development
@@ -665,6 +670,48 @@ page path with the built `index.html` plus that page's content (`backend/src/Ree
 - **robots.txt and sitemaps.** `/robots.txt`; `/sitemap.xml` (index) → `/sitemaps/pages.xml`, `/sitemaps/posts.xml`
   and `/sitemaps/series-{n}.xml` (400 series with their episode URLs per file). The sitemap lists series licensed
   in `Seo:SitemapCountry` (default US). Absolute URLs use `Seo:PublicBaseUrl`.
+
+### 9.14 Episode videos in Tencent COS, and the folder upload ✅
+
+`Video:Provider` chooses where episode videos live. **`Hls`** (the default) is the pipeline above: the upload goes to
+the raw bucket and the worker packages adaptive HLS. **`Cos`** stores them as the Viora (ReelPico) platform does, in a
+private Tencent COS bucket, and plays the uploaded MP4 itself (`ReelGuo.Data/Media/CosVideo.cs`).
+
+- **Layout.** `videos/{storage folder}/{title folder}/{file name}`, the delivery folder's own names, so an object
+  leads straight back to the file on the PC. A name another episode already uses gets `~{series}-{episode}` before
+  the extension. The episode editor uses `Video:Cos:Folder` and the series title as the folders.
+- **Signing.** COS signature v5 as a query string (`CosSigner`, the same as Viora's; tested against Tencent's
+  documented example). Every link covers one method and one object and expires: a browser `PUT` (6 h), a `HEAD` for
+  the API's checks, a `GET` for the worker (30 min) and for viewers (`Video:Cos:PlaybackUrlMinutes`, 30). The
+  bucket stays private and the key never leaves the server.
+- **Upload.** The admin's browser sends the file straight to COS, then the API confirms it with a `HEAD` (it must
+  exist and have the size the browser reported) and queues the worker. The worker runs ffprobe and takes a poster
+  frame through a signed `GET` with range requests, so it never downloads the file; it rejects anything that is not
+  H.264, since nothing re-encodes it. The episode then has `video_key` (the object played) and `video_bytes` instead
+  of `hls_prefix`.
+- **Never destructive.** The bucket may be shared with Viora, so ReelGuo never deletes or overwrites an object it did
+  not upload. A file already at its key with the same size is linked instead of sent again; one with another size
+  makes the new upload take the `~` name. A replacement never takes the name of the object being played. Deleting an
+  episode leaves its object for an operator to remove.
+- **Playback.** `GET /api/v1/series/{id}/episodes/{n}/play` returns a signed COS `GET` link and `kind: "mp4"`; the
+  player plays it natively, and hls.js is used only for `.m3u8`. Country blocks, licences, takedowns and paid
+  episodes are all checked when the link is issued. A COS link can't be revoked afterwards, which is why it lasts
+  only 30 minutes. The edge worker and the `/media` edge are not involved.
+- **Folder upload** (admin **文件夹上传**, `/api/admin/library/*`). The browser lists the delivery folder
+  (`VideoDetails/*.json` in the `reelpico.series/1` format, `Images/`, `Videos/<title>/<title>_<n>.mp4`).
+  - It reads each MP4's header (a few KB per file: complete, faststart, codecs, size, duration) and sends the
+    listing.
+  - The server groups the three folders by a name key (NFKC, case, punctuation and a leading "(Dubbed)" ignored) and
+    matches each title to a series. It matches by the JSON's `id`, then by an id derived from the name, then by
+    exactly one unlinked series of the same name. It answers with a state per episode: new, stored (already in COS:
+    linked), uploaded, changed, incomplete, unplayable, held (above the total), and so on.
+  - The browser then creates the draft series (filling only empty fields, plus optional rights defaults) and its
+    cover, and uploads the episodes two at a time with retries.
+  - In Chrome and Edge it re-lists the remembered folder every 3 minutes to send newly downloaded files.
+- **Settings.** `Video:Provider`, `Video:Cos:{SecretId, SecretKey, Bucket, Region, Folder, CdnHost,
+  PlaybackUrlMinutes, UploadUrlMinutes}`. With `Cos` and any of the first four missing, or a bucket name without its
+  APPID, the API and the worker refuse to start and say which. `Video:Cos:Endpoint` exists only for tests (a local
+  fake bucket).
 
 ## 10. Web / PWA specifics
 

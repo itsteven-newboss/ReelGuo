@@ -129,6 +129,7 @@ public static class AdminClient
     {
         var transcoder = new Transcoder(
             api.Services.GetRequiredService<StorageBuckets>(),
+            api.Services.GetRequiredService<ReelGuo.Data.Media.CosVideoStore>(),
             new FfmpegOptions { BinDirectory = FfmpegLocator.BinDirectory ?? "" },
             NullLogger<Transcoder>.Instance);
         var runner = new JobRunner(api.Services.GetRequiredService<IServiceScopeFactory>(), transcoder, new WorkerOptions(),

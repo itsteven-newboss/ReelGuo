@@ -12,12 +12,13 @@ import { useUi } from "../state/ui";
 import { CloseButton, Modal } from "../ui/Overlays";
 import { startCheckout } from "./actions";
 import { fmtCoins, fmtDay, fmtMoney } from "./money";
+import { BRAND } from "../brand";
 
 /** Portal page frame for the account pages: breadcrumb, title, a readable column. */
 export function AccountFrame({ crumbs, title, sub, children }: { crumbs: { label: string; to?: string }[]; title: string; sub?: string; children: ReactNode }) {
   return (
     <Container>
-      <Breadcrumb items={[{ label: "ReelGuo", to: "/" }, ...crumbs]} />
+      <Breadcrumb items={[{ label: BRAND, to: "/" }, ...crumbs]} />
       <PageTitle sub={sub}>{title}</PageTitle>
       <div className="mt-6 max-w-[880px]">{children}</div>
     </Container>

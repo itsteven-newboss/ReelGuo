@@ -11,6 +11,7 @@ import { CommentsPanel } from "../social/Comments";
 import { useReport } from "../social/Report";
 import { togglePost, useAuth } from "../state/auth";
 import { useUi } from "../state/ui";
+import { BRAND, BRAND_SHORT } from "../brand";
 
 /** Second sanitising layer (the API already sanitises on save). Links open in a new tab. */
 function cleanHtml(html: string): string {
@@ -47,13 +48,13 @@ export function PostPage({ id }: { id: number }) {
 
   return (
     <Container>
-      <Breadcrumb items={[{ label: "ReelGuo", to: "/" }, { label: "热点吃瓜", to: href.posts() }, { label: post.data?.title ?? "帖子" }]} />
+      <Breadcrumb items={[{ label: BRAND, to: "/" }, { label: "热点吃瓜", to: href.posts() }, { label: post.data?.title ?? "帖子" }]} />
       {post.isError ? <EmptyState title="内容不存在或已下架" /> : !post.data ? <div className="flex justify-center py-16"><Spinner /></div> : (
         <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <article className="min-w-0">
             <h1 className="text-[24px] lg:text-[30px] font-bold text-on leading-snug">{post.data.title}</h1>
             <div className="mt-2.5 flex items-center gap-3 text-[13px] text-mut">
-              <span>ReelGuo吃瓜</span>
+              <span>{BRAND_SHORT}吃瓜</span>
               {post.data.published_at && <span>{new Date(post.data.published_at).toLocaleDateString("sv-SE")}</span>}
               <span className="flex items-center gap-1"><Flame size={13} />{fmtCount(post.data.hot)}</span>
             </div>

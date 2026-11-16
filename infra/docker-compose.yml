@@ -64,6 +64,14 @@ services:
       Seo__TemplateUrl: http://web:8080/index.html
       Seo__AllowIndexing: ${REELGUO_ALLOW_INDEXING:-false}
       Seo__PublicBaseUrl: ${REELGUO_APP_URL:-}
+      # Episode videos: Hls (transcoded here) or Cos (Tencent COS; docs/ARCHITECTURE.md §9.14). The worker needs the same.
+      Video__Provider: ${REELGUO_VIDEO_PROVIDER:-Hls}
+      Video__Cos__SecretId: ${REELGUO_COS_SECRET_ID:-}
+      Video__Cos__SecretKey: ${REELGUO_COS_SECRET_KEY:-}
+      Video__Cos__Bucket: ${REELGUO_COS_BUCKET:-}
+      Video__Cos__Region: ${REELGUO_COS_REGION:-ap-singapore}
+      Video__Cos__Folder: ${REELGUO_COS_FOLDER:-reelguo}
+      Video__Cos__CdnHost: ${REELGUO_COS_CDN_HOST:-}
     volumes: [media:/data]
     depends_on:
       postgres: { condition: service_healthy }
@@ -78,6 +86,11 @@ services:
       ConnectionStrings__Default: Host=postgres;Port=5432;Database=reelguo;Username=reelguo;Password=reelguo
       Storage__Provider: FileSystem
       Storage__FileSystemRoot: /data/storage
+      Video__Provider: ${REELGUO_VIDEO_PROVIDER:-Hls}
+      Video__Cos__SecretId: ${REELGUO_COS_SECRET_ID:-}
+      Video__Cos__SecretKey: ${REELGUO_COS_SECRET_KEY:-}
+      Video__Cos__Bucket: ${REELGUO_COS_BUCKET:-}
+      Video__Cos__Region: ${REELGUO_COS_REGION:-ap-singapore}
     volumes: [media:/data]
     depends_on:
       postgres: { condition: service_healthy }

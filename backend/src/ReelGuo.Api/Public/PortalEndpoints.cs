@@ -76,7 +76,7 @@ public static class PortalEndpoints
             .Select(a => new AnnouncementDto(a.Text, a.Url)).ToListAsync(ct);
         var mirrors = app.Value.Mirrors.Select(m => m.Trim().TrimEnd('/')).Where(m => m.Length > 0).Distinct().ToList();
         static string? Clean(string v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
-        return TypedResults.Ok(new SiteDto("ReelGuo", s.Tagline, notices, mirrors, Clean(s.PermanentDomain), Clean(s.Telegram), Clean(s.Email)));
+        return TypedResults.Ok(new SiteDto(Brand.Name, s.Tagline, notices, mirrors, Clean(s.PermanentDomain), Clean(s.Telegram), Clean(s.Email)));
     }
 
     private static async Task<Ok<TopicPage>> ListTopics(

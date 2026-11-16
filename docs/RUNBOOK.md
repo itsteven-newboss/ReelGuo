@@ -41,6 +41,7 @@ links normally stay valid for hours, so the media servers check a revoked-series
 | Media through the API (`/media/…`) | Immediately on the instance that handled the takedown; within 30 s on the others |
 | Media through the CDN edge (production) | Within about 60 s (the edge refreshes its list every minute) |
 | Episodes already downloaded into a viewer's browser cache | Can't be reached; the next segment the player asks for fails |
+| Episodes kept in Tencent COS (`Video:Provider=Cos`) | New play links stop immediately; a link already handed out works until it expires (`Video:Cos:PlaybackUrlMinutes`, 30 min). For an urgent case, also remove or rename the object in the COS console. |
 
 ### How to take something down
 
@@ -93,6 +94,10 @@ the same verified flag.
 | Database | Daily `pg_dump` by the `backup` service (`infra/backup/backup.sh`), checksummed, kept 14 days locally | `backups` volume, plus off-site when `REELGUO_BACKUP_REMOTE` is set |
 | Source videos (raw bucket) | Copy to a second bucket or provider (e.g. a nightly `rclone sync`), with versioning or object lock if available | Off-site |
 | Encoded media (media bucket) | Not backed up: every episode can be encoded again from its source | — |
+
+This section describes the container setup (`infra/docker-compose.yml`). The staging server runs natively on Windows
+without Docker: there a scheduled task runs `scripts\staging\backup.ps1` every night, and `rollback.ps1
+-RestoreBackup` restores (docs/STAGING.md §4 and §5).
 
 **Targets (proposed; confirm with the business):** lose at most 24 hours of data (one nightly backup), and be
 restored within 4 hours.
@@ -253,9 +258,9 @@ Page paths are answered by the API with the page's content for search engines (d
 
 | Setting | Staging | Production |
 |---|---|---|
-| `Seo__TemplateUrl` | `http://web:8080/index.html` (set in compose) | same |
-| `Seo__AllowIndexing` (`REELGUO_ALLOW_INDEXING`) | **false** (the default): robots.txt disallows everything, pages say noindex | `true` |
-| `Seo__PublicBaseUrl` (`REELGUO_APP_URL`) | the staging address | the main domain, e.g. `https://reelguo.com` |
+| Page template | Set by `scripts\staging` (`Seo:TemplatePath` → `C:\reelguo-staging\current\web\client\index.html`) | `Seo__TemplateUrl: http://web:8080/index.html` (set in compose) |
+| Indexing (`REELGUO_ALLOW_INDEXING`) | **false** (the default, in `staging.env`): robots.txt disallows everything, pages say noindex | `true` |
+| Public address (`REELGUO_APP_URL`) | the staging address (in `staging.env`) | the main domain, e.g. `https://reelguo.com` |
 
 Checks after a deploy: `curl -s https://<host>/robots.txt` (staging must say `Disallow: /`), and
 `curl -s https://<host>/video/<id> | grep -E "<title>|canonical|noindex"`. In production, submit
@@ -280,6 +285,8 @@ Checks after a deploy: `curl -s https://<host>/robots.txt` (staging must say `Di
 - [ ] Payments (if selling at launch): provider contracted and connected, descriptor set, 商品 prices reviewed, series
   prices set, 充值协议 (recharge terms) published, and a real test purchase and refund done (§8).
 - [ ] A load test against staging at the expected peak, recorded.
+- [ ] Video storage: if the videos are in Tencent COS, Tencent's written confirmation that the account may hold 18+
+  content, a CAM key limited to the bucket, CORS for the admin origins only, and a billing alert (docs/STAGING.md §6).
 - [ ] Search engines (§9a): `REELGUO_ALLOW_INDEXING=true` and `REELGUO_APP_URL` set in production only; robots.txt and a series page checked; sitemap submitted.
 - [ ] Apps (if offered at launch): production updater key and Android keystore created and stored, `REELGUO_ORIGINS`
   and `App__Mirrors__*` set, the Windows installer code-signed, builds tested on real devices, releases published (§9).

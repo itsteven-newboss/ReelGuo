@@ -17,9 +17,9 @@
     "targets": "all",
     "createUpdaterArtifacts": true,
     "category": "Entertainment",
-    "shortDescription": "ReelGuo 短剧",
-    "longDescription": "ReelGuo 短剧客户端（仅限 18 岁以上成年人）。",
-    "copyright": "© ReelGuo",
+    "shortDescription": "黄约短剧",
+    "longDescription": "黄约短剧客户端（仅限 18 岁以上成年人）。",
+    "copyright": "© 黄约短剧",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

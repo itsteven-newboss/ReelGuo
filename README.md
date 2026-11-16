@@ -2,10 +2,12 @@
 
 Vertical short-drama platform for adults: a C# (.NET 10) API and media worker, a React web app installable as a PWA, a React admin console, and a Cloudflare Worker for the media CDN.
 
+Visitors see it as **黄约短剧** (huangyueai.com). The name is set in two places, `web/packages/ui/src/brand/name.ts` and `backend/src/ReelGuo.Api/Brand.cs`. "ReelGuo" is the code name. It stays wherever software reads it: package and service names, headers, the app's user agent, and `app_name` in `/api/v1/config`, which the desktop and Android apps check.
+
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): decisions, system design, flows, country blocking, compliance, roadmap
 - [docs/UI-REFERENCE.md](docs/UI-REFERENCE.md): screen-by-screen UI spec and build status
 - [docs/RUNBOOK.md](docs/RUNBOOK.md): operations, including alerts, takedowns, country rules, payments and refunds, backups and monitoring
-- [docs/STAGING.md](docs/STAGING.md): setting up and updating the staging server (Windows + Docker, behind Cloudflare)
+- [docs/STAGING.md](docs/STAGING.md): setting up and updating the staging server (native Windows services, behind Cloudflare)
 
 ## Prerequisites
 
@@ -38,6 +40,7 @@ Purchases in development use a sandbox payment provider: 充值 (top up) opens a
 | Regenerate the TS client after API changes | `pnpm gen:api` |
 | Add a migration | `dotnet ef migrations add <Name> --project backend/src/ReelGuo.Data --startup-project backend/src/ReelGuo.Data` |
 | Everything in containers | `REELGUO_MEDIA_KEY=… REELGUO_JWT_KEY=… REELGUO_ADMIN_PASSWORD=… docker compose -f infra/docker-compose.yml --profile app up --build` |
+| Change the brand icon | Replace `Assets/HuangyueDingDing.png` (any transparent PNG; or `pnpm brand:icons --source <file>`), run `pnpm brand:icons`, commit what it writes. It makes the page logo (lossless WebP), favicons, install icons and the app icons. |
 | Deploy the media edge | see `edge/wrangler.toml` |
 | Takedown drill | `node scripts/takedown-drill.mjs --series <test id> --restore` (RUNBOOK §3) |
 | Staging: first setup / update / rollback | `scripts\staging\setup.ps1` / `update.ps1` / `rollback.ps1` (docs/STAGING.md) |

@@ -1,3 +1,5 @@
+import { isHlsUrl } from "./VideoSurface";
+
 /**
  * Warms the browser cache for the next item so its first frame appears almost instantly:
  * master playlist -> a low variant playlist -> its init segment and first media segment.
@@ -6,7 +8,8 @@
 const warmed = new Set<string>();
 
 export async function prefetchStart(masterUrl: string, signal?: AbortSignal) {
-  if (warmed.has(masterUrl)) return;
+  // A single MP4 (Tencent COS) needs no warming: the browser starts it with a range request on its own.
+  if (!isHlsUrl(masterUrl) || warmed.has(masterUrl)) return;
   warmed.add(masterUrl);
   try {
     const base = new URL(masterUrl, window.location.href);

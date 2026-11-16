@@ -1,7 +1,7 @@
 import { unwrap, ApiError } from "@reelguo/api-client";
-import { Spinner } from "@reelguo/ui";
+import { BRAND, BrandMark, Spinner } from "@reelguo/ui";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, BarChart3, Clapperboard, Coins, FileUp, Flag, Flame, Globe, History, KeyRound, Layers, LayoutGrid, LogOut, Megaphone, MessageSquareText, Receipt, ShieldCheck, Smartphone, Trophy, UserRound, Users } from "lucide-react";
+import { Activity, BarChart3, Clapperboard, Coins, FileUp, Flag, Flame, FolderUp, Globe, History, KeyRound, Layers, LayoutGrid, LogOut, Megaphone, MessageSquareText, Receipt, ShieldCheck, Smartphone, Trophy, UserRound, Users } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { AdminsPage } from "./pages/Admins";
 import { AnnouncementsPage } from "./pages/Announcements";
@@ -14,6 +14,7 @@ import { BlockedCountriesPage } from "./pages/BlockedCountries";
 import { ChannelsPage } from "./pages/Channels";
 import { CommentsPage } from "./pages/Comments";
 import { ImportPage } from "./pages/Import";
+import { LibraryPage } from "./pages/Library";
 import { MembersPage } from "./pages/Members";
 import { OrdersPage } from "./pages/Orders";
 import { ProductsPage } from "./pages/Products";
@@ -25,12 +26,13 @@ import { SeriesListPage } from "./pages/SeriesList";
 import { TopicsPage } from "./pages/Topics";
 import { api, setSession, signOut, useSession, type AdminSession } from "./session";
 
-type Section = "status" | "analytics" | "series" | "import" | "posts" | "topics" | "announcements" | "ranks" | "channels" | "comments" | "reports" | "members" | "orders" | "products" | "geo" | "age" | "app" | "admins" | "audit";
+type Section = "status" | "analytics" | "series" | "library" | "import" | "posts" | "topics" | "announcements" | "ranks" | "channels" | "comments" | "reports" | "members" | "orders" | "products" | "geo" | "age" | "app" | "admins" | "audit";
 
 const NAV: { key: Section; label: string; icon: ReactNode }[] = [
   { key: "status", label: "系统状态", icon: <Activity size={17} /> },
   { key: "analytics", label: "数据概览", icon: <BarChart3 size={17} /> },
   { key: "series", label: "内容管理", icon: <Clapperboard size={17} /> },
+  { key: "library", label: "文件夹上传", icon: <FolderUp size={17} /> },
   { key: "import", label: "批量导入", icon: <FileUp size={17} /> },
   { key: "posts", label: "吃瓜文章", icon: <Flame size={17} /> },
   { key: "topics", label: "专题", icon: <Layers size={17} /> },
@@ -82,6 +84,7 @@ function Layout({ session }: { session: AdminSession }) {
   else if (section === "series") page = <SeriesListPage onOpen={setEditing} />;
   else if (section === "status") page = <SystemStatusPage />;
   else if (section === "analytics") page = <AnalyticsPage />;
+  else if (section === "library") page = <LibraryPage onOpenSeries={(id) => { setSection("series"); setEditing(id); }} />;
   else if (section === "import") page = <ImportPage onOpenSeries={(id) => { setSection("series"); setEditing(id); }} />;
   else if (section === "posts") page = <PostsAdminPage />;
   else if (section === "topics") page = <TopicsPage />;
@@ -103,8 +106,8 @@ function Layout({ session }: { session: AdminSession }) {
     <div className="h-full flex bg-canvas text-on">
       <aside className="w-[220px] shrink-0 flex flex-col p-3 gap-1">
         <div className="flex items-center gap-2 px-2.5 py-3">
-          <img src="/icon.svg" alt="" className="w-6 h-6 rounded-md" />
-          <span className="text-[14px] font-bold">ReelGuo</span>
+          <BrandMark height={22} />
+          <span className="text-[14px] font-bold">{BRAND}</span>
           <span className="text-[11px] text-dim">后台</span>
         </div>
         {NAV.map((item) => (
@@ -163,7 +166,7 @@ function Login() {
         <div className="w-12 h-12 rounded-(--r-md) bg-pc text-on-pc flex items-center justify-center mb-4">
           <KeyRound size={22} />
         </div>
-        <h1 className="text-[18px] font-bold">ReelGuo 后台</h1>
+        <h1 className="text-[18px] font-bold">{BRAND} 后台</h1>
         <p className="text-[12px] text-mut mt-1">所有操作都会以你的账号记录在操作日志中。</p>
 
         <label className="block mt-5 text-[12px] text-mut">账号</label>

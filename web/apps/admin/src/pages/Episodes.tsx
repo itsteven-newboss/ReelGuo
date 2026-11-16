@@ -1,5 +1,5 @@
 import { unwrap, type Schemas } from "@reelguo/api-client";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Film, RotateCcw, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
 import { api } from "../session";
@@ -15,6 +15,12 @@ type Pending = { name: string; size: number; progress: number; error?: string };
 export function EpisodesPanel({ series, onChanged }: { series: SeriesDto; onChanged: () => void }) {
   const qc = useQueryClient();
   const [pending, setPending] = useState<Pending[]>([]);
+  // Where uploads go decides what the hint says (COS plays the file as uploaded; otherwise it is transcoded).
+  const cos = useQuery({
+    queryKey: ["admin", "library", "config"],
+    queryFn: async () => unwrap(await api.GET("/api/admin/library")),
+    staleTime: 5 * 60_000,
+  }).data?.cos ?? false;
   const detailKey = ["admin", "series", "detail", series.id];
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: detailKey });
@@ -47,7 +53,11 @@ export function EpisodesPanel({ series, onChanged }: { series: SeriesDto; onChan
       <div className="flex items-center gap-3 px-5 pt-4 pb-3">
         <div className="flex-1">
           <div className="text-[14px] font-semibold">分集</div>
-          <p className="text-[11.5px] text-dim mt-0.5">支持 mp4、mov、mkv、webm 等常见格式。上传后自动转码为多清晰度 HLS，按文件名顺序编号。</p>
+          <p className="text-[11.5px] text-dim mt-0.5">
+            {cos
+              ? "视频直接上传到腾讯云 COS，按原文件播放：请上传 H.264 + AAC 的 MP4（已用 -movflags +faststart 处理）。按文件名顺序编号。"
+              : "支持 mp4、mov、mkv、webm 等常见格式。上传后自动转码为多清晰度 HLS，按文件名顺序编号。"}
+          </p>
         </div>
         <label className="flex items-center gap-1.5 h-9 px-4 rounded-(--r-ctl) bg-primary text-on-primary text-[13px] font-bold cursor-pointer pressable">
           <Upload size={15} /> 上传分集

@@ -1,4 +1,4 @@
-import { Img } from "@reelguo/ui";
+import { BrandMark, Img } from "@reelguo/ui";
 import { ArrowUpToLine, ChevronDown, ChevronRight, History, Menu, Search as SearchIcon, Trash2, UserRound, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useCategories, useRanks, useSeries, useSite, useSuggest } from "../api";
@@ -11,6 +11,7 @@ import { closeOverlay, openOverlay } from "../state/nav";
 import { LEGAL_PATHS, type LegalPath } from "../pages/Legal";
 import { useTranslation } from "react-i18next";
 import { nativeApp } from "../native";
+import { BRAND, BRAND_SHORT } from "../brand";
 
 /** Desktop layout from 1024 px (Tailwind `lg`); below that the phone header, as on the reference. */
 export const WIDE_HEADER = "(min-width: 1024px)";
@@ -42,25 +43,36 @@ function useNavItems(): NavItem[] {
   }));
   return [
     { label: "首页", to: "/", active: (p) => p === "/" },
-    { label: "ReelGuo原创", to: href.channel("all", "original"), active: (p, sort) => p === "/c/all" && sort === "original" },
+    { label: `${BRAND_SHORT}原创`, to: href.channel("all", "original"), active: (p, sort) => p === "/c/all" && sort === "original" },
     ...channels,
     { label: "专题", to: href.topics(), active: (p) => p.startsWith("/topics") },
     { label: "排行榜", to: href.ranks(), active: (p) => p.startsWith("/ranks") },
     { label: "博客", to: href.posts(), active: (p) => p.startsWith("/posts") || p.startsWith("/post/"), caret: true },
     { label: "回家的路", to: href.wayHome(), active: (p) => p === "/go-home" },
-    { label: "ReelGuo APP", to: href.download(), active: (p) => p === "/download" },
+    { label: `${BRAND_SHORT}APP`, to: href.download(), active: (p) => p === "/download" },
   ];
 }
 
-/** Logo block: 112 × 41 on desktop (115 × 42 centred on phones). */
-export function Logo({ small = false }: { small?: boolean }) {
+/**
+ * Brand lockup, laid out like the reference's logo: the mark, 黄约短剧 with a small AI, and the address under it.
+ * `scale` is px per em: 10 gives 160 × 58.7. Styles: .rg-logo in index.css.
+ */
+export function Wordmark({ scale = 10 }: { scale?: number }) {
   return (
-    <Link to="/" className={`flex items-center gap-1.5 shrink-0 h-[41px] ${small ? "" : "w-[112px]"}`} aria-label="ReelGuo 首页">
-      <img src="/icon.svg" alt="" className={small ? "w-8 h-8 rounded-[9px]" : "w-8 h-8 rounded-[9px]"} />
-      <span className="flex flex-col leading-none">
-        <span className="text-[16px] font-extrabold text-white tracking-wide">ReelGuo</span>
-        <span className="text-[10px] text-white/60 mt-1 tracking-[.18em]">AI 短剧</span>
-      </span>
+    <span className="rg-logo" style={{ fontSize: scale }} aria-hidden="true">
+      <BrandMark width={Math.round(5.6 * scale)} className="rg-logo__mark" />
+      <span className="rg-logo__name"><span><span className="rg-logo__hl">黄约</span><span className="rg-logo__wt">短剧</span></span></span>
+      <span className="rg-logo__ai"><span>AI</span></span>
+      <span className="rg-logo__domain"><span>huangyue<b>ai</b>.com</span></span>
+    </span>
+  );
+}
+
+/** Logo link home, sized as on the reference: 160 × 58.7 (desktop header, footer), 142.9 × 52.4 (phone menu), 125.5 × 46 (phone header). */
+export function Logo({ size = "lg" }: { size?: "lg" | "md" | "sm" }) {
+  return (
+    <Link to="/" className="block w-fit shrink-0" aria-label="黄约短剧 首页">
+      <Wordmark scale={size === "sm" ? 7.84 : size === "md" ? 8.93 : 10} />
     </Link>
   );
 }
@@ -265,12 +277,12 @@ function MobileHeader() {
     <>
       <div className="relative h-14 flex items-center px-[18px]">
         <button onClick={openMenu} aria-label="菜单" className="w-7 h-7 flex items-center justify-center text-white"><Menu size={24} /></button>
-        <div className="absolute left-1/2 top-[7px] -translate-x-1/2"><Logo small /></div>
+        <div className="absolute left-1/2 top-[5px] -translate-x-1/2"><Logo size="sm" /></div>
         <button onClick={openSearch} aria-label="搜索" className="ml-auto w-7 h-7 flex items-center justify-center text-white"><SearchIcon size={22} /></button>
       </div>
 
       <Drawer open={menu} side="left" onClose={closeOverlay}>
-        <div className="p-4 flex items-center justify-between"><Logo small /><button onClick={closeOverlay} aria-label="关闭" className="w-9 h-9 rounded-full flex items-center justify-center text-mut"><X size={18} /></button></div>
+        <div className="p-4 flex items-center justify-between"><Logo size="md" /><button onClick={closeOverlay} aria-label="关闭" className="w-9 h-9 rounded-full flex items-center justify-center text-mut"><X size={18} /></button></div>
         <button onClick={() => { closeOverlay(); if (user) navigate(href.me()); else window.setTimeout(openLogin, 50); }}
           className="mx-4 mb-3 w-[calc(100%-32px)] flex items-center gap-3 p-3 rounded-[12px] bg-white/[.05] text-left">
           {user ? <Avatar size={36} name={user.nickname} color={user.avatar_color} />
@@ -343,7 +355,7 @@ export function SiteFooter() {
     <footer className="border-t border-white/10 bg-[#0d0c0c]">
       <div className="rg-wrap pt-[23px] pb-7 flex flex-col lg:flex-row gap-8">
         <div className="flex-1 min-w-0">
-          <Logo small />
+          <Logo />
           <div className="mt-[10px] pl-[6px] space-y-[5px]">
             {lines.map(([label, text, to]) => (
               <div key={label} className="text-[12px] font-medium leading-[14px]">
@@ -352,7 +364,7 @@ export function SiteFooter() {
               </div>
             ))}
           </div>
-          <p className="mt-[14px] text-[12px] leading-[19px] text-white/35">© ReelGuo · ALL RIGHTS RESERVED · 本站内容仅面向年满 18 周岁的成年人</p>
+          <p className="mt-[14px] text-[12px] leading-[19px] text-white/35">© {BRAND} · ALL RIGHTS RESERVED · 本站内容仅面向年满 18 周岁的成年人</p>
         </div>
         <div className="flex gap-6 lg:gap-[73px]">
           {col("关于", [
@@ -392,7 +404,7 @@ export function FloatDock() {
         <div className="relative">
           <Link to={href.download()} className="w-[88px] h-[92px] rounded-[10px] border border-white/10 flex flex-col items-center pt-[5px]"
             style={{ background: "linear-gradient(149.42deg, rgba(71,66,46,.72) 19.3%, rgba(46,43,30,.72) 46.4%, rgba(43,40,25,.72) 80.5%)" }}>
-            <img src="/icon.svg" alt="" className="w-[60px] h-[59px] rounded-[12px]" />
+            <span className="w-[60px] h-[59px] flex items-center justify-center"><BrandMark width={58} /></span>
             <span className="-mt-[5px] h-6 px-2 rounded-full text-[12px] font-medium text-black flex items-center"
               style={{ background: "linear-gradient(90deg,#ffd21c,#f5a623)" }}>下载 APP</span>
           </Link>

@@ -4636,6 +4636,331 @@
         }
       }
     },
+    "/api/admin/library": {
+      "get": {
+        "tags": [
+          "Admin: library upload"
+        ],
+        "summary": "Where uploads go, and the storage folders already in the bucket.",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryConfigDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/library/plan": {
+      "post": {
+        "tags": [
+          "Admin: library upload"
+        ],
+        "summary": "Compares the browser's folder listing with the catalogue and says what to upload.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LibraryPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryPlan"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/library/titles": {
+      "post": {
+        "tags": [
+          "Admin: library upload"
+        ],
+        "summary": "Creates the draft series for one title of the listing, or fills in what it lacks.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LibraryApplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryApplyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/library/episodes": {
+      "post": {
+        "tags": [
+          "Admin: library upload"
+        ],
+        "summary": "Creates or reuses the episode and returns where to upload its file.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LibraryEpisodeStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryEpisodeTicket"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/library/episodes/{id}/commit": {
+      "post": {
+        "tags": [
+          "Admin: library upload"
+        ],
+        "summary": "Confirms the upload with storage and queues the episode for the worker.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LibraryCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminEpisodeDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/library/episodes/{id}/abort": {
+      "post": {
+        "tags": [
+          "Admin: library upload"
+        ],
+        "summary": "Records that an upload did not finish.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/posts": {
       "get": {
         "tags": [
@@ -9388,6 +9713,581 @@
           }
         }
       },
+      "LibraryApplyRequest": {
+        "required": [
+          "category_slug",
+          "listing",
+          "rights"
+        ],
+        "type": "object",
+        "properties": {
+          "category_slug": {
+            "type": "string"
+          },
+          "listing": {
+            "$ref": "#/components/schemas/LibraryListing"
+          },
+          "rights": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LibraryRights"
+              }
+            ]
+          }
+        }
+      },
+      "LibraryApplyResponse": {
+        "required": [
+          "series_id",
+          "created",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "series_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created": {
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "LibraryCommitRequest": {
+        "required": [
+          "bytes"
+        ],
+        "type": "object",
+        "properties": {
+          "bytes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "LibraryConfigDto": {
+        "required": [
+          "cos",
+          "bucket",
+          "region",
+          "default_folder",
+          "folders",
+          "warning"
+        ],
+        "type": "object",
+        "properties": {
+          "cos": {
+            "type": "boolean"
+          },
+          "bucket": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "region": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "default_folder": {
+            "type": "string"
+          },
+          "folders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "warning": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "LibraryDetails": {
+        "required": [
+          "name",
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "text": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "LibraryEpisodePlan": {
+        "required": [
+          "number",
+          "file_name",
+          "bytes",
+          "state",
+          "episode_id",
+          "note"
+        ],
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "file_name": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "state": {
+            "type": "string"
+          },
+          "episode_id": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "note": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "LibraryEpisodeStartRequest": {
+        "required": [
+          "series_id",
+          "number",
+          "storage_folder",
+          "title_folder",
+          "file_name",
+          "bytes",
+          "content_type",
+          "replace"
+        ],
+        "type": "object",
+        "properties": {
+          "series_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "storage_folder": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "title_folder": {
+            "type": "string"
+          },
+          "file_name": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "content_type": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "replace": {
+            "type": "boolean"
+          }
+        }
+      },
+      "LibraryEpisodeTicket": {
+        "required": [
+          "episode_id",
+          "stored",
+          "upload"
+        ],
+        "type": "object",
+        "properties": {
+          "episode_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "stored": {
+            "type": "boolean"
+          },
+          "upload": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UploadTicket"
+              }
+            ]
+          }
+        }
+      },
+      "LibraryFolder": {
+        "required": [
+          "name",
+          "files",
+          "downloading"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "files": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/LibraryVideoFile"
+            }
+          },
+          "downloading": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "LibraryImage": {
+        "required": [
+          "name",
+          "bytes",
+          "width",
+          "height"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "LibraryListing": {
+        "required": [
+          "details",
+          "images",
+          "folders"
+        ],
+        "type": "object",
+        "properties": {
+          "details": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/LibraryDetails"
+            }
+          },
+          "images": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/LibraryImage"
+            }
+          },
+          "folders": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/LibraryFolder"
+            }
+          }
+        }
+      },
+      "LibraryPlan": {
+        "required": [
+          "storage_folder",
+          "cos",
+          "titles",
+          "warning"
+        ],
+        "type": "object",
+        "properties": {
+          "storage_folder": {
+            "type": "string"
+          },
+          "cos": {
+            "type": "boolean"
+          },
+          "titles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LibraryTitlePlan"
+            }
+          },
+          "warning": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "LibraryPlanRequest": {
+        "required": [
+          "storage_folder",
+          "listing"
+        ],
+        "type": "object",
+        "properties": {
+          "storage_folder": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "listing": {
+            "$ref": "#/components/schemas/LibraryListing"
+          }
+        }
+      },
+      "LibraryRights": {
+        "required": [
+          "rights_holder",
+          "contract_ref",
+          "licence_start",
+          "territories",
+          "ai_generated",
+          "has_real_person"
+        ],
+        "type": "object",
+        "properties": {
+          "rights_holder": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "contract_ref": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "licence_start": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          },
+          "territories": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "ai_generated": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "has_real_person": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        }
+      },
+      "LibraryTitlePlan": {
+        "required": [
+          "key",
+          "title",
+          "external_id",
+          "folder_name",
+          "image_name",
+          "details_name",
+          "series_id",
+          "series_status",
+          "has_cover",
+          "total_episodes",
+          "status",
+          "problems",
+          "episodes",
+          "downloading"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "external_id": {
+            "type": "string"
+          },
+          "folder_name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "image_name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "details_name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "series_id": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "series_status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SeriesStatus"
+              }
+            ]
+          },
+          "has_cover": {
+            "type": "boolean"
+          },
+          "total_episodes": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "episodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LibraryEpisodePlan"
+            }
+          },
+          "downloading": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "LibraryVideoFile": {
+        "required": [
+          "name",
+          "bytes",
+          "duration_sec",
+          "width",
+          "height",
+          "complete",
+          "faststart",
+          "video_codec",
+          "audio_codec"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "duration_sec": {
+            "type": "number",
+            "format": "double"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "faststart": {
+            "type": "boolean"
+          },
+          "video_codec": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "audio_codec": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "LoginRequest": {
         "required": [
           "username",
@@ -9963,7 +10863,8 @@
           "expires_at",
           "poster",
           "width",
-          "height"
+          "height",
+          "kind"
         ],
         "type": "object",
         "properties": {
@@ -10002,6 +10903,9 @@
           "height": {
             "type": "integer",
             "format": "int32"
+          },
+          "kind": {
+            "type": "string"
           }
         }
       },
@@ -12085,6 +12989,9 @@
     },
     {
       "name": "Admin: bulk import"
+    },
+    {
+      "name": "Admin: library upload"
     },
     {
       "name": "Admin: posts"

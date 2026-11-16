@@ -14,9 +14,11 @@
     "test": "dotnet test --project backend/tests/ReelGuo.Api.Tests && pnpm -r typecheck && pnpm -r test",
     "db:up": "docker compose -f infra/docker-compose.yml up -d postgres redis",
     "db:down": "docker compose -f infra/docker-compose.yml down",
-    "seed:demo": "node scripts/seed-demo.mjs"
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "brand:icons": "node scripts/brand-icons.mjs"
   },
   "devDependencies": {
-    "concurrently": "^10.0.7"
+    "concurrently": "^10.0.7",
+    "sharp": "0.35.5"
   }
 }

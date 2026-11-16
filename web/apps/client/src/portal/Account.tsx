@@ -1,3 +1,4 @@
+import { BrandMark } from "@reelguo/ui";
 import { useQueries } from "@tanstack/react-query";
 import { Clock, LogOut, Settings, Star, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -11,6 +12,7 @@ import { clearWatchHistory, useAuth } from "../state/auth";
 import { useLibrary } from "../state/library";
 import { useUi } from "../state/ui";
 import { Breadcrumb, Container, EmptyState, Panel, PosterCard, PosterSkeleton, UnderlineTabs } from "./kit";
+import { BRAND } from "../brand";
 
 /** 个人中心: account card, wallet, then favourites and watch history (kept on the device, synced when signed in). */
 export function AccountPage() {
@@ -33,7 +35,7 @@ export function AccountPage() {
 
   return (
     <Container>
-      <Breadcrumb items={[{ label: "ReelGuo", to: "/" }, { label: "个人中心" }]} />
+      <Breadcrumb items={[{ label: BRAND, to: "/" }, { label: "个人中心" }]} />
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         <Panel className="p-5 lg:p-6">
           {signedIn ? (
@@ -69,8 +71,8 @@ export function AccountPage() {
           {signedIn && monetization && <WalletStrip />}
           {!nativeApp && (
             <Link to={href.download()} className="rounded-[14px] bg-[#141414] border border-white/[.06] p-4 flex items-center gap-3 hover:border-primary/40">
-              <img src="/icon.svg" alt="" className="w-10 h-10 rounded-[11px]" />
-              <span className="flex-1"><span className="block text-[14px] font-bold text-on">下载 ReelGuo App</span><span className="block text-[12px] text-dim">安卓 · Windows · iPhone 添加到主屏幕</span></span>
+              <span className="w-10 h-10 shrink-0 flex items-center justify-center"><BrandMark width={40} /></span>
+              <span className="flex-1"><span className="block text-[14px] font-bold text-on">下载{BRAND} App</span><span className="block text-[12px] text-dim">安卓 · Windows · iPhone 添加到主屏幕</span></span>
             </Link>
           )}
           {signedIn && (
@@ -146,7 +148,7 @@ export function AddressReminder() {
   if (!open || !s) return null;
   const latest = s.mirrors[0]?.replace(/^https?:\/\//, "") ?? window.location.host;
   const copyAll = () => {
-    const text = [`ReelGuo 最新地址：${latest}`, s.permanent_domain && `永久域名：${s.permanent_domain}`, s.telegram && `官方交流群：${s.telegram}`,
+    const text = [`${BRAND}最新地址：${latest}`, s.permanent_domain && `永久域名：${s.permanent_domain}`, s.telegram && `官方交流群：${s.telegram}`,
       s.email && `官方邮箱：${s.email}`, `回家的路：${window.location.origin}${href.wayHome()}`].filter(Boolean).join("\n");
     navigator.clipboard?.writeText(text).then(() => toast("地址已复制，请妥善保存", "ok")).catch(() => toast(text));
   };

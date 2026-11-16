@@ -36,7 +36,7 @@ main {
   max-width: 320px;
 }
 
-.logo { border-radius: 18px; }
+.logo { width: 104px; height: auto; }
 .name { margin-top: 12px; font-size: 18px; font-weight: 700; letter-spacing: 0.04em; }
 
 .state { margin-top: 36px; display: flex; flex-direction: column; align-items: center; }

@@ -21,9 +21,19 @@ public sealed class FfmpegOptions
 public sealed record TranscodeResult(
     string HlsPrefix, int Version, double DurationSeconds, int Width, int Height, string PosterKey, string RenditionsJson);
 
-/// <summary>Turns one source file into versioned HLS plus a poster, and uploads both to the media bucket.</summary>
-public sealed class Transcoder(StorageBuckets storage, FfmpegOptions options, ILogger<Transcoder> logger)
+/// <summary>What the worker learns about an MP4 kept in COS: nothing is re-encoded, only measured and given a poster.</summary>
+public sealed record CosVideoResult(int Version, double DurationSeconds, int Width, int Height, string PosterKey, long Bytes);
+
+/// <summary>
+/// Turns one source file into versioned HLS plus a poster, and uploads both to the media bucket. For a video kept in
+/// Tencent COS (<see cref="CosKeys.IsCosKey"/>) it only measures the file and takes a poster frame, reading both
+/// through a signed link with range requests, so the file is never downloaded whole.
+/// </summary>
+public sealed class Transcoder(StorageBuckets storage, CosVideoStore cos, FfmpegOptions options, ILogger<Transcoder> logger)
 {
+    /// <summary>A stalled read from storage gives up after this long instead of holding the job forever.</summary>
+    private static readonly string[] ReadTimeout = ["-rw_timeout", "30000000"];
+
     private string Tool(string name)
     {
         var exe = OperatingSystem.IsWindows() ? name + ".exe" : name;
@@ -45,7 +55,7 @@ public sealed class Transcoder(StorageBuckets storage, FfmpegOptions options, IL
             await storage.Raw.DownloadToFileAsync(sourceKey, input, cancellationToken);
             await reportProgress(2);
 
-            var probeJson = await RunAsync(Tool("ffprobe"),
+            var probeJson = await RunToolAsync(Tool("ffprobe"),
                 ["-v", "error", "-print_format", "json", "-show_streams", "-show_format", input], work, null, cancellationToken);
             var probe = MediaProbe.Parse(probeJson.Stdout);
             var plan = EncodePlan.For(probe);
@@ -57,7 +67,7 @@ public sealed class Transcoder(StorageBuckets storage, FfmpegOptions options, IL
             for (var i = 0; i < plan.Renditions.Count; i++) Directory.CreateDirectory(Path.Combine(output, $"r{i}"));
 
             var lastReported = 2;
-            await RunAsync(Tool("ffmpeg"), plan.FfmpegArguments(input), output, async line =>
+            await RunToolAsync(Tool("ffmpeg"), plan.FfmpegArguments(input), output, async line =>
             {
                 if (!line.StartsWith("out_time_us=", StringComparison.Ordinal)) return;
                 if (!long.TryParse(line.AsSpan("out_time_us=".Length), out var us) || us <= 0) return;
@@ -66,7 +76,7 @@ public sealed class Transcoder(StorageBuckets storage, FfmpegOptions options, IL
             }, cancellationToken);
 
             var poster = Path.Combine(work, "poster.jpg");
-            await RunAsync(Tool("ffmpeg"), plan.PosterArguments(input, poster), work, null, cancellationToken);
+            await RunToolAsync(Tool("ffmpeg"), plan.PosterArguments(input, poster), work, null, cancellationToken);
             await reportProgress(92);
 
             // Upload: segments and init files first, playlists last, so a playlist never points at a missing file.
@@ -98,10 +108,46 @@ public sealed class Transcoder(StorageBuckets storage, FfmpegOptions options, IL
         }
     }
 
+    public async Task<CosVideoResult> ProbeCosAsync(
+        string key, long seriesId, int episodeNumber, int version, Func<int, Task> reportProgress, CancellationToken cancellationToken)
+    {
+        if (!cos.Enabled) throw new MediaRejectedException("视频存储未设置为腾讯云 COS（Video:Provider），无法处理 COS 中的视频");
+        var bytes = await cos.SizeAsync(key, cancellationToken) ?? throw new MediaRejectedException("COS 中找不到上传的视频文件，请重新上传");
+        var url = cos.ReadUrl(key, TimeSpan.FromMinutes(30));
+        await reportProgress(10);
+
+        var root = string.IsNullOrWhiteSpace(options.WorkDirectory) ? Path.GetTempPath() : options.WorkDirectory;
+        var work = Path.Combine(root, "reelguo-transcode", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(work);
+        try
+        {
+            var probeJson = await RunToolAsync(Tool("ffprobe"),
+                [.. ReadTimeout, "-v", "error", "-print_format", "json", "-show_streams", "-show_format", url], work, null, cancellationToken);
+            var probe = MediaProbe.Parse(probeJson.Stdout);
+            // Nothing re-encodes a COS video, so every viewer's browser must be able to play it as it is.
+            if (!string.Equals(probe.VideoCodec, "h264", StringComparison.OrdinalIgnoreCase))
+                throw new MediaRejectedException($"COS 直接播放需要 H.264 编码的 MP4（这个文件是 {probe.VideoCodec}），请转码后重新上传");
+            logger.LogInformation("COS video {Key}: {Width}x{Height} {Duration:0.0}s {Bytes} bytes", key, probe.Width, probe.Height, probe.DurationSeconds, bytes);
+            await reportProgress(50);
+
+            var poster = Path.Combine(work, "poster.jpg");
+            await RunToolAsync(Tool("ffmpeg"), [.. ReadTimeout, .. EncodePlan.For(probe).PosterArguments(url, poster)], work, null, cancellationToken);
+            var posterKey = MediaPaths.PosterKey(seriesId, episodeNumber, version);
+            await storage.Media.PutFileAsync(posterKey, poster, "image/jpeg", cancellationToken);
+            await reportProgress(95);
+            return new CosVideoResult(version, probe.DurationSeconds, probe.Width, probe.Height, posterKey, bytes);
+        }
+        finally
+        {
+            try { Directory.Delete(work, recursive: true); }
+            catch (Exception ex) { logger.LogWarning(ex, "Could not clean up {WorkDir}", work); }
+        }
+    }
+
     private sealed record ProcessOutput(string Stdout, string StderrTail);
 
     /// <summary>Runs a tool; stdout lines go to <paramref name="onStdoutLine"/> (or are collected), stderr keeps the last lines for errors.</summary>
-    private static async Task<ProcessOutput> RunAsync(
+    private static async Task<ProcessOutput> RunToolAsync(
         string fileName, IReadOnlyList<string> args, string workingDirectory, Func<string, Task>? onStdoutLine, CancellationToken cancellationToken)
     {
         var psi = new ProcessStartInfo(fileName)

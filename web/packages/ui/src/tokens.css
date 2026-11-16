@@ -1,0 +1,144 @@
+/*
+ * ReelGuo design tokens, shared by the app and the admin console.
+ * Structure follows the reference product (dark by default, light via html.theme-light,
+ * surface levels s1-s4, pill controls). The accent colour is a placeholder until the
+ * brand palette is decided: change --p-primary / --p-pc here only.
+ * Import after `@import "tailwindcss";`.
+ */
+:root {
+  color-scheme: dark;
+  --p-canvas: #141416;
+  --p-bg: #1b1b1e;
+  --p-s1: #222226;
+  --p-s2: #28282d;
+  --p-s3: #303036;
+  --p-s4: #3b3b42;
+  --p-on: #ffffff;
+  --p-mut: #c4c4cc;
+  --p-dim: #8b8b95;
+  --p-primary: #ffd321;
+  --p-on-primary: #14130e;
+  --p-pc: #3b3317;
+  --p-on-pc: #ffe98f;
+  --p-sec: #37343f;
+  --p-on-sec: #ffffff;
+  --p-like: #ff6f8c;
+  --p-star: #e8c250;
+  --p-success: #6ccb5f;
+  --p-danger: #ff99a4;
+  --p-on-danger: #45060f;
+  --p-glow: rgba(255, 211, 33, .28);
+  --p-hover: rgba(255, 255, 255, .08);
+  --p-tint: rgba(183, 148, 255, .14);
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-ctl: 999px;
+  /* Safe areas; the app shell overrides these with env(safe-area-inset-*). */
+  --sat: 0px;
+  --sab: 0px;
+}
+
+html.theme-light {
+  color-scheme: light;
+  --p-canvas: #f3f3f5;
+  --p-bg: #f9f9fb;
+  --p-s1: #ffffff;
+  --p-s2: #f3f3f5;
+  --p-s3: #e8e8ec;
+  --p-s4: #dcdce2;
+  --p-on: #1a1a1d;
+  --p-mut: #5c5c66;
+  --p-dim: #8a8a94;
+  --p-primary: #b8860b;
+  --p-on-primary: #ffffff;
+  --p-pc: #fff1c2;
+  --p-on-pc: #4a3a00;
+  --p-sec: #e6e3ee;
+  --p-on-sec: #1a1a1d;
+  --p-like: #e74856;
+  --p-star: #9a6b00;
+  --p-success: #0f7b0f;
+  --p-danger: #c42b1c;
+  --p-on-danger: #ffffff;
+  --p-glow: rgba(184, 134, 11, .2);
+  --p-hover: rgba(0, 0, 0, .05);
+  --p-tint: rgba(109, 63, 216, .12);
+}
+
+@theme inline {
+  --font-sans: Arial, Helvetica, "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
+  --color-canvas: var(--p-canvas);
+  --color-bg: var(--p-bg);
+  --color-s1: var(--p-s1);
+  --color-s2: var(--p-s2);
+  --color-s3: var(--p-s3);
+  --color-s4: var(--p-s4);
+  --color-on: var(--p-on);
+  --color-mut: var(--p-mut);
+  --color-dim: var(--p-dim);
+  --color-primary: var(--p-primary);
+  --color-on-primary: var(--p-on-primary);
+  --color-pc: var(--p-pc);
+  --color-on-pc: var(--p-on-pc);
+  --color-sec: var(--p-sec);
+  --color-on-sec: var(--p-on-sec);
+  --color-like: var(--p-like);
+  --color-star: var(--p-star);
+  --color-success: var(--p-success);
+  --color-danger: var(--p-danger);
+  --color-on-danger: var(--p-on-danger);
+}
+
+body {
+  margin: 0;
+  background: var(--p-canvas);
+  color: var(--p-on);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+button { cursor: pointer; font-family: inherit; }
+img, video { -webkit-user-drag: none; }
+
+/* Scrolling */
+.scroll-y { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--p-s4) transparent; }
+.scroll-x { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+.scroll-x::-webkit-scrollbar { display: none; }
+
+/* Elevation instead of divider lines */
+.elev-1 { box-shadow: 0 1px 2px rgba(0,0,0,.16), 0 4px 12px rgba(0,0,0,.1); }
+.elev-2 { box-shadow: 0 2px 6px rgba(0,0,0,.16), 0 10px 24px rgba(0,0,0,.12); }
+.elev-3 { box-shadow: 0 8px 28px rgba(0,0,0,.18); }
+html.theme-light .elev-1 { box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 12px rgba(0,0,0,.04); }
+html.theme-light .elev-2 { box-shadow: 0 2px 8px rgba(0,0,0,.07); }
+html.theme-light .elev-3 { box-shadow: 0 10px 30px rgba(0,0,0,.1); }
+
+.tonal { background: var(--p-sec); color: var(--p-on-sec); }
+.pressable { transition: transform .16s cubic-bezier(.2,0,0,1), opacity .16s, background-color .16s, color .16s; }
+.pressable:active { transform: scale(.94); }
+.tsh { text-shadow: 0 1px 10px rgba(0,0,0,.6); }
+
+.clamp-1, .clamp-2 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.clamp-1 { -webkit-line-clamp: 1; }
+.clamp-2 { -webkit-line-clamp: 2; }
+
+/* Motion */
+@keyframes rg-fade { from { opacity: 0 } to { opacity: 1 } }
+@keyframes rg-rise { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
+@keyframes rg-page-in { from { transform: translateX(100%) } to { transform: none } }
+@keyframes rg-scale-in { from { opacity: 0; transform: scale(.92) } to { opacity: 1; transform: none } }
+@keyframes rg-spin { to { transform: rotate(360deg) } }
+@keyframes rg-shimmer { 0% { background-position: -400px 0 } 100% { background-position: 400px 0 } }
+.a-fade { animation: rg-fade .2s ease both; }
+.a-rise { animation: rg-rise .38s cubic-bezier(.2,0,0,1) both; }
+.a-page-in { animation: rg-page-in .3s cubic-bezier(.2,0,0,1) both; }
+.a-scale-in { animation: rg-scale-in .22s cubic-bezier(.2,0,0,1) both; }
+.spinner { border: 3px solid rgba(255,255,255,.18); border-top-color: var(--p-primary); border-radius: 999px; animation: rg-spin .8s linear infinite; }
+.shimmer { background: linear-gradient(90deg, var(--p-s1) 25%, var(--p-s3) 50%, var(--p-s1) 75%); background-size: 800px 100%; animation: rg-shimmer 1.4s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .a-fade, .a-rise, .a-page-in, .a-scale-in { animation: none; }
+}
+
+@keyframes rg-sheet-in { from { transform: translateY(100%) } to { transform: none } }

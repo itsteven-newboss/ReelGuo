@@ -127,9 +127,9 @@ public static class SeoEndpoints
         // Blocked countries and strict age-verification countries get the app without content (the app explains why).
         SeoPage page;
         if (!legal && (await c.Blocked.GetAsync(ct)).Contains(country))
-            page = new SeoPage(StatusCodes.Status451UnavailableForLegalReasons, "ReelGuo", "当前地区暂不提供服务", null, false, "");
+            page = new SeoPage(StatusCodes.Status451UnavailableForLegalReasons, SiteName, "当前地区暂不提供服务", null, false, "");
         else if (!legal && await c.Ages.ModeForAsync(country, ct) == AgeCheckMode.Strict)
-            page = new SeoPage(StatusCodes.Status200OK, "ReelGuo", "当前地区需完成年龄验证后才能观看", null, false, "");
+            page = new SeoPage(StatusCodes.Status200OK, SiteName, "当前地区需完成年龄验证后才能观看", null, false, "");
         else
         {
             var key = $"seo|{country}|{http.Request.Path}{http.Request.QueryString}";
@@ -162,11 +162,11 @@ public static class SeoEndpoints
     {
         var channels = await ChannelsAsync(c, ct);
         var b = new StringBuilder();
-        b.Append("<header><a href=\"/\"><strong>ReelGuo</strong></a> <nav aria-label=\"主导航\"><a href=\"/\">首页</a>");
-        b.Append(" <a href=\"/c/all?sort=original\">ReelGuo原创</a>");
+        b.Append($"<header><a href=\"/\"><strong>{SiteName}</strong></a> <nav aria-label=\"主导航\"><a href=\"/\">首页</a>");
+        b.Append($" <a href=\"/c/all?sort=original\">{Brand.Short}原创</a>");
         foreach (var ch in channels.Where(x => x.Status == CategoryStatus.Active))
             b.Append(" <a href=\"/c/").Append(Html.Url(ch.Slug)).Append("\">").Append(Html.Text(ch.Name)).Append("</a>");
-        b.Append(" <a href=\"/topics\">专题</a> <a href=\"/ranks\">排行榜</a> <a href=\"/posts\">博客</a> <a href=\"/go-home\">回家的路</a> <a href=\"/download\">ReelGuo APP</a></nav></header>\n");
+        b.Append($" <a href=\"/topics\">专题</a> <a href=\"/ranks\">排行榜</a> <a href=\"/posts\">博客</a> <a href=\"/go-home\">回家的路</a> <a href=\"/download\">{Brand.Short}APP</a></nav></header>\n");
         b.Append("<noscript><p><strong>本站含有成人内容，仅限年满 18 周岁的成年人访问。</strong></p></noscript>\n");
         var list = crumbs.ToList();
         if (list.Count > 1)
@@ -183,7 +183,7 @@ public static class SeoEndpoints
         b.Append("<main>").Append(main).Append("</main>\n");
         b.Append("<footer><nav aria-label=\"页脚\"><a href=\"/go-home\">回家的路</a> <a href=\"/download\">下载 App</a> <a href=\"/c/all\">最近上新</a> <a href=\"/ranks\">热门推荐</a> <a href=\"/topics\">专题合集</a>");
         foreach (var (path, title) in LegalPages) b.Append(" <a href=\"").Append(path).Append("\">").Append(title).Append("</a>");
-        b.Append("</nav><p>© ReelGuo · 本站内容仅面向年满 18 周岁的成年人</p></footer>");
+        b.Append($"</nav><p>© {SiteName} · 本站内容仅面向年满 18 周岁的成年人</p></footer>");
         return b.ToString();
     }
 
@@ -218,7 +218,7 @@ public static class SeoEndpoints
         }).ToList(),
     };
 
-    private const string SiteName = "ReelGuo";
+    private const string SiteName = Brand.Name;
 
     // ---------------------------------------------------------------------------------------------
     // Pages
@@ -233,8 +233,8 @@ public static class SeoEndpoints
         var topics = await c.Db.Topics.AsNoTracking().Where(t => t.Published).OrderBy(t => t.SortOrder).ThenByDescending(t => t.Id).Take(6).ToListAsync(ct);
 
         var m = new StringBuilder();
-        m.Append("<h1>ReelGuo · ").Append(Html.Text(c.Site.Tagline)).Append("</h1>");
-        m.Append("<p>ReelGuo 每日更新 AI 短剧、原创短剧与 AI 漫剧，支持手机与电脑在线观看。仅限年满 18 周岁的成年人访问。</p>");
+        m.Append($"<h1>{SiteName} · ").Append(Html.Text(c.Site.Tagline)).Append("</h1>");
+        m.Append($"<p>{SiteName}每日更新 AI 短剧、原创短剧与 AI 漫剧，支持手机与电脑在线观看。仅限年满 18 周岁的成年人访问。</p>");
         m.Append("<section><h2>精选推荐</h2>").Append(SeriesList(picks)).Append("</section>");
         m.Append("<section><h2>最近上新</h2>").Append(SeriesList(latest)).Append("<p><a href=\"/c/all\">全部上新</a></p></section>");
         m.Append("<section><h2>热播短剧</h2>").Append(SeriesList(hot)).Append("<p><a href=\"/ranks/hot\">更多热播</a></p></section>");
@@ -253,8 +253,8 @@ public static class SeoEndpoints
                 ["@type"] = "SearchAction", ["target"] = BaseFor(c) + "/search?q={search_term_string}", ["query-input"] = "required name=search_term_string",
             },
         };
-        return new SeoPage(200, $"ReelGuo · {c.Site.Tagline}",
-            $"ReelGuo：{c.Site.Tagline}。每日更新 AI 短剧、原创短剧与 AI 漫剧，支持手机与电脑在线观看，仅限 18 岁以上成年人访问。", "/", true, body,
+        return new SeoPage(200, $"{SiteName} · {c.Site.Tagline}",
+            $"{SiteName}：{c.Site.Tagline}。每日更新 AI 短剧、原创短剧与 AI 漫剧，支持手机与电脑在线观看，仅限 18 岁以上成年人访问。", "/", true, body,
             picks.FirstOrDefault()?.CoverKey is { } k ? c.Signer.PublicUrlOrNull(k) : null, JsonLd: [site]);
     }
 
@@ -270,7 +270,7 @@ public static class SeoEndpoints
             channel = await c.Db.Categories.AsNoTracking().FirstOrDefaultAsync(x => x.Slug == slug && x.Status != CategoryStatus.Hidden, ct);
             if (channel is null) return await NotFound(c, ct);
         }
-        var name = original ? "ReelGuo原创" : all ? "全部短剧" : channel!.Name;
+        var name = original ? Brand.Short + "原创" : all ? "全部短剧" : channel!.Name;
         var intro = channel?.Description is { Length: > 0 } d ? d : "精选热播短剧，汇集独家原创、精选推荐与最新更新内容。";
         var canonical = $"/c/{Html.Url(slug)}" + (original ? "?sort=original" : "") + (page > 1 ? (original ? "&" : "?") + $"page={page}" : "");
         var crumbs = new List<(string, string?)> { ("首页", "/"), (name, canonical) };
@@ -388,15 +388,18 @@ public static class SeoEndpoints
         var board = Boards.FirstOrDefault(b => b.Kind == kind);
         if (board.Kind is null) return await NotFound(c, ct);
         var visible = c.Visible(country);
-        var rows = await c.Db.Ranks.AsNoTracking().Where(r => r.Kind == board.Rank && visible.Any(s => s.Id == r.SeriesId))
-            .OrderBy(r => r.Position).Take(20).Select(r => r.Series).Include(s => s.Category).ToListAsync(ct);
+        // The board's order first, then the series with their channels (EF can't Include after projecting to Series).
+        var order = await c.Db.Ranks.AsNoTracking().Where(r => r.Kind == board.Rank && visible.Any(s => s.Id == r.SeriesId))
+            .OrderBy(r => r.Position).Take(20).Select(r => r.SeriesId).ToListAsync(ct);
+        var found = await visible.Include(s => s.Category).Where(s => order.Contains(s.Id)).ToListAsync(ct);
+        var rows = found.OrderBy(s => order.IndexOf(s.Id)).ToList();
         var crumbs = new List<(string, string?)> { ("首页", "/"), ("排行榜", "/ranks"), (board.Name, $"/ranks/{board.Kind}") };
-        var m = new StringBuilder($"<h1>{board.Name}</h1><p>ReelGuo 榜单 · TOP20 · 每 10 分钟更新。</p>");
+        var m = new StringBuilder($"<h1>{board.Name}</h1><p>{SiteName}榜单 · TOP20 · 每 10 分钟更新。</p>");
         m.Append("<nav>");
         foreach (var b in Boards) m.Append($"<a href=\"/ranks/{b.Kind}\">{b.Name}</a> ");
         m.Append("</nav>").Append(SeriesList(rows, ordered: true));
         var body = await FrameAsync(c, crumbs, m.ToString(), ct);
-        return new SeoPage(200, $"{board.Name} TOP20 - ReelGuo排行榜", $"ReelGuo{board.Name}：全站最受欢迎的 20 部短剧，每 10 分钟更新。",
+        return new SeoPage(200, $"{board.Name} TOP20 - {SiteName}排行榜", $"{SiteName}{board.Name}：全站最受欢迎的 20 部短剧，每 10 分钟更新。",
             $"/ranks/{board.Kind}", true, body, JsonLd: [Breadcrumbs(BaseFor(c), crumbs)]);
     }
 
@@ -404,12 +407,12 @@ public static class SeoEndpoints
     {
         var topics = await c.Db.Topics.AsNoTracking().Where(t => t.Published).OrderBy(t => t.SortOrder).ThenByDescending(t => t.Id).Take(200).ToListAsync(ct);
         var crumbs = new List<(string, string?)> { ("首页", "/"), ("专题", "/topics") };
-        var m = new StringBuilder("<h1>全部专题</h1><p>专题集中展示 ReelGuo 各类精品专题合集，按主题整理，方便快速找到想看的短剧。</p><ul>");
+        var m = new StringBuilder($"<h1>全部专题</h1><p>专题集中展示{SiteName}各类精品专题合集，按主题整理，方便快速找到想看的短剧。</p><ul>");
         foreach (var t in topics)
             m.Append("<li><a href=\"/topics/").Append(t.Id).Append("\">").Append(Html.Text(t.Title)).Append("</a> <small>").Append(Html.Text(Html.Clip(t.Description, 100))).Append("</small></li>");
         m.Append("</ul>");
         var body = await FrameAsync(c, crumbs, m.ToString(), ct);
-        return new SeoPage(200, $"全部专题 - {SiteName}", "ReelGuo 专题合集：按题材与看点整理的短剧合集，持续更新。", "/topics", true, body);
+        return new SeoPage(200, $"全部专题 - {SiteName}", $"{SiteName}专题合集：按题材与看点整理的短剧合集，持续更新。", "/topics", true, body);
     }
 
     private static async Task<SeoPage> Topic(Ctx c, int id, string country, CancellationToken ct)
@@ -422,7 +425,7 @@ public static class SeoEndpoints
         var crumbs = new List<(string, string?)> { ("首页", "/"), ("专题", "/topics"), (topic.Title, $"/topics/{id}") };
         var m = $"<h1>{Html.Text(topic.Title)}</h1><p>{Html.Text(topic.Description)} 共 {items.Count} 部。</p>{SeriesList(items)}";
         var body = await FrameAsync(c, crumbs, m, ct);
-        return new SeoPage(200, $"{topic.Title} - ReelGuo专题", string.IsNullOrWhiteSpace(topic.Description) ? $"{topic.Title}：ReelGuo 短剧专题合集。" : Html.Clip(topic.Description, 150),
+        return new SeoPage(200, $"{topic.Title} - {SiteName}专题", string.IsNullOrWhiteSpace(topic.Description) ? $"{topic.Title}：{SiteName}专题合集。" : Html.Clip(topic.Description, 150),
             $"/topics/{id}", true, body, items.FirstOrDefault()?.CoverKey is { } k ? c.Signer.PublicUrlOrNull(k) : null, JsonLd: [Breadcrumbs(BaseFor(c), crumbs)]);
     }
 
@@ -455,7 +458,7 @@ public static class SeoEndpoints
         if (page < pages) m.Append($" <a rel=\"next\" href=\"/posts?page={page + 1}\">下一页</a>");
         m.Append("</nav>");
         var body = await FrameAsync(c, crumbs, m.ToString(), ct);
-        return new SeoPage(200, $"博客{(page > 1 ? $" - 第{page}页" : "")} - {SiteName}", "ReelGuo 博客：圈内热点、短剧剧评与幕后内容，每天更新。",
+        return new SeoPage(200, $"博客{(page > 1 ? $" - 第{page}页" : "")} - {SiteName}", $"{SiteName}博客：圈内热点、短剧剧评与幕后内容，每天更新。",
             page > 1 ? $"/posts?page={page}" : "/posts", true, body);
     }
 
@@ -482,14 +485,14 @@ public static class SeoEndpoints
         };
         if (post.PublishedAt is { } published) article["datePublished"] = published.ToString("O");
         if (cover is not null) article["image"] = PageTemplate.Absolute(cover, baseUrl);
-        return new SeoPage(200, $"{post.Title} - ReelGuo博客", Html.Clip(string.IsNullOrWhiteSpace(post.Summary) ? post.Title : post.Summary, 150),
+        return new SeoPage(200, $"{post.Title} - {SiteName}博客", Html.Clip(string.IsNullOrWhiteSpace(post.Summary) ? post.Title : post.Summary, 150),
             $"/post/{id}", true, body, cover, "article", [article, Breadcrumbs(baseUrl, crumbs)]);
     }
 
     private static async Task<SeoPage> WayHome(Ctx c, CancellationToken ct)
     {
         var crumbs = new List<(string, string?)> { ("首页", "/"), ("回家的路", "/go-home") };
-        var m = new StringBuilder("<h1>ReelGuo · 官方最新地址发布页</h1><p>本页面由 ReelGuo 官方维护，实时同步最新可用线路与备用入口，方便在不同网络环境下快速返回。</p><h2>最新可用地址</h2><ul>");
+        var m = new StringBuilder($"<h1>{SiteName} · 官方最新地址发布页</h1><p>本页面由{SiteName}官方维护，实时同步最新可用线路与备用入口，方便在不同网络环境下快速返回。</p><h2>最新可用地址</h2><ul>");
         foreach (var mirror in c.App.Mirrors.Select(x => x.Trim().TrimEnd('/')).Where(x => x.Length > 0).Distinct())
             m.Append("<li><a href=\"").Append(Html.Attr(mirror)).Append("\">").Append(Html.Text(mirror)).Append("</a></li>");
         m.Append("</ul>");
@@ -497,29 +500,29 @@ public static class SeoEndpoints
         if (!string.IsNullOrWhiteSpace(c.Site.Telegram)) m.Append("<p>官方交流群：<a href=\"").Append(Html.Attr(c.Site.Telegram)).Append("\">").Append(Html.Text(c.Site.Telegram)).Append("</a></p>");
         if (!string.IsNullOrWhiteSpace(c.Site.Email)) m.Append("<p>官方邮箱：").Append(Html.Text(c.Site.Email)).Append("</p>");
         var body = await FrameAsync(c, crumbs, m.ToString(), ct);
-        return new SeoPage(200, "回家的路 · ReelGuo 官方最新地址发布页", "ReelGuo 官方最新地址发布页：最新可用线路、备用入口与官方联系方式。", "/go-home", true, body);
+        return new SeoPage(200, $"回家的路 · {SiteName}官方最新地址发布页", $"{SiteName}官方最新地址发布页：最新可用线路、备用入口与官方联系方式。", "/go-home", true, body);
     }
 
     private static async Task<SeoPage> Download(Ctx c, CancellationToken ct)
     {
         var releases = await c.Db.AppReleases.AsNoTracking().Where(r => r.Published).OrderByDescending(r => r.PublishedAt).Take(20).ToListAsync(ct);
         var crumbs = new List<(string, string?)> { ("首页", "/"), ("下载 App", "/download") };
-        var m = new StringBuilder("<h1>下载 ReelGuo App</h1><p>桌面版与安卓版 App，自动切换可用线路。iPhone 可将网页添加到主屏幕使用。</p><ul>");
+        var m = new StringBuilder($"<h1>下载{SiteName} App</h1><p>桌面版与安卓版 App，自动切换可用线路。iPhone 可将网页添加到主屏幕使用。</p><ul>");
         foreach (var r in releases.GroupBy(r => r.Platform).Select(g => g.First()))
             m.Append("<li>").Append(Html.Text(r.Platform)).Append(" · ").Append(Html.Text(r.Version)).Append("</li>");
         m.Append("</ul>");
         var body = await FrameAsync(c, crumbs, m.ToString(), ct);
-        return new SeoPage(200, $"下载 App - {SiteName}", "下载 ReelGuo 桌面版与安卓版 App。", "/download", true, body);
+        return new SeoPage(200, $"下载 App - {SiteName}", $"下载{SiteName}桌面版与安卓版 App。", "/download", true, body);
     }
 
     private static async Task<SeoPage> Legal(Ctx c, string path, string title, CancellationToken ct)
     {
         var body = await FrameAsync(c, [("首页", "/"), (title, path)], $"<h1>{title}</h1>", ct);
-        return new SeoPage(200, $"{title} - {SiteName}", $"ReelGuo {title}。", path, true, body);
+        return new SeoPage(200, $"{title} - {SiteName}", $"{SiteName}{title}。", path, true, body);
     }
 
     private static async Task<SeoPage> Private(Ctx c, CancellationToken ct) =>
-        new(200, SiteName, $"ReelGuo · {c.Site.Tagline}", null, false, await FrameAsync(c, [], "", ct));
+        new(200, SiteName, $"{SiteName} · {c.Site.Tagline}", null, false, await FrameAsync(c, [], "", ct));
 
     private static async Task<SeoPage> NotFound(Ctx c, CancellationToken ct) =>
         new(404, $"页面不存在 - {SiteName}", "页面不存在或已下架。", null, false,

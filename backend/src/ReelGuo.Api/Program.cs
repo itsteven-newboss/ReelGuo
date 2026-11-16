@@ -20,9 +20,17 @@ using ReelGuo.Data.Media;
 using ReelGuo.Data.Storage;
 using ReelGuo.Data.Telemetry;
 using ReelGuo.Api.Seo;
+using Microsoft.Extensions.Hosting.WindowsServices;
 using Scalar.AspNetCore;
 
-var builder = WebApplication.CreateBuilder(args);
+// As a Windows service (staging, docs/STAGING.md) the working folder is System32, so settings files are read from the
+// app's own folder; AddWindowsService reports start and stop to the service manager. No effect when run normally.
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = WindowsServiceHelpers.IsWindowsService() ? AppContext.BaseDirectory : null,
+});
+builder.Services.AddWindowsService(o => o.ServiceName = "ReelGuoApi");
 // One JSON object per log line outside development, for log collectors.
 if (!builder.Environment.IsDevelopment()) builder.Logging.AddJsonConsole(o => { o.UseUtcTimestamp = true; o.IncludeScopes = true; });
 builder.Services.AddReelGuoTelemetry(builder.Configuration, "reelguo-api",
@@ -71,6 +79,8 @@ builder.Services.AddSingleton<IRevokedSeriesStore, RevokedSeriesStore>();
 builder.Services.AddSingleton<IAgeRuleStore, AgeRuleStore>();
 
 builder.Services.AddReelGuoStorage(builder.Configuration, builder.Environment.ContentRootPath);
+// Tencent COS for episode videos when Video:Provider is "Cos" (docs/ARCHITECTURE.md §9.14); refuses to start half-configured.
+builder.Services.AddReelGuoVideo();
 builder.Services.Configure<MediaOptions>(builder.Configuration.GetSection(MediaOptions.Section));
 builder.Services.AddSingleton(sp => new MediaUrlSigner(
     sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MediaOptions>>().Value, sp.GetRequiredService<TimeProvider>()));

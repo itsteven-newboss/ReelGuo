@@ -1,0 +1,79 @@
+# Caddy for the native Windows staging server. scripts\staging\*.ps1 fill in the {{...}} values and write the result
+# into each release folder (C:\reelguo-staging\releases\<id>\Caddyfile). Same routing and headers as
+# infra/Caddyfile (the Docker / production setup): keep the two in sync.
+{
+	admin off
+	log {
+		output file {{LOG_DIR}}/caddy.log {
+			roll_size 20MiB
+			roll_keep 5
+		}
+	}
+}
+
+(security_headers) {
+	header {
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https:; font-src 'self' data:; worker-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		X-Frame-Options "DENY"
+		Cross-Origin-Opener-Policy "same-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+}
+
+# Local-only ports listen on both loopback addresses: on Windows, "localhost" tries ::1 first, and a port that only
+# listens on 127.0.0.1 makes every new connection to localhost wait about 2 seconds before it falls back.
+# App (PWA). Tunnel mode: this server only (Cloudflare reaches it through cloudflared). Public-port mode: all interfaces.
+:{{APP_PORT}} {
+	bind {{APP_BIND}}
+	encode zstd gzip
+	import security_headers
+	handle /api/* {
+		reverse_proxy {{API}}
+	}
+	handle /health/* {
+		reverse_proxy {{API}}
+	}
+	handle /media/* {
+		reverse_proxy {{API}}
+	}
+	handle {
+		root * {{WEB_ROOT}}/client
+		# The service worker must never be cached, or clients get stuck on old versions.
+		header /sw.js Cache-Control "no-cache"
+		header /assets/* Cache-Control "public, max-age=31536000, immutable"
+		# Files are served as they are; page paths (and /) go to the API, which adds each page's content for search
+		# engines (backend Seo/) and also answers robots.txt and the sitemaps.
+		@file {
+			file
+			not path /
+		}
+		handle @file {
+			file_server
+		}
+		handle {
+			reverse_proxy {{API}}
+		}
+	}
+}
+
+# Admin console: on the server only (or through the tunnel behind Cloudflare Access).
+:{{ADMIN_PORT}} {
+	bind 127.0.0.1 [::1]
+	encode zstd gzip
+	import security_headers
+	handle /api/* {
+		reverse_proxy {{API}}
+	}
+	handle /media/* {
+		reverse_proxy {{API}}
+	}
+	handle {
+		root * {{WEB_ROOT}}/admin
+		try_files {path} /index.html
+		file_server
+	}
+}

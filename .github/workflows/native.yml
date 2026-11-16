@@ -108,7 +108,7 @@ jobs:
         working-directory: native
         run: |
           pnpm tauri android init --ci
-          pnpm tauri icon ../web/apps/client/public/icon.svg
+          pnpm tauri icon app-icon.json
       - name: Build APK
         working-directory: native
         run: pnpm tauri android build --apk --target aarch64 armv7 x86_64

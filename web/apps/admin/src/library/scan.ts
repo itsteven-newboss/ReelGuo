@@ -1,0 +1,214 @@
+import type { Schemas } from "@reelguo/api-client";
+import { readMp4Header, type Mp4Header } from "./mp4";
+
+/**
+ * The delivery folder on the admin's PC, as the browser can see it. Files are classified by what they are, not where
+ * they sit: `.json` is a details file, an image is a cover, an `.mp4` is an episode of the folder it is in, and a
+ * downloader's placeholder (`….mp4.qkdownloading`, `.part`, …) marks an episode still on its way. So the whole
+ * delivery folder (VideoDetails/, Images/, Videos/<title>/<title>_<n>.mp4) can be picked, or one title's folder.
+ *
+ * Nothing here decides anything about the catalogue: it builds the listing the server judges, and keeps the File
+ * objects so the runner can send the ones the server asks for.
+ */
+
+export type Listing = Schemas["LibraryListing"];
+export type TitlePlan = Schemas["LibraryTitlePlan"];
+type VideoFile = Schemas["LibraryVideoFile"];
+
+/** One file found, wherever it came from (a directory handle, or a folder picked with the plain file input). */
+export type LocalEntry = { name: string; parent: string; depth: number; get: () => Promise<File> };
+
+export type FolderIndex = {
+  listing: Listing;
+  /** `folder \n file name` → file */
+  videos: Map<string, File>;
+  /** image file name → file */
+  images: Map<string, File>;
+  files: number;
+};
+
+const IMAGE = /\.(jpe?g|png|webp)$/i;
+const PLACEHOLDER = /\.mp4\.[a-z0-9]+$|\.(part|crdownload|qkdownloading|tmp|download)$/i;
+
+export const videoKey = (folder: string, name: string) => `${folder}\n${name}`;
+
+/** Every file under a directory the admin picked, three levels down (`<delivery>/Videos/<title>/…`). */
+export async function* walkHandle(dir: FileSystemDirectoryHandle, depth = 0, parent = dir.name): AsyncGenerator<LocalEntry> {
+  if (depth > 3) return;
+  for await (const entry of (dir as unknown as { values(): AsyncIterable<FileSystemHandle> }).values()) {
+    if (entry.kind === "directory") yield* walkHandle(entry as FileSystemDirectoryHandle, depth + 1, entry.name);
+    else yield { name: entry.name, parent, depth, get: () => (entry as FileSystemFileHandle).getFile() };
+  }
+}
+
+/** The same, from a folder picked with `<input webkitdirectory>` or dropped where handles are not offered. */
+export function* walkFileList(files: Iterable<File>): Generator<LocalEntry> {
+  for (const file of files) {
+    const parts = (file.webkitRelativePath || file.name).split("/");
+    yield { name: file.name, parent: parts.length > 1 ? parts[parts.length - 2]! : "", depth: parts.length - 1, get: () => Promise.resolve(file) };
+  }
+}
+
+/** Header readings by file identity, so a re-listing every few minutes reads nothing it has read before. */
+const probes = new Map<string, Mp4Header>();
+const sizes = new Map<string, { width: number; height: number }>();
+const identity = (f: File, folder = "") => `${folder}\n${f.name}\n${f.size}\n${f.lastModified}`;
+
+async function imageSize(file: File) {
+  const id = identity(file);
+  const known = sizes.get(id);
+  if (known) return known;
+  try {
+    const bmp = await createImageBitmap(file);
+    const size = { width: bmp.width, height: bmp.height };
+    bmp.close();
+    sizes.set(id, size);
+    return size;
+  } catch {
+    return { width: 0, height: 0 };
+  }
+}
+
+async function probe(file: File, folder: string) {
+  const id = identity(file, folder);
+  const known = probes.get(id);
+  if (known) return known;
+  const header = await readMp4Header(file);
+  // A file still being written must be read again next time, so only a finished one is remembered.
+  if (header.complete) probes.set(id, header);
+  return header;
+}
+
+/** Runs `work` over `items` a few at a time: thousands of small reads go faster in parallel, not all at once. */
+async function inBatches<T>(items: T[], size: number, work: (item: T) => Promise<void>, onProgress?: (done: number) => void) {
+  for (let i = 0; i < items.length; i += size) {
+    await Promise.all(items.slice(i, i + size).map(work));
+    onProgress?.(Math.min(items.length, i + size));
+  }
+}
+
+export async function buildIndex(entries: AsyncIterable<LocalEntry> | Iterable<LocalEntry>, onProgress?: (done: number, total: number) => void): Promise<FolderIndex> {
+  const all: LocalEntry[] = [];
+  for await (const e of entries) all.push(e);
+
+  const details: Schemas["LibraryDetails"][] = [];
+  const images: Schemas["LibraryImage"][] = [];
+  const folders = new Map<string, { files: VideoFile[]; downloading: string[] }>();
+  const videoFiles = new Map<string, File>();
+  const imageFiles = new Map<string, File>();
+  const folderOf = (name: string) => {
+    let f = folders.get(name);
+    if (!f) folders.set(name, (f = { files: [], downloading: [] }));
+    return f;
+  };
+
+  await inBatches(all, 24, async (e) => {
+    const lower = e.name.toLowerCase();
+    if (PLACEHOLDER.test(lower)) {
+      if (e.depth > 0) folderOf(e.parent).downloading.push(e.name);
+      return;
+    }
+    if (lower.endsWith(".json")) {
+      const file = await e.get();
+      details.push({ name: e.name, text: file.size <= 65536 ? await file.text() : null });
+    } else if (IMAGE.test(lower)) {
+      const file = await e.get();
+      const { width, height } = await imageSize(file);
+      images.push({ name: e.name, bytes: file.size, width, height });
+      imageFiles.set(e.name, file);
+    } else if (lower.endsWith(".mp4") && e.depth > 0) {
+      const file = await e.get();
+      const h = await probe(file, e.parent);
+      folderOf(e.parent).files.push({
+        name: e.name, bytes: file.size, duration_sec: h.durationSec, width: h.width, height: h.height,
+        complete: h.complete, faststart: h.faststart, video_codec: h.videoCodec, audio_codec: h.audioCodec,
+      });
+      videoFiles.set(videoKey(e.parent, e.name), file);
+    }
+  }, (done) => onProgress?.(done, all.length));
+
+  return {
+    listing: {
+      details,
+      images,
+      folders: [...folders].map(([name, f]) => ({ name, files: f.files, downloading: f.downloading })),
+    },
+    videos: videoFiles,
+    images: imageFiles,
+    files: all.length,
+  };
+}
+
+/** Just one title's pieces, for creating its series. */
+export function listingFor(index: FolderIndex, title: Pick<TitlePlan, "folder_name" | "image_name" | "details_name">): Listing {
+  return {
+    details: (index.listing.details ?? []).filter((d) => d.name === title.details_name),
+    images: (index.listing.images ?? []).filter((i) => i.name === title.image_name),
+    folders: (index.listing.folders ?? []).filter((f) => f.name === title.folder_name),
+  };
+}
+
+// ---------- the remembered folder (Edge and Chrome) ----------
+
+const DB = "reelguo-library";
+function store(mode: IDBTransactionMode): Promise<IDBObjectStore> {
+  return new Promise((resolve, reject) => {
+    const open = indexedDB.open(DB, 1);
+    open.onupgradeneeded = () => open.result.createObjectStore("folders");
+    open.onsuccess = () => resolve(open.result.transaction("folders", mode).objectStore("folders"));
+    open.onerror = () => reject(open.error);
+  });
+}
+
+/** The folder handle picked last time, if the browser can keep one. Never throws. */
+export async function rememberedFolder(): Promise<FileSystemDirectoryHandle | null> {
+  try {
+    const s = await store("readonly");
+    return await new Promise((resolve) => {
+      const req = s.get("last");
+      req.onsuccess = () => resolve((req.result as FileSystemDirectoryHandle | undefined) ?? null);
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function rememberFolder(handle: FileSystemDirectoryHandle) {
+  try {
+    (await store("readwrite")).put(handle, "last");
+  } catch {
+    /* a private window or blocked storage: the folder is simply picked again next time */
+  }
+}
+
+type PermissionHandle = FileSystemDirectoryHandle & {
+  queryPermission?: (d: { mode: "read" }) => Promise<PermissionState>;
+  requestPermission?: (d: { mode: "read" }) => Promise<PermissionState>;
+};
+
+/** Read access to a remembered folder: asks again where the browser wants a click (usually once per visit). */
+export async function canRead(handle: FileSystemDirectoryHandle, ask: boolean) {
+  const h = handle as PermissionHandle;
+  if (!h.queryPermission) return true;
+  if ((await h.queryPermission({ mode: "read" })) === "granted") return true;
+  return ask && h.requestPermission ? (await h.requestPermission({ mode: "read" })) === "granted" : false;
+}
+
+export const canPickFolders = () => typeof (window as unknown as { showDirectoryPicker?: unknown }).showDirectoryPicker === "function";
+
+/** The browser's folder picker. Cancelling is "cancelled"; a refusal is "failed", so the page falls back to the plain input. */
+export async function pickFolder(): Promise<FileSystemDirectoryHandle | "cancelled" | "failed"> {
+  try {
+    return await (window as unknown as { showDirectoryPicker: (o: object) => Promise<FileSystemDirectoryHandle> })
+      .showDirectoryPicker({ mode: "read" });
+  } catch (e) {
+    return e instanceof DOMException && e.name === "AbortError" ? "cancelled" : "failed";
+  }
+}
+
+/** The episode number in "Title_12.mp4" (the server parses it too; this only finds the file it asks for). */
+export function episodeNumber(name: string) {
+  const m = /_(\d{1,4})(?:-[0-9a-f]{6,})?\.mp4/i.exec(name);
+  return m ? Number(m[1]) : null;
+}

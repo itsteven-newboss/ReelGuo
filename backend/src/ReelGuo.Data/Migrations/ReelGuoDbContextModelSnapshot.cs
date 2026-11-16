@@ -580,6 +580,14 @@ namespace ReelGuo.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<long?>("VideoBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("video_bytes");
+
+                    b.Property<string>("VideoKey")
+                        .HasColumnType("text")
+                        .HasColumnName("video_key");
+
                     b.Property<int>("Width")
                         .HasColumnType("integer")
                         .HasColumnName("width");

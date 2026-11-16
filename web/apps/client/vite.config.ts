@@ -22,23 +22,23 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icon.svg", "icons/apple-touch-icon.png"],
+      includeAssets: ["favicon.ico", "icons/apple-touch-icon.png"],
       manifest: {
-        name: "ReelGuo",
-        short_name: "ReelGuo",
-        description: "ReelGuo 短剧",
+        // The name under the installed app's icon (src/brand.ts has the same).
+        name: "黄约短剧",
+        short_name: "黄约短剧",
+        description: "黄约短剧 · AI 短剧与原创短剧在线观看",
         lang: "zh-CN",
         start_url: "/",
         display: "standalone",
         orientation: "portrait",
         theme_color: "#000000",
         background_color: "#000000",
-        // Rendered from the placeholder icon.svg; regenerate when the brand logo exists.
+        // Generated from the brand mark by scripts/brand-icons.mjs (`pnpm brand:icons`).
         icons: [
           { src: "icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
           { src: "icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
           { src: "icons/maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
-          { src: "icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
         ],
       },
       workbox: {

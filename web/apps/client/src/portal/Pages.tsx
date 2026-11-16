@@ -1,5 +1,5 @@
 import { unwrap } from "@reelguo/api-client";
-import { Img, Spinner } from "@reelguo/ui";
+import { BrandMark, Img, Spinner } from "@reelguo/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Crown, Flame, Search as SearchIcon, Sparkles, Star, TrendingUp } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -10,6 +10,7 @@ import { useUi } from "../state/ui";
 import { SearchPanel, useSearchSubmit } from "./chrome";
 import { TopicTile } from "./Home";
 import { Breadcrumb, Container, EmptyState, Faq, LoadMore, PageTitle, Pager, Panel, PillTabs, PosterGrid, PosterSkeleton, UnderlineTabs } from "./kit";
+import { BRAND, BRAND_SHORT } from "../brand";
 
 const SORTS = [["latest", "最近更新"], ["hot", "当前热播"], ["picks", "精选推荐"]] as const;
 type SortKey = (typeof SORTS)[number][0] | "original";
@@ -17,7 +18,7 @@ const PAGE_SIZE = 42;
 
 function channelFaq(name: string) {
   return [
-    { q: `什么是${name}？`, a: `${name}是 ReelGuo 按题材整理的成人向短剧频道，每部作品分集播放，单集几分钟，适合碎片时间观看。` },
+    { q: `什么是${name}？`, a: `${name}是${BRAND}按题材整理的成人向短剧频道，每部作品分集播放，单集几分钟，适合碎片时间观看。` },
     { q: `${name}多久更新一次？`, a: "频道内容每天更新。「最近更新」按最新一集的上线时间排序，追更的作品会排在前面。" },
     { q: `${name}可以免费看吗？`, a: "大部分剧集的前几集可以免费观看，后续剧集可用金币解锁或开通 VIP 观看全部剧集。" },
     { q: "怎么找到想看的剧？", a: "可以切换「当前热播」「精选推荐」，也可以用页面顶部的搜索按剧名、标签查找，或到排行榜看最热门的作品。" },
@@ -25,7 +26,7 @@ function channelFaq(name: string) {
 }
 
 /* ---------------------------------------------------------------------------------------------
- * Channel: /c/:slug (/c/all = every channel, ?sort=original = ReelGuo原创): "【名称】 介绍", pill tabs, 7 × 6 grid,
+ * Channel: /c/:slug (/c/all = every channel, ?sort=original = 黄约原创): "【名称】 介绍", pill tabs, 7 × 6 grid,
  * numbered pages and an FAQ, as on the reference.
  * ------------------------------------------------------------------------------------------- */
 
@@ -38,7 +39,7 @@ export function ChannelPage({ slug }: { slug: string }) {
   const all = slug === "all";
   const channel = categories.data?.find((c) => c.slug === slug);
   const comingSoon = channel?.status === "coming_soon";
-  const name = sort === "original" ? "ReelGuo原创" : all ? "全部短剧" : channel?.name ?? "";
+  const name = sort === "original" ? `${BRAND_SHORT}原创` : all ? "全部短剧" : channel?.name ?? "";
   const list = useListingPage(slug, sort as ChannelSort, page, PAGE_SIZE, all || (!!channel && !comingSoon));
   const items = list.data?.items ?? [];
   const pg = list.data?.pagination;
@@ -102,7 +103,7 @@ export function TopicsPage() {
     <Container>
       <Breadcrumb items={[{ label: "首页", to: "/" }, { label: "专题" }]} />
       <PageTitle right={topics.data ? `共 ${topics.data.pagination.total} 部` : undefined}
-        sub="【专题】专题集中展示 ReelGuo 各类精品专题合集，按主题整理，方便你快速找到想看的短剧。专题内容持续更新。">
+        sub={`【专题】专题集中展示${BRAND}各类精品专题合集，按主题整理，方便你快速找到想看的短剧。专题内容持续更新。`}>
         全部专题
       </PageTitle>
       <div className="mt-[18px]">
@@ -263,7 +264,7 @@ export function PostsPage() {
               <span className="flex-1 min-w-0 lg:pt-[10px]">
                 <span className="flex items-center gap-2 text-[12px] lg:text-[14px] leading-[19px] text-[#a9aebc]">
                   <span className="w-[23px] h-[23px] rounded-full bg-[#ffd21c] text-black text-[13px] font-bold flex items-center justify-center">R</span>
-                  ReelGuo吃瓜<span>·</span>{p.published_at ? new Date(p.published_at).toLocaleDateString("sv-SE") : ""}{p.tags[0] && <><span>·</span>{p.tags[0]}</>}
+                  {BRAND_SHORT}吃瓜<span>·</span>{p.published_at ? new Date(p.published_at).toLocaleDateString("sv-SE") : ""}{p.tags[0] && <><span>·</span>{p.tags[0]}</>}
                 </span>
                 <span className="block mt-[14px] text-[16px] lg:text-[21px] font-semibold leading-[24px] lg:leading-[30px] text-[#f1f2f5] clamp-2 group-hover:text-primary">{p.title}</span>
                 {p.summary && <span className="block mt-[9px] text-[13px] lg:text-[14px] leading-5 text-[#a9aebc] clamp-2">{p.summary}</span>}
@@ -331,9 +332,9 @@ export function WayHomePage() {
         <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(45% 60% at 50% 45%, rgba(255,210,28,.12), transparent 70%)" }} />
         <div className="rg-wrap relative pt-10 lg:pt-[42px] pb-10 lg:pb-[43px] text-center">
           <span className="inline-flex h-9 px-[34px] rounded-[12px] bg-[#111] border border-[#ffd21c]/50 text-[#ffd21c] text-[13px] lg:text-[14px] font-medium items-center">官方权威发布 · 永久有效入口</span>
-          <div className="mt-10 lg:mt-[56px] flex justify-center"><img src="/icon.svg" alt="" className="w-[72px] h-[72px] rounded-[20px] shadow-[0_0_60px_var(--p-glow)]" /></div>
-          <h1 className="mt-6 lg:mt-[33px] text-[22px] lg:text-[2.25rem] font-semibold leading-[34px] text-white">ReelGuo · 官方最新地址发布页</h1>
-          <p className="mt-[15px] mx-auto max-w-[665px] text-[14px] lg:text-[1.25rem] font-medium leading-[21px] text-white/50">本页面由 ReelGuo 官方维护，实时同步最新可用线路与备用入口，方便在不同网络环境下快速返回。</p>
+          <div className="mt-10 lg:mt-[56px] flex justify-center"><BrandMark width={104} /></div>
+          <h1 className="mt-6 lg:mt-[33px] text-[22px] lg:text-[2.25rem] font-semibold leading-[34px] text-white">{BRAND} · 官方最新地址发布页</h1>
+          <p className="mt-[15px] mx-auto max-w-[665px] text-[14px] lg:text-[1.25rem] font-medium leading-[21px] text-white/50">本页面由{BRAND}官方维护，实时同步最新可用线路与备用入口，方便在不同网络环境下快速返回。</p>
           <div className="mt-8 lg:mt-[76px] flex flex-wrap items-center justify-center gap-4 lg:gap-[37px]">
             <Link to="/" className="w-[179px] h-[45px] rounded-full text-[18px] lg:text-[21px] font-semibold text-black flex items-center justify-center" style={{ background: GOLD }}>立即进入主站</Link>
             <button onClick={() => copy(pageUrl, "分享链接已复制")} className="w-[179px] h-[45px] rounded-full border border-[#ffd21c] text-[18px] lg:text-[21px] font-semibold text-[#ffd21c]">复制分享链接</button>
@@ -398,7 +399,7 @@ export function WayHomePage() {
         <WayPanel title="设备使用与兼容性建议" sub="建议使用主流浏览器（Chrome、Safari 等）访问，以获得更好的页面兼容性与加载速度；遇到加载缓慢时，可切换线路或刷新页面。">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {[["iPhone 用户", "建议使用 Safari 浏览器，并可添加到主屏幕当作 App 使用", "避免在微信 / QQ 等 App 内部打开，以防页面加载失败"],
-              ["Android 用户", "推荐使用 Chrome 浏览器，或直接下载 ReelGuo App", "部分手机自带浏览器兼容性较差，可能出现无法播放"],
+              ["Android 用户", `推荐使用 Chrome 浏览器，或直接下载${BRAND} App`, "部分手机自带浏览器兼容性较差，可能出现无法播放"],
               ["电脑 / 桌面端", "首选 Chrome / Edge 浏览器，或使用桌面版 App", "若无法加载，请尝试清除浏览器缓存后重试"]].map(([h = "", ok = "", warn = ""]) => (
               <div key={h} className="lg:pl-[19px]">
                 <h3 className="text-[16px] lg:text-[1.375rem] font-semibold text-[#eee]">{h}</h3>
@@ -410,10 +411,10 @@ export function WayHomePage() {
         </WayPanel>
 
         <section className="rounded-[6px] bg-white/[.04] border border-white/10 p-4 lg:px-[13px] lg:py-6 text-[12px] leading-[1.8] text-white/85">
-          <h2 className="text-[14px] lg:text-[1.0625rem] font-semibold text-white">ReelGuo 官方入口</h2>
-          <p className="mt-4">ReelGuo 官方网站为 <span className="text-[#ffd21c]">{s?.permanent_domain ? bare(s.permanent_domain) : window.location.host}</span>，可在此查看已上线作品，或核对官方域名与账号。</p>
-          <h3 className="mt-5 text-[13px] font-semibold text-white">关于 ReelGuo</h3>
-          <p className="mt-3">ReelGuo 提供 AI 短剧、原创短剧与 AI 漫剧在线观看，每日更新，支持手机与电脑在线观看。仅限年满 18 周岁的用户访问。</p>
+          <h2 className="text-[14px] lg:text-[1.0625rem] font-semibold text-white">{BRAND}官方入口</h2>
+          <p className="mt-4">{BRAND}官方网站为 <span className="text-[#ffd21c]">{s?.permanent_domain ? bare(s.permanent_domain) : window.location.host}</span>，可在此查看已上线作品，或核对官方域名与账号。</p>
+          <h3 className="mt-5 text-[13px] font-semibold text-white">关于{BRAND}</h3>
+          <p className="mt-3">{BRAND}提供 AI 短剧、原创短剧与 AI 漫剧在线观看，每日更新，支持手机与电脑在线观看。仅限年满 18 周岁的用户访问。</p>
           <h3 className="mt-5 text-[13px] font-semibold text-white">支持平台</h3>
           <p className="mt-3">网页版：手机 / 电脑浏览器直接观看；App：可在 <Link to={href.download()} className="text-[#ffd21c]">下载页</Link> 获取桌面版与安卓版。</p>
         </section>

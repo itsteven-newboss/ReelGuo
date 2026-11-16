@@ -1,6 +1,7 @@
 import { Globe, ShieldCheck } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { Wordmark } from "../portal/chrome";
 import { LoginSheet } from "../social/LoginSheet";
 import { useAuth } from "../state/auth";
 import { useSession } from "../state/session";
@@ -36,13 +37,7 @@ export function AgeGate() {
     <div className="fixed inset-0 flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-labelledby="age-title"
       style={{ background: "radial-gradient(60% 45% at 50% 0%, color-mix(in srgb, var(--p-primary) 14%, transparent), transparent 70%), #0d0d0d" }}>
       <div className="w-full max-w-[500px] text-center a-rise">
-        <div className="flex items-center justify-center gap-3">
-          <img src="/icon.svg" alt="" className="w-14 h-14 rounded-[16px]" />
-          <span className="text-left leading-none">
-            <span className="block text-[26px] font-extrabold text-on">ReelGuo</span>
-            <span className="block mt-1.5 text-[12px] text-mut tracking-[.2em]">AI 短剧</span>
-          </span>
-        </div>
+        <div className="flex justify-center"><Wordmark scale={13} /></div>
         <h1 id="age-title" className="mt-10 text-[20px] lg:text-[22px] text-on leading-relaxed">本站含有成人内容，<br />仅限年满 18 周岁的成年人访问。</h1>
         <button onClick={confirmAge}
           className="mt-8 w-full h-[58px] rounded-full bg-primary text-on-primary text-[16px] font-bold ring-2 ring-white ring-offset-2 ring-offset-[#0d0d0d]">

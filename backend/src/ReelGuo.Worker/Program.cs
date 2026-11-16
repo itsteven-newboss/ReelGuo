@@ -1,12 +1,20 @@
 using ReelGuo.Data;
 using ReelGuo.Data.Catalog;
 using ReelGuo.Data.Jobs;
+using ReelGuo.Data.Media;
 using ReelGuo.Data.Storage;
 using ReelGuo.Data.Telemetry;
 using ReelGuo.Worker;
 using ReelGuo.Worker.Media;
+using Microsoft.Extensions.Hosting.WindowsServices;
 
-var builder = Host.CreateApplicationBuilder(args);
+// As a Windows service (staging, docs/STAGING.md): settings from the app's folder, start/stop reported to Windows.
+var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+{
+    Args = args,
+    ContentRootPath = WindowsServiceHelpers.IsWindowsService() ? AppContext.BaseDirectory : null,
+});
+builder.Services.AddWindowsService(o => o.ServiceName = "ReelGuoWorker");
 // One JSON object per log line outside development, for log collectors.
 if (!builder.Environment.IsDevelopment()) builder.Logging.AddJsonConsole(o => { o.UseUtcTimestamp = true; o.IncludeScopes = true; });
 builder.Services.AddReelGuoTelemetry(builder.Configuration, "reelguo-worker");
@@ -20,6 +28,7 @@ builder.Services.AddDbContext<ReelGuoDbContext>(o =>
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddReelGuoStorage(builder.Configuration, builder.Environment.ContentRootPath);
+builder.Services.AddReelGuoVideo();
 builder.Services.AddScoped<MediaJobQueue>();
 builder.Services.AddScoped<RankingCalculator>();
 

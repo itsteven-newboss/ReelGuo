@@ -22,6 +22,7 @@ import { useLibrary } from "../state/library";
 import { useUi } from "../state/ui";
 import { useMedia } from "./chrome";
 import { Breadcrumb, Container, EmptyState, PosterGrid } from "./kit";
+import { BRAND } from "../brand";
 
 const toCard = (d: SeriesDetail): VideoCard => ({
   id: d.id, title: d.title, cover: d.cover, description: d.description, tags: d.tags, score: d.score,
@@ -39,7 +40,7 @@ export function SeriesPage({ id, ep: pathEp }: { id: number; ep?: number }) {
   const ep = pathEp || Number(query.get("ep")) || progress?.ep || series.data?.episodes[0]?.ep_num || 1;
 
   if (series.isError) {
-    return <Container><Breadcrumb items={[{ label: "ReelGuo", to: "/" }, { label: "剧集" }]} /><EmptyState title="内容不存在或已下架" sub="可能已被下架，或在你所在的地区不可观看" /></Container>;
+    return <Container><Breadcrumb items={[{ label: BRAND, to: "/" }, { label: "剧集" }]} /><EmptyState title="内容不存在或已下架" sub="可能已被下架，或在你所在的地区不可观看" /></Container>;
   }
   if (!series.data) return <div className="flex justify-center py-24"><Spinner /></div>;
 
@@ -350,7 +351,7 @@ function InfoCard({ series, ep }: { series: SeriesDetail; ep: number }) {
           <Fact label="单集片长">{current ? fmtTime(current.duration) : "—"}</Fact>
           <Fact label="出品">
             <span className="flex items-center gap-[10px]">
-              <span className="truncate font-semibold">{series.author?.name ?? "ReelGuo"}</span>
+              <span className="truncate font-semibold">{series.author?.name ?? BRAND}</span>
               {series.author && (
                 <button onClick={() => void toggleFollow(series.author!.id, series.author!.name)} aria-pressed={following}
                   className={`h-[26px] px-3 rounded-full text-[12px] font-semibold shrink-0 ${following ? "bg-white/10 text-white/60" : "bg-[#ffd21c] text-black"}`}>

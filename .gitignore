@@ -7,9 +7,6 @@
 .env
 # Off-site backup credentials (see infra/backup/backup.sh)
 infra/backup.env
-# Staging secrets and deploy records (see docs/STAGING.md)
-infra/staging.env
-infra/staging.deploy.log
 
 # User-specific files
 *.rsuser
@@ -503,3 +500,9 @@ dev-dist/
 .api.log
 .worker.log
 .web.log
+
+# ---- Re-included: the Visual Studio rules above would hide these source folders ----
+# "**/[Pp]ackages/*" (NuGet) matches the web workspace packages (@reelguo/api-client, @reelguo/ui),
+# and "Backup*/" matches the backup scripts the compose file runs.
+!web/packages/*
+!infra/backup/

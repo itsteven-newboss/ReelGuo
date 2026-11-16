@@ -54,6 +54,18 @@ function canUseHlsJs() {
   return Hls.isSupported();
 }
 
+/** An HLS playlist, as opposed to one MP4 played as is (episodes kept in Tencent COS). */
+export function isHlsUrl(src: string) {
+  try {
+    return new URL(src, window.location.href).pathname.toLowerCase().endsWith(".m3u8");
+  } catch {
+    return (src.split("?")[0] ?? "").toLowerCase().endsWith(".m3u8");
+  }
+}
+
+/** A signed link lasts at least this long; a file that fails sooner is broken, not expired. */
+const EXPIRY_GRACE_MS = 60_000;
+
 export const VideoSurface = forwardRef<VideoSurfaceHandle, Props>(function VideoSurface(props, ref) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -64,6 +76,8 @@ export const VideoSurface = forwardRef<VideoSurfaceHandle, Props>(function Video
   const stoppedEarly = useRef(false);
   const latest = useRef(props);
   latest.current = props;
+  /** When the current source was attached: a native-playback error long after it is most likely an expired link. */
+  const attachedAt = useRef(0);
 
   const attach = (src: string, startAt: number) => {
     const video = videoRef.current;
@@ -73,8 +87,9 @@ export const VideoSurface = forwardRef<VideoSurfaceHandle, Props>(function Video
     recoveries.current = 0;
     manifestParsed.current = false;
     stoppedEarly.current = false;
+    attachedAt.current = Date.now();
 
-    if (canUseHlsJs()) {
+    if (isHlsUrl(src) && canUseHlsJs()) {
       const hls = new Hls({
         // Dev-only verbose logging: localStorage.setItem("rg.hlsDebug", "1")
         debug: import.meta.env.DEV && safeFlag("rg.hlsDebug"),
@@ -112,6 +127,7 @@ export const VideoSurface = forwardRef<VideoSurfaceHandle, Props>(function Video
       hlsRef.current = hls;
       if (import.meta.env.DEV) (window as unknown as { __hls?: Hls }).__hls = hls; // debugging aid in dev builds only
     } else {
+      // Native playback: an MP4 (range requests do the seeking), or HLS on browsers without MediaSource.
       video.src = src;
       if (startAt > 0) video.addEventListener("loadedmetadata", () => { video.currentTime = startAt; }, { once: true });
     }
@@ -217,7 +233,15 @@ export const VideoSurface = forwardRef<VideoSurfaceHandle, Props>(function Video
       onWaiting={() => props.onWaiting?.()}
       onEnded={() => props.onEnded?.()}
       onError={() => {
-        if (!hlsRef.current) props.onError?.(videoRef.current?.error?.message || "media error");
+        if (hlsRef.current) return;
+        const v = videoRef.current;
+        // A signed MP4 link that ran out mid-episode fails like a network error: fetch a fresh one and resume.
+        if (props.onExpired && v && Date.now() - attachedAt.current > EXPIRY_GRACE_MS) {
+          attachedAt.current = Date.now();
+          props.onExpired(v.currentTime);
+          return;
+        }
+        props.onError?.(v?.error?.message || "media error");
       }}
     />
   );

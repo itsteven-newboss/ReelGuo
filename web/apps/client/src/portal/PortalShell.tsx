@@ -17,6 +17,7 @@ import { Breadcrumb, Container, EmptyState } from "./kit";
 import { ChannelPage, PostsPage, RanksPage, SearchPage, TopicPage, TopicsPage, WayHomePage } from "./Pages";
 import { SeriesPage } from "./SeriesPage";
 import type { RankKind } from "../api";
+import { BRAND } from "../brand";
 
 /** URL → page. Unknown paths get a not-found page inside the normal layout. */
 function Route() {
@@ -42,7 +43,7 @@ function Route() {
   if (path === "/settings") return <SettingsPage />;
   return (
     <Container>
-      <Breadcrumb items={[{ label: "ReelGuo", to: "/" }, { label: "页面不存在" }]} />
+      <Breadcrumb items={[{ label: BRAND, to: "/" }, { label: "页面不存在" }]} />
       <EmptyState title="页面不存在" sub="链接可能已失效，回到首页看看吧" />
     </Container>
   );

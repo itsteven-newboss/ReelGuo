@@ -85,7 +85,7 @@ public sealed class PortalTests(PostgresFixture db) : IClassFixture<PostgresFixt
         await admin.AdminSendAsync(HttpMethod.Post, "/api/admin/announcements", new { text = "已隐藏的公告", url = (string?)null, active = false, sort_order = 0 }).OkJsonAsync();
 
         var site = await Get(api.CreateClient(), "/api/v1/site").OkJsonAsync();
-        Assert.Equal("ReelGuo", site.GetProperty("name").GetString());
+        Assert.Equal("黄约短剧", site.GetProperty("name").GetString());
         var notice = Assert.Single(site.GetProperty("announcements").EnumerateArray());
         Assert.Equal("/go-home", notice.GetProperty("url").GetString());
         Assert.Equal("https://app.example.com", Assert.Single(site.GetProperty("mirrors").EnumerateArray()).GetString());

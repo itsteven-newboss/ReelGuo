@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { api } from "../api";
 import { fmtDay } from "../billing/money";
 import { Breadcrumb, Container, PageTitle } from "../portal/kit";
+import { BRAND } from "../brand";
 
 type Release = Schemas["AppReleaseDto"];
 
@@ -29,7 +30,7 @@ export function DownloadPage() {
 
   return (
     <Container>
-      <Breadcrumb items={[{ label: "ReelGuo", to: "/" }, { label: t("download.title") }]} />
+      <Breadcrumb items={[{ label: BRAND, to: "/" }, { label: t("download.title") }]} />
       <PageTitle sub={t("download.sub")}>{t("download.title")}</PageTitle>
       <div className="mt-6">
         <div className="space-y-3 max-w-[880px]">

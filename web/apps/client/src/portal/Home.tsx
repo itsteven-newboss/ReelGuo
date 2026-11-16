@@ -5,6 +5,7 @@ import { useRanks, useSeriesList, useSite, useSuggest, useTopics, type TopicCard
 import { href, Link, navigate } from "../router";
 import { useMedia } from "./chrome";
 import { Container, fmtPlays, PosterGrid, PosterSkeleton, progressLabel, SectionTitle } from "./kit";
+import { BRAND } from "../brand";
 
 /* ---------------------------------------------------------------------------------------------
  * Hero, as on the reference: the cover full width under the header, its bottom edge cut by a wide ellipse with a
@@ -44,7 +45,7 @@ function Hero({ slides }: { slides: VideoCard[] }) {
           <div className="absolute inset-0 bg-black/10" style={{ backgroundImage: "linear-gradient(rgba(0,0,0,0) 50%, rgba(0,0,0,.7) 100%)" }} />
         </Link>
         <div className="absolute left-[13px] right-[60px] bottom-[14px] pointer-events-none">
-          <p className="text-[12px] font-medium leading-[17px] text-[#ffd21c] truncate">ReelGuo · {tagline}</p>
+          <p className="text-[12px] font-medium leading-[17px] text-[#ffd21c] truncate">{BRAND} · {tagline}</p>
           <div className="mt-1 text-[24px] font-semibold leading-[34px] text-white truncate">{cur.title}</div>
           <p className="mt-1.5 text-[12px] font-medium leading-[17px] text-white flex gap-[9px]">
             {cur.score > 0 && <span><span>{cur.score.toFixed(1)}</span>分</span>}
@@ -80,7 +81,7 @@ function Hero({ slides }: { slides: VideoCard[] }) {
           style={{ ...CURVE, maskImage: "linear-gradient(90deg, rgba(0,0,0,.35), #000 30%, #000 70%, rgba(0,0,0,.35))" }} />
         <div className="absolute inset-x-0 bottom-[23%] pointer-events-none">
           <div className="rg-wrap">
-            <p className="text-[1.125rem] leading-[1.52] text-[#ffd321]">ReelGuo · {tagline}</p>
+            <p className="text-[1.125rem] leading-[1.52] text-[#ffd321]">{BRAND} · {tagline}</p>
             <div className="mt-[3px] max-w-[60%] text-[3.0625rem] font-semibold leading-[1.4] text-white truncate">{cur.title}</div>
             <p className="mt-[2px] max-w-[25rem] text-[1.0625rem] leading-[1.48] text-white/80 truncate">{cur.description || "暂无简介"}</p>
             <p className="mt-[14px] flex items-center text-[1.1875rem] leading-[1.5]">
@@ -121,7 +122,7 @@ function AnnouncementBar() {
   const site = useSite();
   const notices = site.data?.announcements.length
     ? site.data.announcements
-    : [{ text: "欢迎来到 ReelGuo：请收藏「回家的路」，地址变更时也能找到我们", url: href.wayHome() }];
+    : [{ text: `欢迎来到${BRAND}：请收藏「回家的路」，地址变更时也能找到我们`, url: href.wayHome() }];
   const line = (
     <span className="flex items-center shrink-0">
       {notices.map((n, i) => (
@@ -190,9 +191,9 @@ function EntryBlock() {
   const host = s?.permanent_domain?.replace(/^https?:\/\//, "") || window.location.host;
   return (
     <section className="mt-10 lg:mt-[31px] border-t border-white/10 pt-6 lg:pt-[31px] pb-6 lg:pb-[31px]">
-      <h2 className="text-[16px] lg:text-[1.25rem] font-semibold leading-[25px] text-[#e6e6e6]">ReelGuo 官方入口</h2>
+      <h2 className="text-[16px] lg:text-[1.25rem] font-semibold leading-[25px] text-[#e6e6e6]">{BRAND}官方入口</h2>
       <div className="mt-[11px] space-y-[10px] text-[13px] lg:text-[14px] font-medium leading-[18px] text-[#999]">
-        <p>ReelGuo 官方网站为 <strong className="font-semibold text-[#ffd321]">{host}</strong>。地址如有变更，请到「回家的路」查看最新入口。</p>
+        <p>{BRAND}官方网站为 <strong className="font-semibold text-[#ffd321]">{host}</strong>。地址如有变更，请到「回家的路」查看最新入口。</p>
         {(s?.telegram || s?.email) && (
           <p>
             官方渠道：

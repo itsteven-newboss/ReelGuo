@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ReelGuo.Data;
 using ReelGuo.Data.Entities;
@@ -193,6 +194,36 @@ public sealed class SeoTests(PostgresFixture db) : IClassFixture<PostgresFixture
             found = xml.Contains($"<loc>https://reelguo.example/video/{seriesId}</loc>") && xml.Contains($"<loc>https://reelguo.example/video/{seriesId}/ep-3</loc>");
         }
         Assert.True(found, "the series and its episode URLs are in a sitemap file");
+    }
+
+    [Fact]
+    public async Task Listing_pages_render_under_the_brand_name()
+    {
+        await using var api = Api();
+        var id = await SeedAsync(api, "排行榜上的剧");
+        await using (var scope = api.Services.CreateAsyncScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<ReelGuoDbContext>();
+            await ctx.Ranks.Where(r => r.Kind == RankKind.Hot).ExecuteDeleteAsync(Ct);
+            ctx.Ranks.Add(new RankEntry { Kind = RankKind.Hot, Position = 1, SeriesId = id, MetricValue = 1, ComputedAt = DateTimeOffset.UtcNow });
+            await ctx.SaveChangesAsync(Ct);
+        }
+
+        foreach (var path in new[] { "/", "/ranks", "/ranks/hot", "/topics", "/posts", "/go-home", "/download", "/c/all?sort=original", "/terms" })
+        {
+            var (status, html, _) = await Page(api, path);
+            Assert.True(status == HttpStatusCode.OK, $"{path}: HTTP {(int)status}");
+            var title = html[(html.IndexOf("<title>", StringComparison.Ordinal) + 7)..html.IndexOf("</title>", StringComparison.Ordinal)];
+            Assert.True(title.Contains("黄约"), $"{path}: title '{title}'");
+            Assert.Contains("<strong>黄约短剧</strong>", html);      // header
+            Assert.Contains("<p>© 黄约短剧 · ", html);                // footer
+            Assert.DoesNotContain("ReelGuo", html);                  // the code name never reaches visitors
+        }
+
+        // The ranking lists its series in board order, with the channel (loaded with the series).
+        var ranks = (await Page(api, "/ranks/hot")).Body;
+        Assert.Contains($"<li><a href=\"/video/{id}\">排行榜上的剧</a> <small>", ranks);
+        Assert.DoesNotContain("<small> · ", ranks);
     }
 
     [Fact]

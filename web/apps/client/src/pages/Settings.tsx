@@ -9,6 +9,7 @@ import { useLibrary } from "../state/library";
 import { useUi } from "../state/ui";
 import { Modal, Toggle } from "../ui/Overlays";
 import { LEGAL_PATHS, type LegalPath } from "./Legal";
+import { BRAND } from "../brand";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -55,7 +56,7 @@ export function SettingsPage() {
 
   return (
     <Container>
-      <Breadcrumb items={[{ label: "ReelGuo", to: "/" }, { label: "个人中心", to: href.me() }, { label: t("settings.title") }]} />
+      <Breadcrumb items={[{ label: BRAND, to: "/" }, { label: "个人中心", to: href.me() }, { label: t("settings.title") }]} />
       <PageTitle sub={t("settings.sub")}>{t("settings.title")}</PageTitle>
       <div className="max-w-[880px]">
         <Section title={t("settings.playback")}>
@@ -70,7 +71,7 @@ export function SettingsPage() {
         </Section>
 
         <Section title={t("settings.about")}>
-          <Row icon={<Info size={16} />} title="ReelGuo" sub={t("settings.version", { version: __APP_VERSION__ })} />
+          <Row icon={<Info size={16} />} title={BRAND} sub={t("settings.version", { version: __APP_VERSION__ })} />
           {nativeApp ? (
             <Row icon={<Smartphone size={16} />} title={t("settings.appVersion")}
               sub={t(nativeApp.platform === "android" ? "settings.appAndroid" : "settings.appDesktop", { version: nativeApp.version })} />

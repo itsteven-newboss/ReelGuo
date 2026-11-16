@@ -101,7 +101,7 @@ public sealed partial class PageTemplate(IOptions<SeoOptions> options, IHttpClie
             head.Append("    <link rel=\"canonical\" href=\"").Append(Html.Attr(url)).Append("\" />\n");
             head.Append("    <meta property=\"og:url\" content=\"").Append(Html.Attr(url)).Append("\" />\n");
         }
-        head.Append("    <meta property=\"og:site_name\" content=\"ReelGuo\" />\n");
+        head.Append($"    <meta property=\"og:site_name\" content=\"{Brand.Name}\" />\n");
         head.Append("    <meta property=\"og:type\" content=\"").Append(Html.Attr(page.OgType)).Append("\" />\n");
         head.Append("    <meta property=\"og:title\" content=\"").Append(Html.Attr(page.Title)).Append("\" />\n");
         head.Append("    <meta property=\"og:description\" content=\"").Append(Html.Attr(page.Description)).Append("\" />\n");

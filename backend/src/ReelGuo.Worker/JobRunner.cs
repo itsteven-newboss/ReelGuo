@@ -3,6 +3,7 @@ using ReelGuo.Data;
 using ReelGuo.Data.Catalog;
 using ReelGuo.Data.Entities;
 using ReelGuo.Data.Jobs;
+using ReelGuo.Data.Media;
 using ReelGuo.Data.Telemetry;
 using ReelGuo.Worker.Media;
 
@@ -94,32 +95,64 @@ public sealed class JobRunner(
         try
         {
             var version = episode.MediaVersion + 1;
-            var result = await transcoder.RunAsync(episode.SourceKey, episode.SeriesId, episode.EpisodeNumber, version,
-                pct => SetProgressAsync(db, episode.Id, pct, stoppingToken), stoppingToken);
-
+            Func<int, Task> progress = pct => SetProgressAsync(db, episode.Id, pct, stoppingToken);
+            string posterKey;
+            string location;
             var now = time.GetUtcNow();
-            await db.Episodes.Where(e => e.Id == episode.Id).ExecuteUpdateAsync(u => u
-                .SetProperty(e => e.Status, EpisodeStatus.Ready)
-                .SetProperty(e => e.HlsPrefix, result.HlsPrefix)
-                .SetProperty(e => e.MediaVersion, result.Version)
-                .SetProperty(e => e.DurationSeconds, result.DurationSeconds)
-                .SetProperty(e => e.Width, result.Width)
-                .SetProperty(e => e.Height, result.Height)
-                .SetProperty(e => e.PosterKey, result.PosterKey)
-                .SetProperty(e => e.RenditionsJson, result.RenditionsJson)
-                .SetProperty(e => e.ProcessingProgress, 100)
-                .SetProperty(e => e.ProcessingError, (string?)null)
-                .SetProperty(e => e.UpdatedAt, now), stoppingToken);
+            if (CosKeys.IsCosKey(episode.SourceKey))
+            {
+                // Kept in Tencent COS and played as uploaded: measure it and take a poster, nothing is re-encoded.
+                var key = episode.SourceKey;
+                var result = await transcoder.ProbeCosAsync(key, episode.SeriesId, episode.EpisodeNumber, version, progress, stoppingToken);
+                now = time.GetUtcNow();
+                await db.Episodes.Where(e => e.Id == episode.Id).ExecuteUpdateAsync(u => u
+                    .SetProperty(e => e.Status, EpisodeStatus.Ready)
+                    .SetProperty(e => e.VideoKey, key)
+                    .SetProperty(e => e.VideoBytes, result.Bytes)
+                    .SetProperty(e => e.HlsPrefix, (string?)null)
+                    .SetProperty(e => e.RenditionsJson, (string?)null)
+                    .SetProperty(e => e.MediaVersion, result.Version)
+                    .SetProperty(e => e.DurationSeconds, result.DurationSeconds)
+                    .SetProperty(e => e.Width, result.Width)
+                    .SetProperty(e => e.Height, result.Height)
+                    .SetProperty(e => e.PosterKey, result.PosterKey)
+                    .SetProperty(e => e.ProcessingProgress, 100)
+                    .SetProperty(e => e.ProcessingError, (string?)null)
+                    .SetProperty(e => e.UpdatedAt, now), stoppingToken);
+                posterKey = result.PosterKey;
+                location = "cos:" + key;
+            }
+            else
+            {
+                var result = await transcoder.RunAsync(episode.SourceKey, episode.SeriesId, episode.EpisodeNumber, version, progress, stoppingToken);
+                now = time.GetUtcNow();
+                await db.Episodes.Where(e => e.Id == episode.Id).ExecuteUpdateAsync(u => u
+                    .SetProperty(e => e.Status, EpisodeStatus.Ready)
+                    .SetProperty(e => e.HlsPrefix, result.HlsPrefix)
+                    .SetProperty(e => e.VideoKey, (string?)null)
+                    .SetProperty(e => e.VideoBytes, (long?)null)
+                    .SetProperty(e => e.MediaVersion, result.Version)
+                    .SetProperty(e => e.DurationSeconds, result.DurationSeconds)
+                    .SetProperty(e => e.Width, result.Width)
+                    .SetProperty(e => e.Height, result.Height)
+                    .SetProperty(e => e.PosterKey, result.PosterKey)
+                    .SetProperty(e => e.RenditionsJson, result.RenditionsJson)
+                    .SetProperty(e => e.ProcessingProgress, 100)
+                    .SetProperty(e => e.ProcessingError, (string?)null)
+                    .SetProperty(e => e.UpdatedAt, now), stoppingToken);
+                posterKey = result.PosterKey;
+                location = result.HlsPrefix;
+            }
 
             // A series without a cover uses its first ready episode's poster.
             await db.Series.Where(s => s.Id == episode.SeriesId && s.CoverKey == null)
-                .ExecuteUpdateAsync(u => u.SetProperty(s => s.CoverKey, result.PosterKey), stoppingToken);
+                .ExecuteUpdateAsync(u => u.SetProperty(s => s.CoverKey, posterKey), stoppingToken);
             await SeriesStats.RefreshAsync(db, episode.SeriesId, stoppingToken);
             await queue.CompleteAsync(job.Id, stoppingToken);
             stats.Finished(succeeded: true);
             ReelGuoTelemetry.MediaJobs.Add(1, new KeyValuePair<string, object?>("outcome", "succeeded"));
             ReelGuoTelemetry.TranscodeSeconds.Record(time.GetElapsedTime(started).TotalSeconds);
-            logger.LogInformation("Job {JobId}: episode {EpisodeId} ready at {Prefix}", job.Id, episode.Id, result.HlsPrefix);
+            logger.LogInformation("Job {JobId}: episode {EpisodeId} ready at {Location}", job.Id, episode.Id, location);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
