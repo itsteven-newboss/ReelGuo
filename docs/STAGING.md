@@ -313,14 +313,44 @@ admin's PC ──(signed PUT, one file)──▶ COS bucket  videos/<storage fol
 
 Nothing re-encodes a COS video, so every file has to play in every browser as it is: **MP4, H.264 video, AAC
 audio, with the index at the front** ("faststart"). The folder upload page checks each file's header and holds
-back the ones that don't qualify. To fix a file:
+back the ones that don't qualify (格式不支持). It also notes files above 8 Mbit/s: they upload, but stall on phones and
+cost far more COS traffic.
+
+Deliveries often come with the index at the end and at high bit rates. Convert them before uploading, in one of two
+ways.
+
+**In the admin console: 文件夹上传 → 优化视频** (Edge or Chrome on a PC).
+
+1. Pick the delivery folder, then an empty output folder.
+2. The page lists every episode: those that need optimising (and why) and those copied as they are.
+3. **开始优化** converts them in the browser, one at a time, with the PC's graphics hardware where available:
+   H.264 + AAC, index at the front, constant quality. Measured on a real episode: 16 Mbit/s became 1.6 Mbit/s at
+   SSIM 0.989, about 80 MB for 6 minutes.
+4. The output is written as `Videos/<title>/<title>_<n>.mp4`, `Images/<title>.jpg` and `VideoDetails/`.
+5. **上传优化后的文件夹** loads it straight into the upload.
+
+Keep the page open while it works. Started again, it skips finished episodes. Speed depends on the PC: with hardware
+encoding usually several times real time; a PC without it encodes in software at about real time.
+
+**On the PC with PowerShell** (faster on a strong CPU, and for very large batches): `scripts\prepare-videos.ps1`. It
+writes a copy with the same layout, converts every video, copies the pictures and details files, and skips what it has
+already done:
 
 ```powershell
-ffmpeg -i in.mp4 -c:v libx264 -profile:v high -crf 23 -preset medium -c:a aac -b:a 128k -movflags +faststart out.mp4
+cd C:\Users\<you>\Documents\ReelGuo        # the repository on the PC that uploads
+powershell -ExecutionPolicy Bypass -File .\scripts\prepare-videos.ps1 -Source "D:\deliveries\SeriesA"
+# writes D:\deliveries\SeriesA-upload: pick that folder on the upload page
 ```
 
-When the codecs are already right and only the index is at the end, `ffmpeg -i in.mp4 -c copy -movflags +faststart out.mp4`
-is enough.
+- **Default (compress):** H.264 High at CRF 23, capped at 4 Mbit/s, AAC 128 kbit/s, at most 1080 px on the short
+  side. Measured on a real 6-minute 1080×1920 episode: 694 MB at 16 Mbit/s became 88 MB at 2 Mbit/s, looking nearly
+  the same (SSIM 0.99), in about a minute on an 8-core PC. Uploads get about 8 times faster.
+- **`-Quality high`:** CRF 20, up to 6 Mbit/s; larger files, about twice the time.
+- **`-Mode faststart`:** only moves the index, without re-encoding. Takes seconds, but the size stays the same, and the
+  codecs must already be H.264 and AAC.
+
+It uses ffmpeg from the repository's `.tools`, from PATH, or downloads it once. Run it again while a delivery is still
+downloading: files written in the last minute are left for the next run.
 
 ### Step 1. The bucket
 
@@ -382,8 +412,12 @@ Admin console → **文件夹上传**:
    - **新剧放入频道:** the channel new series go to.
    - **版权信息** (optional): copied into each new series that has none. Left empty, a new series gets rights holder
      `huangyueai`, worldwide, and "no" for AI-generated and real person. None of it is required to publish.
-2. **选择文件夹:** pick the whole delivery folder (`VideoDetails/`, `Images/`, `Videos/<title>/<title>_<n>.mp4`).
-   Chrome and Edge remember it; other browsers ask each time.
+2. **选择文件夹:** pick the whole delivery folder. Both layouts work, and a folder holding several titles too:
+   - `VideoDetails/`, `Images/<title>.jpg`, `Videos/<title>/<title>_<n>.mp4`
+   - `<title>/video/<title>_<n>.mp4` with `<title>/Images/<any name>.jpg`: the title comes from the file names, and
+     the tallest picture in a title's `Images` folder is its cover.
+
+   Episode files must be named `<title>_<n>.mp4`. Chrome and Edge remember the folder; other browsers ask each time.
 3. The page reads each file's header (a few KB per file) and labels each title: new, has updates, in sync, or needs
    attention. Click a title to see its episodes, coloured by state, and hover an episode to see why.
 4. Press **全部上传**:
@@ -417,7 +451,9 @@ about US$12 for a month.
 | Upload stops at 0% and the browser console mentions CORS | Step 2: the origin must match exactly, including `https://` and the port. |
 | Upload answers 403 | The key (Step 3), the bucket name (it must include the APPID) or the region. |
 | "COS 中的文件大小与本地文件不一致" | The upload was cut short. Upload that title again; the episode is sent again. |
-| An episode shows 格式不支持 | Not H.264/AAC or not faststart. Fix it with the ffmpeg command above, then check the folder again. |
+| An episode shows 格式不支持 | Not H.264/AAC, or the index isn't at the front. Convert the folder with 优化视频 or `scripts\prepare-videos.ps1` (above), then upload the converted folder. |
+| 优化视频 says the browser can't encode H.264 | An old browser, or one without video encoding. Update Edge / Chrome, or use `scripts\prepare-videos.ps1`. |
+| A series is named "video", or episodes show 有多个第 1 集的文件 | An admin console from before 2026-11-17, which grouped `video/` folders together. Update staging. |
 | An episode is "failed" after upload | `ops.ps1 logs worker`. The worker reads the file from COS, so it needs outbound HTTPS to the bucket. |
 | Plays, but only after a long wait | The file isn't faststart. |
 | Playback stops after a while with an error | The link expired while the tab was paused; the player fetches a new one. Raise `REELGUO_COS_PLAYBACK_MINUTES` if needed. |

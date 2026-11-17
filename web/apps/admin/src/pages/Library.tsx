@@ -1,7 +1,7 @@
 import { ApiError, unwrap, type Schemas } from "@reelguo/api-client";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, FolderOpen, Pause, Play, RefreshCw, Square, Upload } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { ChevronDown, ChevronRight, FolderOpen, Pause, Play, RefreshCw, Square, Upload, Wand2 } from "lucide-react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import {
   buildIndex, canPickFolders, canRead, listingFor, pickFolder, rememberFolder, rememberedFolder, videoKey, walkFileList, walkHandle,
   type FolderIndex, type TitlePlan,
@@ -9,6 +9,9 @@ import {
 import { api, CSRF_HEADER } from "../session";
 import { formatBytes, uploadFile } from "../upload";
 import { Button, Card, ErrorText, Field, inputClass, PageHeader } from "../ui";
+
+// The optimizer brings the video encoding library (about 600 KB): loaded only when 优化视频 is opened.
+const OptimizePanel = lazy(() => import("../library/OptimizePanel").then((m) => ({ default: m.OptimizePanel })));
 
 type Plan = Schemas["LibraryPlan"];
 type EpisodePlan = Schemas["LibraryEpisodePlan"];
@@ -109,6 +112,7 @@ export function LibraryPage({ onOpenSeries }: { onOpenSeries: (id: number) => vo
   const [running, setRunning] = useState(false);
   const [paused, setPaused] = useState(false);
   const [keepUploading, setKeepUploading] = useState(true);
+  const [optimizing, setOptimizing] = useState(false);
   const [log, setLog] = useState<string[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
   const stopper = useRef<AbortController | null>(null);
@@ -156,6 +160,15 @@ export function LibraryPage({ onOpenSeries }: { onOpenSeries: (id: number) => vo
     setRemembered(picked);
     await rememberFolder(picked);
     await scanFolder(picked);
+  }
+
+  /** The optimizer's output folder, straight into the upload. */
+  async function openOptimized(dir: FileSystemDirectoryHandle) {
+    setOptimizing(false);
+    setHandle(dir);
+    setRemembered(dir);
+    await rememberFolder(dir);
+    await scanFolder(dir);
   }
 
   async function reopen(h: FileSystemDirectoryHandle) {
@@ -367,8 +380,9 @@ export function LibraryPage({ onOpenSeries }: { onOpenSeries: (id: number) => vo
       <PageHeader
         title="文件夹上传"
         sub={<>
-          选择整个交付文件夹（包含 <code>VideoDetails/</code>、<code>Images/</code>、<code>Videos/剧名/剧名_集数.mp4</code>），
-          系统会比对后台，列出每部剧缺少的内容；视频由浏览器直接上传到存储，不经过服务器。新剧以草稿创建，发布前请在内容管理中补全版权信息。
+          选择整个交付文件夹（<code>Videos/剧名/剧名_集数.mp4</code>，或 <code>剧名/video/剧名_集数.mp4</code>，可含 <code>Images/</code>、<code>VideoDetails/</code>），
+          系统会比对后台，列出每部剧缺少的内容；视频由浏览器直接上传到存储，不经过服务器。新剧以草稿创建，检查后在内容管理中发布。
+          视频格式不符或码率过高时，先点「优化视频」转换。
         </>}
       />
 
@@ -420,6 +434,12 @@ export function LibraryPage({ onOpenSeries }: { onOpenSeries: (id: number) => vo
         </details>
       </Card>
 
+      {optimizing && (
+        <Suspense fallback={<Card className="p-5 mb-4 text-[12.5px] text-mut">正在加载视频优化工具…</Card>}>
+          <OptimizePanel onClose={() => setOptimizing(false)} onUseFolder={(dir) => void openOptimized(dir)} />
+        </Suspense>
+      )}
+
       <Card className="p-5 mb-4">
         <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => void onDrop(e)}
           className="rounded-(--r-md) border border-dashed border-white/15 p-5 flex items-center gap-4">
@@ -432,6 +452,7 @@ export function LibraryPage({ onOpenSeries }: { onOpenSeries: (id: number) => vo
           </div>
           {remembered && !handle && <Button disabled={running || !!scan} onClick={() => void reopen(remembered)}>打开上次的文件夹「{remembered.name}」</Button>}
           {index && <Button disabled={running || !!scan} onClick={() => void (handle ? scanFolder(handle) : choose())}><RefreshCw size={14} className="inline -mt-0.5 mr-1" />重新检查</Button>}
+          {!optimizing && <Button disabled={running || !!scan} onClick={() => setOptimizing(true)} title="把交付的视频转换成适合上传和播放的格式（索引在开头、码率合适），整理成可直接上传的文件夹"><Wand2 size={14} className="inline -mt-0.5 mr-1" />优化视频</Button>}
           <Button variant="primary" disabled={running || !!scan} onClick={() => void choose()}><FolderOpen size={14} className="inline -mt-0.5 mr-1" />选择文件夹</Button>
           <input ref={(el) => { fileInput.current = el; el?.setAttribute("webkitdirectory", ""); }} type="file" multiple className="hidden"
             onChange={(e) => { const files = Array.from(e.target.files ?? []); e.target.value = ""; if (files.length) { setHandle(null); void scanFolder(files); } }} />

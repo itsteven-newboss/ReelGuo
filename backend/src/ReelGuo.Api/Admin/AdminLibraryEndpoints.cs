@@ -206,7 +206,7 @@ public static class AdminLibraryEndpoints
             if (useCos && g.Folder is not null
                 && stored.TryGetValue(CosKeys.EpisodeKey(folder, g.Folder.Name, f.Name), out var size) && size == f.Bytes)
                 return new(n, f.Name, f.Bytes, "stored", row?.Id, "已在 COS 中，无需再上传");
-            return new(n, f.Name, f.Bytes, "new", row?.Id, null);
+            return new(n, f.Name, f.Bytes, "new", row?.Id, HighBitrate(f));
         }
 
         plans = [.. plans.OrderBy(p => p.Number == 0 ? int.MaxValue : p.Number).ThenBy(p => p.FileName, StringComparer.Ordinal)];
@@ -225,9 +225,20 @@ public static class AdminLibraryEndpoints
     }
 
     /// <summary>Why a browser could not play this file as it is, or null. Nothing re-encodes a COS video.</summary>
+    /// <summary>A note for a file far above what streams well on phones (it still uploads).</summary>
+    public static string? HighBitrate(LibraryVideoFile f)
+    {
+        if (f.DurationSec <= 0) return null;
+        var mbps = f.Bytes * 8 / f.DurationSec / 1_000_000;
+        return mbps > 8
+            ? $"码率约 {mbps:0.#} Mbit/s，偏高（网络播放建议 2-4 Mbit/s）。可先用 scripts\\prepare-videos.ps1 压缩：上传更快，手机播放更流畅，COS 流量更省"
+            : null;
+    }
+
     private static string? Unplayable(LibraryVideoFile f)
     {
-        if (!f.Faststart) return "索引不在文件开头（需用 ffmpeg -movflags +faststart 处理），否则要下载完整个文件才能播放";
+        if (!f.Faststart)
+            return "索引不在文件开头，网页播放会变慢。请先用 scripts\\prepare-videos.ps1 转换整个文件夹（同时压缩到适合网络播放的大小），再选择转换后的文件夹";
         if (f.VideoCodec is null || !PlayableVideo.Contains(f.VideoCodec, StringComparer.OrdinalIgnoreCase))
             return $"视频编码为 {f.VideoCodec ?? "未知"}，需要 H.264（avc1）";
         if (f.AudioCodec is not null && !string.Equals(f.AudioCodec, "mp4a", StringComparison.OrdinalIgnoreCase))

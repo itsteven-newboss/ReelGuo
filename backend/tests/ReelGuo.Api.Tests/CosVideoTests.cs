@@ -24,6 +24,19 @@ public sealed class CosVideoUnitTests
     private const string DocSecretKey = "BQYIM75p8x0iWVFSIgqEKwFprpRSVHlz";
 
     [Fact]
+    public void Very_high_bit_rates_get_a_note_pointing_to_the_conversion_script()
+    {
+        // A real delivery: 694 MB for 360 s (16 Mbit/s), and the same episode after scripts/prepare-videos.ps1 (88 MB).
+        var original = new ReelGuo.Api.Admin.LibraryVideoFile("后悔有妻_01.mp4", 727_416_688, 360.05, 1080, 1920, true, false, "avc1", "mp4a");
+        var note = ReelGuo.Api.Admin.AdminLibraryEndpoints.HighBitrate(original);
+        Assert.NotNull(note);
+        Assert.Contains("16.2 Mbit/s", note);
+        Assert.Contains("prepare-videos.ps1", note);
+        Assert.Null(ReelGuo.Api.Admin.AdminLibraryEndpoints.HighBitrate(original with { Bytes = 92_274_688, Faststart = true }));
+        Assert.Null(ReelGuo.Api.Admin.AdminLibraryEndpoints.HighBitrate(original with { DurationSec = 0 }));
+    }
+
+    [Fact]
     public void Signature_matches_the_documented_worked_example()
     {
         var url = CosSigner.Presign("put", "host", "/exampleobject", new CosCredentials("AKIDEXAMPLE", DocSecretKey),

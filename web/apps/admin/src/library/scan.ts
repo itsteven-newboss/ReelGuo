@@ -16,7 +16,34 @@ export type TitlePlan = Schemas["LibraryTitlePlan"];
 type VideoFile = Schemas["LibraryVideoFile"];
 
 /** One file found, wherever it came from (a directory handle, or a folder picked with the plain file input). */
-export type LocalEntry = { name: string; parent: string; depth: number; get: () => Promise<File> };
+export type LocalEntry = { name: string; parent: string; grandparent: string; depth: number; get: () => Promise<File> };
+
+/**
+ * Folders named for what they hold rather than for a title. Deliveries also come as `<title>/video/<title>_01.mp4`
+ * with `<title>/Images/<any name>.jpg`: there the title is the file name's prefix (or the folder above), and a
+ * picture belongs to the title folder above it.
+ */
+const GENERIC_VIDEO = /^(videos?|video ?files|视频|视频文件|mp4|episodes?|剧集|正片)$/i;
+const GENERIC_IMAGE = /^(images?|imgs?|pics?|pictures?|covers?|posters?|封面|图片|海报|剧照)$/i;
+const EPISODE = /_(\d{1,4})(?:-[0-9a-f]{6,})?\.mp4$/i;
+
+/** The title folder an episode file belongs to. */
+function titleFolderOf(e: LocalEntry) {
+  if (!GENERIC_VIDEO.test(e.parent.trim())) return e.parent;
+  const prefix = EPISODE.test(e.name) ? e.name.replace(EPISODE, "").trim() : "";
+  if (prefix) return prefix;
+  return e.grandparent && !GENERIC_VIDEO.test(e.grandparent.trim()) ? e.grandparent : e.parent;
+}
+
+/** The folder above a picture in an `Images`-like folder: the title it may belong to. */
+function imageOwnerOf(e: LocalEntry) {
+  return GENERIC_IMAGE.test(e.parent.trim()) && e.grandparent && !GENERIC_IMAGE.test(e.grandparent.trim()) ? e.grandparent : null;
+}
+
+/** The server's title key (CosKeys.NameKey): NFKC, lower case, no leading "(Dubbed)", only letters and digits. */
+const nameKey = (s: string) =>
+  s.normalize("NFKC").trim().replace(/^\(\s*dubbed\s*\)\s*/i, "").toLowerCase().replace(/[^\p{L}\p{Nd}]/gu, "");
+const stem = (name: string) => name.replace(/\.[^.]+$/, "");
 
 export type FolderIndex = {
   listing: Listing;
@@ -33,11 +60,11 @@ const PLACEHOLDER = /\.mp4\.[a-z0-9]+$|\.(part|crdownload|qkdownloading|tmp|down
 export const videoKey = (folder: string, name: string) => `${folder}\n${name}`;
 
 /** Every file under a directory the admin picked, three levels down (`<delivery>/Videos/<title>/…`). */
-export async function* walkHandle(dir: FileSystemDirectoryHandle, depth = 0, parent = dir.name): AsyncGenerator<LocalEntry> {
-  if (depth > 3) return;
+export async function* walkHandle(dir: FileSystemDirectoryHandle, depth = 0, parent = dir.name, grandparent = ""): AsyncGenerator<LocalEntry> {
+  if (depth > 4) return;
   for await (const entry of (dir as unknown as { values(): AsyncIterable<FileSystemHandle> }).values()) {
-    if (entry.kind === "directory") yield* walkHandle(entry as FileSystemDirectoryHandle, depth + 1, entry.name);
-    else yield { name: entry.name, parent, depth, get: () => (entry as FileSystemFileHandle).getFile() };
+    if (entry.kind === "directory") yield* walkHandle(entry as FileSystemDirectoryHandle, depth + 1, entry.name, parent);
+    else yield { name: entry.name, parent, grandparent, depth, get: () => (entry as FileSystemFileHandle).getFile() };
   }
 }
 
@@ -45,7 +72,13 @@ export async function* walkHandle(dir: FileSystemDirectoryHandle, depth = 0, par
 export function* walkFileList(files: Iterable<File>): Generator<LocalEntry> {
   for (const file of files) {
     const parts = (file.webkitRelativePath || file.name).split("/");
-    yield { name: file.name, parent: parts.length > 1 ? parts[parts.length - 2]! : "", depth: parts.length - 1, get: () => Promise.resolve(file) };
+    yield {
+      name: file.name,
+      parent: parts.length > 1 ? parts[parts.length - 2]! : "",
+      grandparent: parts.length > 2 ? parts[parts.length - 3]! : "",
+      depth: parts.length - 1,
+      get: () => Promise.resolve(file),
+    };
   }
 }
 
@@ -102,10 +135,14 @@ export async function buildIndex(entries: AsyncIterable<LocalEntry> | Iterable<L
     return f;
   };
 
+  // Pictures in an `Images`-like folder are settled once the titles are known (below).
+  const inImageFolders: { owner: string; name: string; file: File; width: number; height: number }[] = [];
+
   await inBatches(all, 24, async (e) => {
     const lower = e.name.toLowerCase();
     if (PLACEHOLDER.test(lower)) {
-      if (e.depth > 0) folderOf(e.parent).downloading.push(e.name);
+      // A placeholder ("x.mp4.part") names the episode file it will become.
+      if (e.depth > 0) folderOf(titleFolderOf({ ...e, name: e.name.replace(/\.[a-z0-9]+$/i, "") })).downloading.push(e.name);
       return;
     }
     if (lower.endsWith(".json")) {
@@ -114,18 +151,47 @@ export async function buildIndex(entries: AsyncIterable<LocalEntry> | Iterable<L
     } else if (IMAGE.test(lower)) {
       const file = await e.get();
       const { width, height } = await imageSize(file);
+      const owner = imageOwnerOf(e);
+      if (owner) {
+        inImageFolders.push({ owner, name: e.name, file, width, height });
+        return;
+      }
       images.push({ name: e.name, bytes: file.size, width, height });
       imageFiles.set(e.name, file);
     } else if (lower.endsWith(".mp4") && e.depth > 0) {
       const file = await e.get();
-      const h = await probe(file, e.parent);
-      folderOf(e.parent).files.push({
+      const folder = titleFolderOf(e);
+      const h = await probe(file, folder);
+      folderOf(folder).files.push({
         name: e.name, bytes: file.size, duration_sec: h.durationSec, width: h.width, height: h.height,
         complete: h.complete, faststart: h.faststart, video_codec: h.videoCodec, audio_codec: h.audioCodec,
       });
-      videoFiles.set(videoKey(e.parent, e.name), file);
+      videoFiles.set(videoKey(folder, e.name), file);
     }
   }, (done) => onProgress?.(done, all.length));
+
+  // A picture named after a title keeps its name (Images/<title>.jpg). Otherwise, when the folder above `Images` is
+  // a title (<title>/Images/9月14日-封面.jpg), the tallest such picture is that title's cover, listed under its name.
+  const titleKeys = new Set([...folders.keys()].map(nameKey));
+  const owned = new Map<string, (typeof inImageFolders)[number]>();
+  const ratio = (w: number, h: number) => (w > 0 ? h / w : 0);
+  for (const img of inImageFolders) {
+    if (!titleKeys.has(nameKey(stem(img.name))) && titleKeys.has(nameKey(img.owner))) {
+      const best = owned.get(img.owner);
+      if (!best || ratio(img.width, img.height) > ratio(best.width, best.height)
+        || (ratio(img.width, img.height) === ratio(best.width, best.height) && img.height > best.height)) owned.set(img.owner, img);
+      continue;
+    }
+    if (imageFiles.has(img.name)) continue;
+    images.push({ name: img.name, bytes: img.file.size, width: img.width, height: img.height });
+    imageFiles.set(img.name, img.file);
+  }
+  for (const [owner, img] of owned) {
+    const name = owner + img.name.slice(img.name.lastIndexOf(".")).toLowerCase();
+    if (imageFiles.has(name)) continue; // a picture already named after the title wins
+    images.push({ name, bytes: img.file.size, width: img.width, height: img.height });
+    imageFiles.set(name, img.file);
+  }
 
   return {
     listing: {

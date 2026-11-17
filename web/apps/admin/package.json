@@ -13,6 +13,7 @@
     "@reelguo/ui": "workspace:*",
     "@tanstack/react-query": "^5.107.1",
     "lucide-react": "^1.71.0",
+    "mediabunny": "1.65.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
