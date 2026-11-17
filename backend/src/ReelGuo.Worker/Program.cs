@@ -27,7 +27,7 @@ builder.Services.AddDbContext<ReelGuoDbContext>(o =>
 });
 
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddReelGuoStorage(builder.Configuration, builder.Environment.ContentRootPath);
+builder.Services.AddReelGuoStorage(builder.Environment.ContentRootPath);
 builder.Services.AddReelGuoVideo();
 builder.Services.AddScoped<MediaJobQueue>();
 builder.Services.AddScoped<RankingCalculator>();

@@ -29,13 +29,16 @@ public sealed class S3Options
 
 public static class StorageSetup
 {
-    public static IServiceCollection AddReelGuoStorage(this IServiceCollection services, IConfiguration configuration, string contentRoot)
+    public static IServiceCollection AddReelGuoStorage(this IServiceCollection services, string contentRoot)
     {
-        var options = configuration.GetSection(StorageOptions.Section).Get<StorageOptions>() ?? new StorageOptions();
-        services.AddSingleton(options);
+        // Bound on first use, not here: settings added after registration (the tests' WebApplicationFactory overrides)
+        // would otherwise be missed, and tests would write into the development storage folder.
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<IConfiguration>().GetSection(StorageOptions.Section).Get<StorageOptions>() ?? new StorageOptions());
 
-        services.AddSingleton(_ =>
+        services.AddSingleton(sp =>
         {
+            var options = sp.GetRequiredService<StorageOptions>();
             if (string.Equals(options.Provider, "S3", StringComparison.OrdinalIgnoreCase))
             {
                 var client = S3ObjectStorage.CreateClient(options.S3);

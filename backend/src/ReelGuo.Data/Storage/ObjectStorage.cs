@@ -17,6 +17,8 @@ public interface IObjectStorage
     Task DownloadToFileAsync(string key, string localPath, CancellationToken cancellationToken);
     Task<IReadOnlyList<string>> ListAsync(string prefix, CancellationToken cancellationToken);
     Task DeletePrefixAsync(string prefix, CancellationToken cancellationToken);
+    /// <summary>Deletes one object; nothing happens when it does not exist.</summary>
+    Task DeleteAsync(string key, CancellationToken cancellationToken);
 
     /// <summary>
     /// A URL the browser can PUT the file to directly, or null when this backend cannot sign URLs

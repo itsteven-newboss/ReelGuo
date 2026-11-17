@@ -1,10 +1,11 @@
 import { unwrap, type Schemas } from "@reelguo/api-client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Film, RotateCcw, Trash2, Upload } from "lucide-react";
+import { Film, Play, RotateCcw, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
 import { api } from "../session";
 import { formatBytes, formatDuration, uploadFile } from "../upload";
 import { Button, Card, ErrorText, StatusBadge } from "../ui";
+import { EpisodePreviewDialog, canPreview } from "./EpisodePreview";
 
 type SeriesDto = Schemas["AdminSeriesDto"];
 type EpisodeDto = Schemas["AdminEpisodeDto"];
@@ -15,6 +16,7 @@ type Pending = { name: string; size: number; progress: number; error?: string };
 export function EpisodesPanel({ series, onChanged }: { series: SeriesDto; onChanged: () => void }) {
   const qc = useQueryClient();
   const [pending, setPending] = useState<Pending[]>([]);
+  const [previewId, setPreviewId] = useState<number | null>(null);
   // Where uploads go decides what the hint says (COS plays the file as uploaded; otherwise it is transcoded).
   const cos = useQuery({
     queryKey: ["admin", "library", "config"],
@@ -94,15 +96,17 @@ export function EpisodesPanel({ series, onChanged }: { series: SeriesDto; onChan
           {series.episodes.length === 0 && (
             <tr><td colSpan={7} className="px-5 py-8 text-center text-dim">还没有分集</td></tr>
           )}
-          {series.episodes.map((e) => <EpisodeRow key={e.id} episode={e} onChanged={refresh} />)}
+          {series.episodes.map((e) => <EpisodeRow key={e.id} episode={e} onChanged={refresh} onPreview={() => setPreviewId(e.id)} />)}
         </tbody>
       </table>
+      <EpisodePreviewDialog episodes={series.episodes} episodeId={previewId} onSelect={setPreviewId} onClose={() => setPreviewId(null)} />
     </Card>
   );
 }
 
-function EpisodeRow({ episode: e, onChanged }: { episode: EpisodeDto; onChanged: () => void }) {
+function EpisodeRow({ episode: e, onChanged, onPreview }: { episode: EpisodeDto; onChanged: () => void; onPreview: () => void }) {
   const [title, setTitle] = useState(e.title);
+  const playable = canPreview(e);
   const path = { params: { path: { id: e.id } } };
 
   const update = useMutation({
@@ -131,11 +135,25 @@ function EpisodeRow({ episode: e, onChanged }: { episode: EpisodeDto; onChanged:
 
   return (
     <tr className="border-t border-white/5 align-middle">
-      <td className="px-5 py-2.5 font-semibold">第 {e.episode_number} 集</td>
+      <td className="px-5 py-2.5 font-semibold whitespace-nowrap">
+        {playable
+          ? <button onClick={onPreview} className="hover:text-primary" title="播放这一集">第 {e.episode_number} 集</button>
+          : <>第 {e.episode_number} 集</>}
+      </td>
       <td className="px-3 py-2.5">
-        <div className="w-9 h-12 rounded bg-s3 overflow-hidden flex items-center justify-center text-dim">
-          {e.poster_url ? <img src={e.poster_url} alt="" className="w-full h-full object-cover" /> : <Film size={14} />}
-        </div>
+        {playable ? (
+          <button onClick={onPreview} title="播放这一集" aria-label={`播放第 ${e.episode_number} 集`}
+            className="group relative w-9 h-12 rounded bg-s3 overflow-hidden flex items-center justify-center text-dim">
+            {e.poster_url ? <img src={e.poster_url} alt="" className="w-full h-full object-cover" /> : <Film size={14} />}
+            <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-white opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">
+              <Play size={14} fill="currentColor" />
+            </span>
+          </button>
+        ) : (
+          <div className="w-9 h-12 rounded bg-s3 overflow-hidden flex items-center justify-center text-dim">
+            {e.poster_url ? <img src={e.poster_url} alt="" className="w-full h-full object-cover" /> : <Film size={14} />}
+          </div>
+        )}
       </td>
       <td className="px-3 py-2.5">
         <input value={title} onChange={(ev) => setTitle(ev.target.value)} onBlur={() => title !== e.title && update.mutate({ title, is_free: e.is_free })}
@@ -153,6 +171,7 @@ function EpisodeRow({ episode: e, onChanged }: { episode: EpisodeDto; onChanged:
         <input type="checkbox" checked={e.is_free} onChange={(ev) => update.mutate({ title, is_free: ev.target.checked })} />
       </td>
       <td className="px-5 py-2.5 text-right whitespace-nowrap">
+        {playable && <button onClick={onPreview} className="text-primary hover:underline text-[12.5px] mr-3">预览</button>}
         <label className="text-primary hover:underline cursor-pointer text-[12.5px]">
           {replace.isPending ? "上传中…" : "替换视频"}
           <input type="file" accept="video/*,.mkv,.mov" className="hidden" onChange={(ev) => { const f = ev.target.files?.[0]; if (f) replace.mutate(f); ev.target.value = ""; }} />

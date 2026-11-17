@@ -287,6 +287,17 @@ public sealed class PipelineTests(PostgresFixture db) : IClassFixture<PostgresFi
         await admin.UploadAsync(created.GetProperty("upload"), clip);
         await admin.AdminSendAsync(HttpMethod.Post, $"/api/admin/episodes/{episodeId}/uploaded").OkJsonAsync();
 
+        // Preview while processing: the uploaded original, streamed to the admin with range support.
+        var original = await admin.GetAsync($"/api/admin/episodes/{episodeId}/preview", Ct).OkJsonAsync();
+        Assert.Equal(("file", "original"), (original.GetProperty("kind").GetString(), original.GetProperty("source").GetString()));
+        Assert.Equal($"/api/admin/episodes/{episodeId}/preview/source", original.GetProperty("url").GetString());
+        var ranged = new HttpRequestMessage(HttpMethod.Get, original.GetProperty("url").GetString());
+        ranged.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 99);
+        var part = await admin.SendAsync(ranged, Ct);
+        Assert.Equal(HttpStatusCode.PartialContent, part.StatusCode);
+        Assert.Equal("video/mp4", part.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(100, (await part.Content.ReadAsByteArrayAsync(Ct)).Length);
+
         Assert.True(await AdminClient.RunWorkerOnceAsync(api));
 
         var detail = await admin.GetAsync($"/api/admin/series/{seriesId}", Ct).OkJsonAsync();
@@ -294,6 +305,22 @@ public sealed class PipelineTests(PostgresFixture db) : IClassFixture<PostgresFi
         Assert.Equal("ready", episode.GetProperty("status").GetString());
         Assert.Equal((720, 1280), (episode.GetProperty("width").GetInt32(), episode.GetProperty("height").GetInt32()));
         Assert.Equal(0, detail.GetProperty("publish_problems").GetArrayLength());
+
+        // Preview once processed: the HLS viewers get, through admin-only routes (draft series, no token, no geo check).
+        var preview = await admin.GetAsync($"/api/admin/episodes/{episodeId}/preview", Ct).OkJsonAsync();
+        Assert.Equal(("hls", "output"), (preview.GetProperty("kind").GetString(), preview.GetProperty("source").GetString()));
+        var previewUrl = preview.GetProperty("url").GetString()!;
+        Assert.Equal($"/api/admin/episodes/{episodeId}/preview/hls/1/master.m3u8", previewUrl);
+        Assert.StartsWith("/media/p/posters/", preview.GetProperty("poster_url").GetString());
+        var previewBase = previewUrl[..(previewUrl.LastIndexOf('/') + 1)];
+        Assert.Contains("r0/index.m3u8", await admin.GetStringAsync(previewUrl, Ct));
+        Assert.Contains("seg_0000.m4s", await admin.GetStringAsync(previewBase + "r0/index.m3u8", Ct));
+        var previewSegment = await admin.GetAsync(previewBase + "r0/seg_0000.m4s", Ct);
+        Assert.Equal(HttpStatusCode.OK, previewSegment.StatusCode);
+        Assert.True((await previewSegment.Content.ReadAsByteArrayAsync(Ct)).Length > 1000);
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync($"/api/admin/episodes/{episodeId}/preview/hls/2/master.m3u8", Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync(previewBase + "..%2F..%2Fv1/master.m3u8", Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await api.CreateClient().GetAsync(previewUrl, Ct)).StatusCode);
 
         await admin.AdminSendAsync(HttpMethod.Post, $"/api/admin/series/{seriesId}/publish").OkJsonAsync();
 

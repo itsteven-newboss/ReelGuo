@@ -78,5 +78,12 @@ public sealed class FileSystemObjectStorage : IObjectStorage
         return Task.CompletedTask;
     }
 
+    public Task DeleteAsync(string key, CancellationToken cancellationToken)
+    {
+        var path = PathFor(key);
+        if (File.Exists(path)) File.Delete(path);
+        return Task.CompletedTask;
+    }
+
     public Uri? CreateUploadUrl(string key, string contentType, TimeSpan validFor) => null;
 }

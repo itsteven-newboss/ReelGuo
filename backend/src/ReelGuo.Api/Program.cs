@@ -78,7 +78,7 @@ builder.Services.AddSingleton<IBlockedCountryStore, BlockedCountryStore>();
 builder.Services.AddSingleton<IRevokedSeriesStore, RevokedSeriesStore>();
 builder.Services.AddSingleton<IAgeRuleStore, AgeRuleStore>();
 
-builder.Services.AddReelGuoStorage(builder.Configuration, builder.Environment.ContentRootPath);
+builder.Services.AddReelGuoStorage(builder.Environment.ContentRootPath);
 // Tencent COS for episode videos when Video:Provider is "Cos" (docs/ARCHITECTURE.md §9.14); refuses to start half-configured.
 builder.Services.AddReelGuoVideo();
 builder.Services.Configure<MediaOptions>(builder.Configuration.GetSection(MediaOptions.Section));

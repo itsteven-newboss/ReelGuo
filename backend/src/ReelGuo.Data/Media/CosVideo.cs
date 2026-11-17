@@ -176,8 +176,8 @@ public static class CosSigner
 /// playback all use pre-signed links that expire. COS honours range requests, so a faststart MP4 starts playing
 /// and seeks before the whole file has arrived.
 ///
-/// Nothing here deletes a video. The bucket is the archive of what was delivered (it may also be shared with the
-/// Viora platform), so a replaced or deleted episode leaves its object for an operator to remove in the COS console.
+/// The bucket is ReelGuo's own: when an episode or series is deleted, or a video replaced, the objects no episode uses
+/// any more are deleted through <see cref="CosCleanup"/>. Existing objects are never overwritten.
 /// </summary>
 public sealed partial class CosVideoStore(VideoOptions options, TimeProvider clock, HttpClient http)
 {
@@ -212,6 +212,19 @@ public sealed partial class CosVideoStore(VideoOptions options, TimeProvider clo
 
     /// <summary>A read link for the worker's ffprobe and poster frame; always the bucket itself, never the CDN.</summary>
     public string ReadUrl(string key, TimeSpan validFor) => Presign("get", Host, key, validFor);
+
+    /// <summary>
+    /// Deletes one video. Only keys under videos/ are ever deleted; COS answers 204 whether or not the object existed.
+    /// Callers go through <see cref="CosCleanup"/>, which first checks that no episode still uses the file.
+    /// </summary>
+    public async Task DeleteAsync(string key, CancellationToken ct)
+    {
+        if (!CosKeys.IsCosKey(key)) throw new ArgumentException($"Not a COS video key: {key}", nameof(key));
+        using var req = new HttpRequestMessage(HttpMethod.Delete, Presign("delete", Host, key, TimeSpan.FromMinutes(5)));
+        using var res = await http.SendAsync(req, ct);
+        if (res.StatusCode == HttpStatusCode.NotFound) return;
+        res.EnsureSuccessStatusCode();
+    }
 
     /// <summary>The stored object's size, or null when there is no such object.</summary>
     public async Task<long?> SizeAsync(string key, CancellationToken ct)

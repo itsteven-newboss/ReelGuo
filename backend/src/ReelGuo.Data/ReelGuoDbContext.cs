@@ -13,6 +13,8 @@ public sealed class ReelGuoDbContext(DbContextOptions<ReelGuoDbContext> options)
     public DbSet<BlockedCountry> BlockedCountries => Set<BlockedCountry>();
     public DbSet<AgeRule> AgeRules => Set<AgeRule>();
     public DbSet<WorkerHeartbeat> WorkerHeartbeats => Set<WorkerHeartbeat>();
+    public DbSet<TelemetrySpan> TelemetrySpans => Set<TelemetrySpan>();
+    public DbSet<TelemetryLog> TelemetryLogs => Set<TelemetryLog>();
     public DbSet<PlaybackSample> PlaybackSamples => Set<PlaybackSample>();
     public DbSet<AuditLogEntry> AuditLog => Set<AuditLogEntry>();
     public DbSet<MediaJob> MediaJobs => Set<MediaJob>();
@@ -257,6 +259,33 @@ public sealed class ReelGuoDbContext(DbContextOptions<ReelGuoDbContext> options)
             e.Property(x => x.CountryCode).HasMaxLength(2).IsFixedLength();
             e.Property(x => x.Note).HasMaxLength(500);
             e.Property(x => x.UpdatedBy).HasMaxLength(128);
+        });
+
+        model.Entity<TelemetrySpan>(e =>
+        {
+            e.Property(x => x.TraceId).HasMaxLength(32);
+            e.Property(x => x.SpanId).HasMaxLength(16);
+            e.Property(x => x.ParentSpanId).HasMaxLength(16);
+            e.Property(x => x.Service).HasMaxLength(64);
+            e.Property(x => x.Name).HasMaxLength(300);
+            e.Property(x => x.Kind).HasMaxLength(16);
+            e.Property(x => x.StatusMessage).HasMaxLength(2000);
+            e.Property(x => x.Attributes).HasColumnType("jsonb");
+            e.HasIndex(x => x.TraceId);
+            e.HasIndex(x => x.StartedAt);
+            e.HasIndex(x => new { x.IsRoot, x.StartedAt });
+        });
+
+        model.Entity<TelemetryLog>(e =>
+        {
+            e.Property(x => x.Service).HasMaxLength(64);
+            e.Property(x => x.Category).HasMaxLength(300);
+            e.Property(x => x.Message).HasMaxLength(4000);
+            e.Property(x => x.Exception).HasMaxLength(16000);
+            e.Property(x => x.TraceId).HasMaxLength(32);
+            e.Property(x => x.SpanId).HasMaxLength(16);
+            e.HasIndex(x => x.At);
+            e.HasIndex(x => x.TraceId);
         });
 
         model.Entity<WorkerHeartbeat>(e =>

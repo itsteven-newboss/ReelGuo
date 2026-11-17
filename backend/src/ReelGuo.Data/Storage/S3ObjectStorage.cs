@@ -115,6 +115,9 @@ public sealed class S3ObjectStorage(IAmazonS3 client, string bucket) : IObjectSt
         }
     }
 
+    public Task DeleteAsync(string key, CancellationToken cancellationToken) =>
+        client.DeleteObjectAsync(new DeleteObjectRequest { BucketName = bucket, Key = StorageKeys.Require(key) }, cancellationToken);
+
     public Uri? CreateUploadUrl(string key, string contentType, TimeSpan validFor) =>
         new(client.GetPreSignedURL(new GetPreSignedUrlRequest
         {

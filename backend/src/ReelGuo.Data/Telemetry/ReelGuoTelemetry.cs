@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using OpenTelemetry;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -12,9 +13,10 @@ using OpenTelemetry.Trace;
 namespace ReelGuo.Data.Telemetry;
 
 /// <summary>
-/// Traces, metrics and logs for the API and the worker, through OpenTelemetry. Nothing leaves the process unless
+/// Traces, metrics and logs for the API and the worker, through OpenTelemetry. Failed and slow traces and warning/error
+/// logs are kept in the app's own database (LocalTelemetry.cs). Nothing leaves the process unless
 /// <c>OTEL_EXPORTER_OTLP_ENDPOINT</c> is set (plus <c>OTEL_EXPORTER_OTLP_HEADERS</c> for the vendor's key), so any
-/// OTLP backend works (Grafana Cloud, Honeycomb, Datadog, a self-hosted collector).
+/// OTLP backend works as well (Grafana Cloud, Honeycomb, Datadog, a self-hosted collector).
 /// </summary>
 public static class ReelGuoTelemetry
 {
@@ -50,19 +52,28 @@ public static class ReelGuoTelemetry
         Action<TracerProviderBuilder>? tracing = null,
         Action<MeterProviderBuilder>? metrics = null)
     {
+        // Traces of failed and slow requests and jobs, and warning/error logs, kept in the app's own database for the
+        // admin page 运行追踪 (LocalTelemetry.cs). On unless Telemetry:Local:Enabled is false.
+        var local = LocalTelemetrySetup.Enabled(configuration);
+        if (local) services.AddLocalTelemetryServices(serviceName);
+
         var builder = services.AddOpenTelemetry()
             .ConfigureResource(r => r.AddService(serviceName, serviceVersion: Version, serviceInstanceId: $"{Environment.MachineName}:{Environment.ProcessId}"))
             .WithTracing(t =>
             {
                 t.AddSource(Name).AddHttpClientInstrumentation().AddNpgsql();
                 tracing?.Invoke(t);
+                if (local) t.AddProcessor(sp => sp.GetRequiredService<LocalTraceProcessor>());
             })
             .WithMetrics(m =>
             {
                 m.AddMeter(Name, "Npgsql").AddRuntimeInstrumentation().AddHttpClientInstrumentation();
                 metrics?.Invoke(m);
             })
-            .WithLogging(_ => { }, o =>
+            .WithLogging(l =>
+            {
+                if (local) l.AddProcessor(sp => sp.GetRequiredService<LocalLogProcessor>());
+            }, o =>
             {
                 o.IncludeFormattedMessage = true;
                 o.IncludeScopes = true;

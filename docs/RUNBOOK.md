@@ -138,8 +138,16 @@ docker compose -f infra/docker-compose.yml --profile app run --rm backup "sh /sc
   - `/health/live` (the process is up);
   - `/health/ready` (the database is reachable);
   - `/health/worker` (at least one media worker is alive).
-- **Traces, metrics and logs:** set `OTEL_EXPORTER_OTLP_ENDPOINT` (and `OTEL_EXPORTER_OTLP_HEADERS` for the vendor's key)
-  on `api` and `worker`. Any OTLP backend works.
+- **When something breaks, start at 运行追踪** in the admin console:
+  - It lists the requests and worker jobs that failed, logged an error or took 1 s or more, plus a 2% sample of normal
+    ones.
+  - Each opens as a timeline of its steps (database commands, outgoing calls) with their errors and the log lines
+    written during it.
+  - The 日志 tab holds every warning and error log line.
+  - The API and worker keep this in the database (`telemetry_spans`, `telemetry_logs`) for 7 days; no outside service is
+    needed. Set `Telemetry:Local:*` to change the thresholds (or `REELGUO_TRACE_DAYS` on staging).
+- **Traces, metrics and logs to an outside backend (optional):** set `OTEL_EXPORTER_OTLP_ENDPOINT` (and
+  `OTEL_EXPORTER_OTLP_HEADERS` for the vendor's key) on `api` and `worker`. Any OTLP backend works, alongside 运行追踪.
 - **Metrics worth alerting on:**
   - `reelguo.media_jobs{outcome="failed"}`;
   - `reelguo.playback_errors`;

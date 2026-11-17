@@ -65,6 +65,7 @@ public static class AdminEndpoints
         admin.MapAdminModeration();
         admin.MapAdminAgeRules();
         admin.MapAdminSystem();
+        admin.MapAdminTelemetry();
         admin.MapAdminAnalytics();
         admin.MapAdminBilling();
         admin.MapAdminAppReleases();

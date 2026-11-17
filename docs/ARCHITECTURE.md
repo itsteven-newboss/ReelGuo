@@ -253,7 +253,7 @@ Tables are snake_case. Enums are stored as text. ✓ marks tables that exist.
 |---|---|
 | ✓ 0 | `GET /api/v1/config`, `GET /api/v1/categories`; admin geo block list + audit log |
 | ✓ 1 | `GET /api/v1/feed?page=&size=`, `GET /api/v1/categories/{slug}/series?sort=latest\|hot\|score`, `GET /api/v1/series/{id}`, `GET /api/v1/series/{id}/episodes/{ep}/play` |
-| ✓ 1 | Admin: `auth/login`, `auth/logout`, `session`, `users` (create, enable/disable, reset password), `categories`, `series` (CRUD, cover, publish, unpublish, episodes), `episodes/{id}` (update, upload, uploaded, retry, delete), `import` (incoming uploads, template, dry run, run), `uploads/raw/{key}` (dev uploads) |
+| ✓ 1 | Admin: `auth/login`, `auth/logout`, `session`, `users` (create, enable/disable, reset password), `categories`, `series` (CRUD, cover, publish, unpublish, episodes, bulk `delete` + `delete-preview`), `episodes/{id}` (update, upload, uploaded, retry, delete, preview), `import` (incoming uploads, template, dry run, run), `uploads/raw/{key}` (dev uploads) |
 | ✓ 1 | `GET /api/edge/config` (block list for the CDN worker) |
 | ✓ 2 | `POST /api/v1/events` (batched, 120/min per IP), `GET /api/v1/ranks/{hot\|recommend\|potential}`, `GET /api/v1/search?q=`, `GET /api/v1/search/suggest?seed=`, `GET /api/v1/posts`, `GET /api/v1/posts/{id}` |
 | ✓ 2 | Admin: `posts` (CRUD, Markdown preview, cover, inline images, publish/unpublish), `ranks/{kind}`, `ranks/recompute`; series `recommend_weight` |
@@ -365,6 +365,19 @@ the CSV import, gets rights holder `huangyueai`, territories `*` (worldwide), an
 person, unless given (`PublishRules.ApplyNewSeriesDefaults`). For visitors (`VisibleTo`), no licence start means
 available now, and no territories means worldwide. Set territories still hide a series outside them.
 
+**Deleting series** (内容管理: tick rows, then 删除; or 删除 in the editor). `POST /api/admin/series/delete-preview` lists
+each series with its status, episodes, buyers and comments. The dialog asks for an extra tick when one is published or
+has been bought. `POST /api/admin/series/delete` (1-100 ids) is permanent (`AdminSeriesDeletion`):
+- The database removes episodes, jobs, likes, favourites, history, ratings, rankings, topic entries and episode
+  purchases with the series; comments on it are deleted in the same transaction; articles keep existing without the
+  link. Wallet ledger entries stay as the payment record. One `series.delete` audit entry per series.
+- Then, best effort: local HLS (`s/{id}/`), its posters and cover, and uploaded originals (`uploads/{id}/`; an
+  `incoming/` file only when no other episode uses it).
+- COS videos of the deleted episodes, unless another episode still uses the same file (`CosCleanup`). The bucket
+  is ReelGuo's own since 2026-11-17. The same clean-up runs when one episode is deleted, when a new upload replaces a
+  pending one, and in the worker when a replaced video has been processed (the old played file goes). Failures are
+  logged with the key (运行追踪 → 日志) and reported in the delete dialog.
+
 ### 9.2 Playback
 
 ```
@@ -378,6 +391,13 @@ Near end (duration − 0.35 s) → next episode
 Progress saved on the device every 5 s and when leaving an item/episode
 Token expired (403) → fetch a fresh /play URL and resume at the same position
 ```
+
+**Admin preview (series editor).** Clicking an episode's thumbnail, number or 预览 opens a player with previous/next
+(`EpisodePreview.tsx`; hls.js is loaded only then). `GET /api/admin/episodes/{id}/preview` picks what to play: the
+processed video when there is one (COS object, or the HLS), otherwise the uploaded original once the upload finished.
+Local files stream through admin-only routes (`…/preview/hls/{version}/{file}`, `…/preview/source`, range
+requests supported), so the admin cookie is the only credential: no media token, no country check, and taken-down or
+unpublished series still play for admins. COS videos use the same short-lived signed COS link as viewers.
 
 ### 9.3 Accounts ✅
 
@@ -503,6 +523,13 @@ API: in strict countries every /api/v1 content endpoint answers 403 age_verifica
   - OpenTelemetry traces, metrics and logs, from ASP.NET Core, HttpClient, Npgsql and the runtime.
   - Business counters: `reelguo.media_jobs`, `reelguo.transcode.duration`, `reelguo.play_events`,
     `reelguo.playback_errors`, `reelguo.comments`, `reelguo.reports`.
+  - Kept locally for 运行追踪 (`Telemetry/LocalTelemetry.cs`):
+    - Whole traces of requests and jobs that failed, logged an error or were slow (≥ 1 s), and a 2% sample of the rest.
+      Database or HTTP calls outside any request are kept only when failed or slow.
+    - Every warning and error log line, with its trace.
+    - Written in batches to `telemetry_spans` and `telemetry_logs`, without tracing those writes, and deleted after
+      7 days.
+    - Shown by `/api/admin/telemetry/*`.
   - Exported over OTLP only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
   - JSON console logs outside development.
 - **Worker heartbeat.** Every 30 s into `worker_heartbeats`. `/health/worker` is 503 when none is newer than 90 s.
@@ -692,10 +719,11 @@ private Tencent COS bucket, and plays the uploaded MP4 itself (`ReelGuo.Data/Med
   frame through a signed `GET` with range requests, so it never downloads the file; it rejects anything that is not
   H.264, since nothing re-encodes it. The episode then has `video_key` (the object played) and `video_bytes` instead
   of `hls_prefix`.
-- **Never destructive.** The bucket may be shared with Viora, so ReelGuo never deletes or overwrites an object it did
-  not upload. A file already at its key with the same size is linked instead of sent again; one with another size
-  makes the new upload take the `~` name. A replacement never takes the name of the object being played. Deleting an
-  episode leaves its object for an operator to remove.
+- **Never overwrites; deletes what nothing uses.** A file already at its key with the same size is linked instead of
+  sent again; one with another size makes the new upload take the `~` name. A replacement never takes the name of the
+  object being played. The bucket is ReelGuo's own (since 2026-11-17; it used to be shared with Viora, when nothing was
+  deleted): deleting an episode or series, or replacing a video, deletes the COS objects no episode uses any more
+  (`CosCleanup`, signed `DELETE`, keys under `videos/` only). The CAM key needs `cos:DeleteObject` for that.
 - **Playback.** `GET /api/v1/series/{id}/episodes/{n}/play` returns a signed COS `GET` link and `kind: "mp4"`; the
   player plays it natively, and hls.js is used only for `.m3u8`. Country blocks, licences, takedowns and paid
   episodes are all checked when the link is issued. A COS link can't be revoked afterwards, which is why it lasts

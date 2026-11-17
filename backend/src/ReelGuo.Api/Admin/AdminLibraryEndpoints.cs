@@ -315,7 +315,7 @@ public static class AdminLibraryEndpoints
 
     private static async Task<Results<Ok<LibraryEpisodeTicket>, BadRequest<ApiErrorResponse>, NotFound<ApiErrorResponse>, Conflict<ApiErrorResponse>>> Start(
         LibraryEpisodeStartRequest request, HttpContext http, ReelGuoDbContext db, StorageBuckets storage, CosVideoStore cos,
-        TimeProvider time, CancellationToken ct)
+        TimeProvider time, ILoggerFactory logs, CancellationToken ct)
     {
         var series = await db.Series.FirstOrDefaultAsync(s => s.Id == request.SeriesId, ct);
         if (series is null) return TypedResults.NotFound(ApiErrorResponse.Of("not_found", "剧集不存在"));
@@ -353,6 +353,7 @@ public static class AdminLibraryEndpoints
             db.Episodes.Add(episode);
         }
         // A ready episode keeps playing its current video until the new one is confirmed and processed.
+        var previous = episode.SourceKey;
         episode.SourceKey = key;
         if (episode.Status != EpisodeStatus.Ready) episode.Status = EpisodeStatus.Uploading;
         episode.ProcessingError = null;
@@ -367,6 +368,8 @@ public static class AdminLibraryEndpoints
         {
             return TypedResults.Conflict(ApiErrorResponse.Of("episode_busy", $"第 {request.Number} 集正在另一个页面上传"));
         }
+        // An earlier upload that never became the played video is not needed any more (the played one is kept).
+        await CosCleanup.DeleteUnusedAsync(db, cos, [previous], logs.CreateLogger("AdminLibrary"), CancellationToken.None);
         return TypedResults.Ok(new LibraryEpisodeTicket(episode.Id, stored, ticket));
     }
 

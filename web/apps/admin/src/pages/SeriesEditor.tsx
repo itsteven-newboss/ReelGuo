@@ -1,10 +1,11 @@
 import { ApiError, unwrap, type Schemas } from "@reelguo/api-client";
 import { Spinner } from "@reelguo/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ImagePlus } from "lucide-react";
+import { ArrowLeft, ImagePlus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, CSRF_HEADER } from "../session";
 import { Button, Card, ErrorText, Field, PageHeader, StatusBadge, inputClass } from "../ui";
+import { DeleteSeriesDialog } from "./DeleteSeriesDialog";
 import { EpisodesPanel } from "./Episodes";
 
 type SeriesDto = Schemas["AdminSeriesDto"];
@@ -77,6 +78,7 @@ export function SeriesEditor({ id, onBack, onCreated }: { id: number | "new"; on
   const qc = useQueryClient();
   const isNew = id === "new";
   const key = ["admin", "series", "detail", id];
+  const [deleting, setDeleting] = useState(false);
 
   const series = useQuery({
     queryKey: key,
@@ -162,10 +164,16 @@ export function SeriesEditor({ id, onBack, onCreated }: { id: number | "new"; on
       <PageHeader
         title={isNew ? "新建剧集" : s!.title}
         sub={s && <span className="flex items-center gap-2"><StatusBadge status={s.status} />{s.published_at && <span>首次发布于 {new Date(s.published_at).toLocaleDateString("zh-CN")}</span>}</span>}
-        actions={s && (s.status === "published"
-          ? <Button variant="danger" disabled={publish.isPending} onClick={() => window.confirm("下架后用户将无法观看，确定？") && publish.mutate(false)}>下架</Button>
-          : <Button variant="primary" disabled={publish.isPending || s.publish_problems.length > 0} onClick={() => publish.mutate(true)}>发布</Button>)}
+        actions={s && (
+          <div className="flex gap-2">
+            <Button variant="ghost" className="hover:!text-danger" onClick={() => setDeleting(true)}><Trash2 size={14} className="inline -mt-0.5 mr-1" />删除</Button>
+            {s.status === "published"
+              ? <Button variant="danger" disabled={publish.isPending} onClick={() => window.confirm("下架后用户将无法观看，确定？") && publish.mutate(false)}>下架</Button>
+              : <Button variant="primary" disabled={publish.isPending || s.publish_problems.length > 0} onClick={() => publish.mutate(true)}>发布</Button>}
+          </div>
+        )}
       />
+      {s && <DeleteSeriesDialog ids={deleting ? [s.id] : null} onClose={() => setDeleting(false)} onDeleted={onBack} />}
 
       {s && s.status !== "published" && s.publish_problems.length > 0 && (
         <Card className="p-4 mb-4 border border-star/30">

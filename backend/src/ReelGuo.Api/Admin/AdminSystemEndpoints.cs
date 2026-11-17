@@ -37,6 +37,7 @@ public sealed record SystemStatusDto(
     int PlaysLastHour, int PlaybackErrorsLastHour,
     int RevokedSeries, int BlockedCountries, int StrictAgeCountries,
     bool TelemetryExport,
+    bool TelemetryStore,
     PaymentsStatusDto Payments,
     List<StatusAlertDto> Alerts);
 
@@ -68,7 +69,7 @@ public static class AdminSystemEndpoints
 
     private static async Task<Ok<SystemStatusDto>> Status(
         ReelGuoDbContext db, StorageBuckets storage, IConfiguration configuration, IHostEnvironment environment, IBlockedCountryStore blocked,
-        IRevokedSeriesStore revoked, PaymentGateway gateway, IOptions<BillingOptions> billing, TimeProvider time, CancellationToken ct)
+        IRevokedSeriesStore revoked, PaymentGateway gateway, IOptions<BillingOptions> billing, TimeProvider time, HttpContext http, CancellationToken ct)
     {
         var now = time.GetUtcNow();
         var alerts = new List<StatusAlertDto>();
@@ -104,7 +105,7 @@ public static class AdminSystemEndpoints
         {
             return TypedResults.Ok(new SystemStatusDto(ReelGuoTelemetry.Version, environment.EnvironmentName, Environment.MachineName, ProcessStarted, now,
                 false, dbLatency, 0, storageOk, configuration["Storage:Provider"] ?? "FileSystem", [], 0, 0, 0, null, null, 0, 0, 0, 0, 0, 0, 0, 0,
-                ReelGuoTelemetry.ExportEnabled(configuration), new PaymentsStatusDto(billing.Value.Enabled, null, false, 0, 0, 0, 0, 0), alerts));
+                ReelGuoTelemetry.ExportEnabled(configuration), LocalTelemetrySetup.Enabled(configuration), new PaymentsStatusDto(billing.Value.Enabled, null, false, 0, 0, 0, 0, 0), alerts));
         }
 
         var workers = (await db.WorkerHeartbeats.AsNoTracking().OrderByDescending(h => h.SeenAt).ToListAsync(ct))
@@ -128,6 +129,8 @@ public static class AdminSystemEndpoints
         var playbackErrors = await db.PlaybackSamples.CountAsync(s => s.Error != null && s.At >= hourAgo, ct);
         var strict = await db.AgeRules.CountAsync(r => r.Mode == AgeCheckMode.Strict, ct);
         var telemetry = ReelGuoTelemetry.ExportEnabled(configuration);
+        var store = LocalTelemetrySetup.Enabled(configuration);
+        var storeError = http.RequestServices.GetService<LocalTelemetryStatus>()?.LastError;
 
         if (!workers.Any(w => w.Alive)) Critical("没有在线的转码 Worker：新上传的视频不会被处理");
         if (urgent > 0) Critical($"有 {urgent} 条紧急举报待处理（未成年人 / 未经同意的真人形象）");
@@ -136,7 +139,8 @@ public static class AdminSystemEndpoints
         if (rankings is null || now - rankings > TimeSpan.FromMinutes(30)) Warning("榜单超过 30 分钟未更新（Worker 的榜单任务可能停止）");
         if (plays >= 20 && playbackErrors * 20 > plays) Warning($"最近 1 小时播放失败偏多：{playbackErrors} 次失败 / {plays} 次播放");
         if (pending > 200) Warning($"待审核评论积压 {pending} 条");
-        if (!telemetry && !environment.IsDevelopment()) Warning("未配置监控数据导出（OTEL_EXPORTER_OTLP_ENDPOINT），出问题时无法追踪");
+        if (!telemetry && !store && !environment.IsDevelopment()) Warning("运行追踪已关闭（Telemetry:Local:Enabled），也未配置监控数据导出（OTEL_EXPORTER_OTLP_ENDPOINT），出问题时无法追踪");
+        if (store && storeError is not null) Warning($"运行追踪数据写入失败：{storeError}");
 
         var provider = gateway.Active;
         var stalePending = await db.Orders.CountAsync(o => o.Status == OrderStatus.Pending && o.CreatedAt < now.AddHours(-1), ct);
@@ -157,6 +161,6 @@ public static class AdminSystemEndpoints
             ReelGuoTelemetry.Version, environment.EnvironmentName, Environment.MachineName, ProcessStarted, now,
             true, dbLatency, dbBytes, storageOk, configuration["Storage:Provider"] ?? "FileSystem", workers,
             queued, running, failed, oldestSeconds, rankings, pending, open, urgent, plays, playbackErrors,
-            (await revoked.GetAsync(ct)).Count, (await blocked.GetAsync(ct)).Count, strict, telemetry, payments, alerts));
+            (await revoked.GetAsync(ct)).Count, (await blocked.GetAsync(ct)).Count, strict, telemetry, store, payments, alerts));
     }
 }

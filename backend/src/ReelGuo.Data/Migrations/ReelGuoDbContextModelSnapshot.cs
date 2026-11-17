@@ -1853,6 +1853,153 @@ namespace ReelGuo.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ReelGuo.Data.Entities.TelemetryLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("at");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("category");
+
+                    b.Property<string>("Exception")
+                        .HasMaxLength(16000)
+                        .HasColumnType("character varying(16000)")
+                        .HasColumnName("exception");
+
+                    b.Property<int>("Level")
+                        .HasColumnType("integer")
+                        .HasColumnName("level");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("message");
+
+                    b.Property<string>("Service")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("service");
+
+                    b.Property<string>("SpanId")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("span_id");
+
+                    b.Property<string>("TraceId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("trace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_telemetry_logs");
+
+                    b.HasIndex("At")
+                        .HasDatabaseName("ix_telemetry_logs_at");
+
+                    b.HasIndex("TraceId")
+                        .HasDatabaseName("ix_telemetry_logs_trace_id");
+
+                    b.ToTable("telemetry_logs", (string)null);
+                });
+
+            modelBuilder.Entity("ReelGuo.Data.Entities.TelemetrySpan", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Attributes")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("attributes");
+
+                    b.Property<double>("DurationMs")
+                        .HasColumnType("double precision")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<bool>("IsError")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_error");
+
+                    b.Property<bool>("IsRoot")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_root");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("ParentSpanId")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("parent_span_id");
+
+                    b.Property<string>("Service")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("service");
+
+                    b.Property<string>("SpanId")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("span_id");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("StatusMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("status_message");
+
+                    b.Property<string>("TraceId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("trace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_telemetry_spans");
+
+                    b.HasIndex("StartedAt")
+                        .HasDatabaseName("ix_telemetry_spans_started_at");
+
+                    b.HasIndex("TraceId")
+                        .HasDatabaseName("ix_telemetry_spans_trace_id");
+
+                    b.HasIndex("IsRoot", "StartedAt")
+                        .HasDatabaseName("ix_telemetry_spans_is_root_started_at");
+
+                    b.ToTable("telemetry_spans", (string)null);
+                });
+
             modelBuilder.Entity("ReelGuo.Data.Entities.Topic", b =>
                 {
                     b.Property<int>("Id")

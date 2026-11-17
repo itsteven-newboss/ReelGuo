@@ -1,7 +1,7 @@
 import { unwrap, ApiError } from "@reelguo/api-client";
 import { BRAND, BrandMark, Spinner } from "@reelguo/ui";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, BarChart3, Clapperboard, Coins, FileUp, Flag, Flame, FolderUp, Globe, History, KeyRound, Layers, LayoutGrid, LogOut, Megaphone, MessageSquareText, Receipt, ShieldCheck, Smartphone, Trophy, UserRound, Users } from "lucide-react";
+import { Activity, BarChart3, Clapperboard, Coins, FileUp, Flag, Flame, FolderUp, Globe, History, KeyRound, Layers, LayoutGrid, LogOut, Megaphone, MessageSquareText, Receipt, ScanSearch, ShieldCheck, Smartphone, Trophy, UserRound, Users } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { AdminsPage } from "./pages/Admins";
 import { AnnouncementsPage } from "./pages/Announcements";
@@ -9,6 +9,7 @@ import { AppReleasesPage } from "./pages/AppReleases";
 import { AgeRulesPage } from "./pages/AgeRules";
 import { AnalyticsPage } from "./pages/Analytics";
 import { SystemStatusPage } from "./pages/SystemStatus";
+import { TracingPage } from "./pages/Tracing";
 import { AuditLogPage } from "./pages/AuditLog";
 import { BlockedCountriesPage } from "./pages/BlockedCountries";
 import { ChannelsPage } from "./pages/Channels";
@@ -26,10 +27,11 @@ import { SeriesListPage } from "./pages/SeriesList";
 import { TopicsPage } from "./pages/Topics";
 import { api, setSession, signOut, useSession, type AdminSession } from "./session";
 
-type Section = "status" | "analytics" | "series" | "library" | "import" | "posts" | "topics" | "announcements" | "ranks" | "channels" | "comments" | "reports" | "members" | "orders" | "products" | "geo" | "age" | "app" | "admins" | "audit";
+type Section = "status" | "tracing" | "analytics" | "series" | "library" | "import" | "posts" | "topics" | "announcements" | "ranks" | "channels" | "comments" | "reports" | "members" | "orders" | "products" | "geo" | "age" | "app" | "admins" | "audit";
 
 const NAV: { key: Section; label: string; icon: ReactNode }[] = [
   { key: "status", label: "系统状态", icon: <Activity size={17} /> },
+  { key: "tracing", label: "运行追踪", icon: <ScanSearch size={17} /> },
   { key: "analytics", label: "数据概览", icon: <BarChart3 size={17} /> },
   { key: "series", label: "内容管理", icon: <Clapperboard size={17} /> },
   { key: "library", label: "文件夹上传", icon: <FolderUp size={17} /> },
@@ -83,6 +85,7 @@ function Layout({ session }: { session: AdminSession }) {
   if (section === "series" && editing !== null) page = <SeriesEditor id={editing} onBack={() => setEditing(null)} onCreated={(id) => setEditing(id)} />;
   else if (section === "series") page = <SeriesListPage onOpen={setEditing} />;
   else if (section === "status") page = <SystemStatusPage />;
+  else if (section === "tracing") page = <TracingPage />;
   else if (section === "analytics") page = <AnalyticsPage />;
   else if (section === "library") page = <LibraryPage onOpenSeries={(id) => { setSection("series"); setEditing(id); }} />;
   else if (section === "import") page = <ImportPage onOpenSeries={(id) => { setSection("series"); setEditing(id); }} />;

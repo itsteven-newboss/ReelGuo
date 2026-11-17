@@ -9,9 +9,12 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
+using ReelGuo.Data;
+using ReelGuo.Data.Entities;
 using ReelGuo.Data.Media;
 using static ReelGuo.Api.Tests.HttpTestExtensions;
 
@@ -147,8 +150,9 @@ public sealed class CosVideoUnitTests
 }
 
 /// <summary>
-/// A stand-in for a COS bucket on 127.0.0.1: PUT, HEAD, ranged GET and the bucket listing, enough for the browser's
-/// upload, the API's checks, the worker's ffprobe and a viewer's player. Signatures are required but not verified.
+/// A stand-in for a COS bucket on 127.0.0.1: PUT, HEAD, ranged GET, DELETE and the bucket listing, enough for the
+/// browser's upload, the API's checks and clean-up, the worker's ffprobe and a viewer's player. Signatures are required
+/// but not verified.
 /// </summary>
 public sealed class FakeCos : IAsyncDisposable
 {
@@ -190,6 +194,13 @@ public sealed class FakeCos : IAsyncDisposable
             using var body = new MemoryStream();
             await ctx.Request.Body.CopyToAsync(body);
             Objects[key] = body.ToArray();
+            return;
+        }
+        if (HttpMethods.IsDelete(ctx.Request.Method))
+        {
+            // Like COS: 204 whether or not the object existed.
+            Objects.TryRemove(key, out _);
+            ctx.Response.StatusCode = StatusCodes.Status204NoContent;
             return;
         }
         if (key.Length == 0 && HttpMethods.IsGet(ctx.Request.Method))
@@ -340,6 +351,12 @@ public sealed class CosLibraryTests(PostgresFixture db) : IClassFixture<Postgres
         Assert.InRange(episodes[0].GetProperty("duration").GetDouble(), 1.5, 2.5);
         Assert.Equal(0, detail.GetProperty("publish_problems").GetArrayLength());
 
+        // The admin preview plays the same COS object viewers will get, before the series is published.
+        var preview = await admin.GetAsync($"/api/admin/episodes/{episodes[1].GetProperty("id").GetInt64()}/preview", Ct).OkJsonAsync();
+        Assert.Equal(("file", "output"), (preview.GetProperty("kind").GetString(), preview.GetProperty("source").GetString()));
+        Assert.StartsWith(cos.Endpoint + "/videos/self/", preview.GetProperty("url").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await direct.GetAsync(preview.GetProperty("url").GetString(), Ct)).StatusCode);
+
         // Planning again: both on the site, nothing left to send.
         plan = await admin.AdminSendAsync(HttpMethod.Post, "/api/admin/library/plan", new { storage_folder = "self", listing }).OkJsonAsync();
         title = plan.GetProperty("titles").EnumerateArray().Single();
@@ -368,5 +385,50 @@ public sealed class CosLibraryTests(PostgresFixture db) : IClassFixture<Postgres
         var editorUrl = created.GetProperty("upload").GetProperty("url").GetString()!;
         Assert.StartsWith(cos.Endpoint + "/videos/reelguo/", editorUrl);
         Assert.Contains($"Betrayed%20Title_3~{seriesId}-3.mp4?", editorUrl);
+
+        // COS is ReelGuo's own bucket: replacing or deleting content removes the videos nothing uses any more.
+        var oneKey = $"videos/self/{folderName}/Betrayed Title_1.mp4";
+        var twoKey = $"videos/self/{folderName}/Betrayed Title_2.mp4";
+        var episodeOne = episodes[0].GetProperty("id").GetInt64();
+
+        // Replace episode 1: once the new file is processed, the old one goes.
+        var replaced = await admin.AdminSendAsync(HttpMethod.Post, $"/api/admin/episodes/{episodeOne}/upload",
+            new { file_name = "Betrayed Title_1 v2.mp4", content_type = "video/mp4" }).OkJsonAsync();
+        var replaceUrl = replaced.GetProperty("upload").GetProperty("url").GetString()!;
+        Assert.True((await direct.SendAsync(new HttpRequestMessage(HttpMethod.Put, replaceUrl)
+            { Content = new ByteArrayContent(await File.ReadAllBytesAsync(clips[0], Ct)) }, Ct)).IsSuccessStatusCode);
+        await admin.AdminSendAsync(HttpMethod.Post, $"/api/admin/episodes/{episodeOne}/uploaded").OkJsonAsync();
+        Assert.True(cos.Objects.ContainsKey(oneKey), "the old video plays until the new one is processed");
+        Assert.True(await AdminClient.RunWorkerOnceAsync(api));
+        Assert.False(cos.Objects.ContainsKey(oneKey));
+        var newKey = cos.Objects.Keys.Single(k => k.Contains("Betrayed Title_1 v2", StringComparison.Ordinal));
+
+        // Delete episode 1: its (new) video goes.
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.AdminSendAsync(HttpMethod.Delete, $"/api/admin/episodes/{episodeOne}")).StatusCode);
+        Assert.False(cos.Objects.ContainsKey(newKey));
+
+        // Another series playing the same file as episode 2 keeps it alive through the delete of this series.
+        long otherId;
+        using (var scope = api.Services.CreateScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<ReelGuoDbContext>();
+            var now = DateTimeOffset.UtcNow;
+            var other = new Series
+            {
+                Title = "同一文件的另一部剧", CategoryId = (await ctx.Categories.FirstAsync(Ct)).Id, Status = SeriesStatus.Draft, CreatedAt = now, UpdatedAt = now,
+                Episodes = [new Episode { EpisodeNumber = 1, Title = "", Status = EpisodeStatus.Ready, SourceKey = twoKey, VideoKey = twoKey, CreatedAt = now, UpdatedAt = now }],
+            };
+            ctx.Series.Add(other);
+            await ctx.SaveChangesAsync(Ct);
+            otherId = other.Id;
+        }
+        var gone = await admin.AdminSendAsync(HttpMethod.Post, "/api/admin/series/delete", new { ids = new[] { seriesId } }).OkJsonAsync();
+        Assert.Equal((1, 0, 1), (gone.GetProperty("deleted").GetInt32(), gone.GetProperty("cos_failed").GetInt32(), gone.GetProperty("cos_kept").GetInt32()));
+        Assert.True(cos.Objects.ContainsKey(twoKey));
+        gone = await admin.AdminSendAsync(HttpMethod.Post, "/api/admin/series/delete", new { ids = new[] { otherId } }).OkJsonAsync();
+        Assert.Equal((1, 0), (gone.GetProperty("cos_deleted").GetInt32(), gone.GetProperty("cos_kept").GetInt32()));
+        Assert.False(cos.Objects.ContainsKey(twoKey));
+        // A file no episode ever pointed at is not touched.
+        Assert.True(cos.Objects.ContainsKey("videos/reelguo/被背叛的她/Betrayed Title_3.mp4"));
     }
 }

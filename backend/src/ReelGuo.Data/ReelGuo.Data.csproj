@@ -1,6 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <!-- The tests read the telemetry store's queue directly (LocalTelemetry.cs). -->
+    <InternalsVisibleTo Include="ReelGuo.Api.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="AWSSDK.S3" />
     <PackageReference Include="EFCore.NamingConventions" />
     <PackageReference Include="HtmlSanitizer" />

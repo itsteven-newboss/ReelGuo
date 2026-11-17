@@ -174,6 +174,14 @@ function Test-SettingsReady {
         try { $appHost = ([uri](Get-Setting 'REELGUO_APP_URL')).Host } catch { $appHost = '' }
         if ($adminHost -eq $appHost) { Stop-WithError 'REELGUO_ADMIN_HOST must differ from the site address (REELGUO_APP_URL).' }
     }
+    $otlpEndpoint = Get-Setting 'REELGUO_OTLP_ENDPOINT'
+    if ($otlpEndpoint -ne '' -and $otlpEndpoint -notmatch '^https?://[^\s]+$') {
+        Stop-WithError "REELGUO_OTLP_ENDPOINT must be an http:// or https:// address (it is '$otlpEndpoint'), or empty."
+    }
+    if ((Get-Setting 'REELGUO_OTLP_PROTOCOL' 'http/protobuf') -notin @('http/protobuf', 'grpc')) {
+        Stop-WithError 'REELGUO_OTLP_PROTOCOL must be http/protobuf or grpc.'
+    }
+    if ((Get-Setting 'REELGUO_TRACE_DAYS' '7') -notmatch '^[1-9][0-9]?$') { Stop-WithError 'REELGUO_TRACE_DAYS must be a number of days, 1 to 99.' }
     $provider = Get-Setting 'REELGUO_VIDEO_PROVIDER' 'Hls'
     if ($provider -notin @('Hls', 'Cos')) { Stop-WithError "REELGUO_VIDEO_PROVIDER must be Hls or Cos (it is '$provider')." }
     if ($provider -eq 'Cos') {
@@ -463,6 +471,16 @@ function Write-ReleaseConfig([string]$Dir) {
         }
     }
 
+    # Monitoring: failed and slow requests/jobs and warning/error logs are kept in the database for the admin page
+    # "tracing" (backend Telemetry/LocalTelemetry.cs). Optionally everything is also sent to an OTLP backend.
+    $telemetry = @{ Local = @{ RetentionDays = [int](Get-Setting 'REELGUO_TRACE_DAYS' '7') } }
+    $otlp = [ordered]@{}
+    if ((Get-Setting 'REELGUO_OTLP_ENDPOINT') -ne '') {
+        $otlp['OTEL_EXPORTER_OTLP_ENDPOINT'] = Get-Setting 'REELGUO_OTLP_ENDPOINT'
+        $otlp['OTEL_EXPORTER_OTLP_PROTOCOL'] = Get-Setting 'REELGUO_OTLP_PROTOCOL' 'http/protobuf'
+        if ((Get-Setting 'REELGUO_OTLP_HEADERS') -ne '') { $otlp['OTEL_EXPORTER_OTLP_HEADERS'] = Get-Setting 'REELGUO_OTLP_HEADERS' }
+    }
+
     $site = @{}
     foreach ($pair in @(@('PermanentDomain', 'REELGUO_PERMANENT_DOMAIN'), @('Telegram', 'REELGUO_TELEGRAM'), @('Email', 'REELGUO_CONTACT_EMAIL'))) {
         $v = Get-Setting $pair[1]
@@ -505,6 +523,10 @@ function Write-ReleaseConfig([string]$Dir) {
         Video             = $video
         Ffmpeg            = @{ BinDirectory = $FfmpegBin }
         Logging           = $logging + @{ EventLog = @{ SourceName = 'ReelGuo.Worker'; LogLevel = @{ Default = 'Information' } } }
+    }
+    foreach ($settings in @($api, $worker)) {
+        $settings['Telemetry'] = $telemetry
+        foreach ($key in $otlp.Keys) { $settings[$key] = $otlp[$key] }
     }
 
     Write-TextFile (Join-Path $Dir 'api\appsettings.Production.json') ($api | ConvertTo-Json -Depth 10)

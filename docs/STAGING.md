@@ -356,10 +356,10 @@ downloading: files written in the last minute are left for the next run.
 
 Use the **international console** (console.tencentcloud.com) → **Cloud Object Storage (对象存储)**.
 
-- **Same bucket as Viora, or a new one?** Both work.
-  - **Viora's bucket and storage folder:** files Viora already uploaded are **linked, not uploaded again**, as long
-    as the name and size match. ReelGuo never deletes or overwrites objects in the bucket.
-  - **A new bucket:** tidier. A takedown, a key rotation or a bucket-wide policy then affects only one site.
+- **A bucket of its own, not shared with Viora or any other platform.** ReelGuo deletes a video from the bucket
+  when the episode or series using it is deleted in admin, or when the episode's video is replaced, so nothing is left
+  behind as an orphan. A file still used by another episode is kept. It never overwrites an existing object: a file
+  already in the bucket with the same name and size is **linked, not uploaded again**.
 - **A new bucket:** **Create Bucket (创建存储桶)** → region **Singapore (`ap-singapore`)** → access **Private
   Read/Write (私有读写)**, never public. The console appends the APPID, so the real name looks like
   `reelguo-1300000000`; use the full name.
@@ -371,7 +371,7 @@ the browser with a CORS error and no useful message.
 
 | Field | Value |
 |---|---|
-| Origin | Every address the admin console is opened from, exactly: its Cloudflare address (for example `https://admin.yourdomain.com`) and `http://localhost:8081` (the console on the server itself). If the bucket is Viora's, add these to its existing rule. |
+| Origin | Every address the admin console is opened from, exactly: its Cloudflare address (for example `https://admin.yourdomain.com`) and `http://localhost:8081` (the console on the server itself). |
 | Methods | `PUT`, `GET`, `HEAD` |
 | Allow-Headers | `*` |
 | Expose-Headers | `ETag`, `Content-Length` |
@@ -382,9 +382,10 @@ Viewers don't need a CORS rule: the player loads the MP4 as plain media.
 ### Step 3. A key that can only reach this bucket
 
 **Cloud Access Management (访问管理 / CAM)** → **Users** → create a sub-account with **programmatic access only**. Give
-it a policy limited to this one bucket: read, write and list, not `AdministratorAccess` and not all of COS. Copy its
-**SecretId** and **SecretKey**. If the bucket is Viora's, a separate sub-account for ReelGuo lets you revoke one site's
-key without touching the other.
+it a policy limited to this one bucket: read, write, list **and delete** (`cos:DeleteObject`), not
+`AdministratorAccess` and not all of COS. Copy its **SecretId** and **SecretKey**. Without delete permission, deleting
+content in admin still works, but its videos stay in the bucket: the delete dialog then reports how many could not be
+removed, and **运行追踪 → 日志** lists their keys.
 
 ### Step 4. Settings
 
@@ -407,8 +408,7 @@ and the API both stop and say which. Demo episodes encoded before the switch kee
 Admin console → **文件夹上传**:
 
 1. Fill in the settings at the top.
-   - **存储文件夹:** pick a folder under `videos/` that is already in the bucket (with Viora's bucket, the one its
-     delivery used), or type a new name.
+   - **存储文件夹:** pick a folder under `videos/` that is already in the bucket, or type a new name.
    - **新剧放入频道:** the channel new series go to.
    - **版权信息** (optional): copied into each new series that has none. Left empty, a new series gets rights holder
      `huangyueai`, worldwide, and "no" for AI-generated and real person. None of it is required to publish.
@@ -477,6 +477,8 @@ about US$12 for a month.
 | `REELGUO_PERMANENT_DOMAIN`, `REELGUO_TELEGRAM`, `REELGUO_CONTACT_EMAIL` | Official addresses shown on the site (footer, 回家的路). Optional. |
 | `REELGUO_BILLING_ENABLED`, `REELGUO_PAYMENT_PROVIDER`, `REELGUO_ALLOW_SANDBOX_PAYMENTS`, `REELGUO_SANDBOX_SECRET`, `REELGUO_BILLING_DESCRIPTOR` | Off by default. To try paid episodes and the store with the sandbox provider, set the first four to `true`, `sandbox`, `true` and a long random string. Anyone can then "pay" for free, so use this on staging only. |
 | `REELGUO_BACKUP_KEEP_DAYS` | How many days of backups to keep (14). |
+| `REELGUO_TRACE_DAYS` | How many days the admin page 运行追踪 keeps failed and slow requests and jobs, and warning/error logs (7). They are kept in the database; nothing else is needed. |
+| `REELGUO_OTLP_ENDPOINT`, `REELGUO_OTLP_HEADERS`, `REELGUO_OTLP_PROTOCOL` | Optional: also send traces, metrics and logs to an outside OTLP backend (Grafana Cloud, Honeycomb, a collector). The endpoint is the vendor's `https://…` address; the headers carry its key (`Authorization=Basic%20…`, spaces as `%20`); the protocol is `http/protobuf` (default) or `grpc`. Empty keeps everything on the server. |
 | `REELGUO_VIDEO_PROVIDER` | `Hls` (default: videos stay on this server and are transcoded) or `Cos` (Tencent COS, §6). |
 | `REELGUO_COS_SECRET_ID`, `REELGUO_COS_SECRET_KEY` | The CAM sub-account key limited to the bucket (§6, step 3). |
 | `REELGUO_COS_BUCKET`, `REELGUO_COS_REGION` | The full bucket name with its APPID (`reelguo-1300000000`) and its region (`ap-singapore`). |
@@ -499,6 +501,7 @@ After editing the file, run `ops.ps1 config`.
 | "Could not download the PostgreSQL installer" | Download *PostgreSQL 17 Windows x86-64* from EnterpriseDB and install it with the defaults. Put the password you chose in `REELGUO_PG_SUPERPASSWORD`, then run `setup.ps1` again. |
 | The build fails (`dotnet publish` or `pnpm`) | Usually network access to nuget.org or the npm registry. Run the same script again. With 4 GB RAM, close other programs during the build. |
 | "The site did not become ready" | Read the printed logs, or `ops.ps1 logs api`. Common causes: PostgreSQL isn't running (`ops.ps1 logs postgres`), or the disk is full. |
+| Something fails while the site is running (an upload, a page, a worker job) | Admin console → **运行追踪**: the failed request or job is listed with each step's error, and the 日志 tab has the error logs. |
 | Cloudflare error **1033** | The tunnel isn't connected. Check `ops.ps1 logs tunnel` and the tunnel's page in Cloudflare; usually a wrong or old token. Put the new token in `CLOUDFLARE_TUNNEL_TOKEN`, then run `ops.ps1 config`. If the tunnel still won't connect, check that the server allows outbound traffic on port 7844. |
 | Cloudflare **502 Bad Gateway** | The public hostname's service is wrong. It must be `HTTP` and `localhost:8080` (admin: `localhost:8081`). Also check that the service `ReelGuoWeb` is running. |
 | Cloudflare **521** (public-port mode) | The server isn't reachable on port 80. Check the cloud firewall, the Windows Firewall rule "ReelGuo staging (Cloudflare only)", and that `REELGUO_WEB_PORT` is 80. Also check that SSL/TLS is **Flexible**. |

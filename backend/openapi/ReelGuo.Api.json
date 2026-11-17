@@ -4189,6 +4189,109 @@
         }
       }
     },
+    "/api/admin/series/delete-preview": {
+      "post": {
+        "tags": [
+          "Admin: catalog"
+        ],
+        "summary": "What deleting these series would remove: status, episodes, buyers, comments, COS videos.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteSeriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SeriesDeleteImpactDto"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/series/delete": {
+      "post": {
+        "tags": [
+          "Admin: catalog"
+        ],
+        "summary": "Permanently deletes series with their episodes, media (local and COS), episode purchases and comments.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteSeriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteSeriesResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/episodes/{id}": {
       "put": {
         "tags": [
@@ -4263,7 +4366,7 @@
         "tags": [
           "Admin: catalog"
         ],
-        "summary": "Deletes an episode and its packaged media.",
+        "summary": "Deletes an episode and its media, including its COS video.",
         "parameters": [
           {
             "name": "id",
@@ -4484,6 +4587,67 @@
           },
           "400": {
             "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/episodes/{id}/preview": {
+      "get": {
+        "tags": [
+          "Admin: catalog"
+        ],
+        "summary": "Where the admin preview player loads this episode's video from.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EpisodePreviewDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -6123,6 +6287,219 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/telemetry": {
+      "get": {
+        "tags": [
+          "Admin: telemetry"
+        ],
+        "summary": "What is stored, and the last 24 hours at a glance.",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelemetryOverviewDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/telemetry/traces": {
+      "get": {
+        "tags": [
+          "Admin: telemetry"
+        ],
+        "summary": "Requests and jobs, newest first. show: problems (failed, error logged or slow; default), errors, slow, all.",
+        "parameters": [
+          {
+            "name": "show",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "service",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 24
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TracePageDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/telemetry/traces/{traceId}": {
+      "get": {
+        "tags": [
+          "Admin: telemetry"
+        ],
+        "summary": "Every stored step of one trace, with the log lines written in it.",
+        "parameters": [
+          {
+            "name": "traceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceDetailDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/admin/telemetry/logs": {
+      "get": {
+        "tags": [
+          "Admin: telemetry"
+        ],
+        "summary": "Warning and error log lines, newest first. level: warning, error (incl. critical), or all.",
+        "parameters": [
+          {
+            "name": "level",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "service",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 24
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogPageDto"
                 }
               }
             }
@@ -9442,6 +9819,56 @@
           }
         }
       },
+      "DeleteSeriesRequest": {
+        "required": [
+          "ids"
+        ],
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
+      "DeleteSeriesResult": {
+        "required": [
+          "deleted",
+          "ids",
+          "cos_deleted",
+          "cos_failed",
+          "cos_kept"
+        ],
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "cos_deleted": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cos_failed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cos_kept": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "EpisodeDto": {
         "required": [
           "ep_num",
@@ -9469,6 +9896,62 @@
           "price": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "EpisodePreviewDto": {
+        "required": [
+          "episode_id",
+          "kind",
+          "url",
+          "source",
+          "note",
+          "poster_url",
+          "width",
+          "height",
+          "expires_at"
+        ],
+        "type": "object",
+        "properties": {
+          "episode_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "note": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "poster_url": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "expires_at": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },
@@ -10300,6 +10783,24 @@
           },
           "password": {
             "type": "string"
+          }
+        }
+      },
+      "LogPageDto": {
+        "required": [
+          "items",
+          "more"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TelemetryLogDto"
+            }
+          },
+          "more": {
+            "type": "boolean"
           }
         }
       },
@@ -11747,6 +12248,46 @@
           }
         }
       },
+      "SeriesDeleteImpactDto": {
+        "required": [
+          "id",
+          "title",
+          "status",
+          "episodes",
+          "buyers",
+          "comments",
+          "cos_files"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SeriesStatus"
+          },
+          "episodes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "buyers": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "comments": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cos_files": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "SeriesDetailDto": {
         "required": [
           "id",
@@ -12110,6 +12651,64 @@
           }
         }
       },
+      "SpanDto": {
+        "required": [
+          "span_id",
+          "parent_span_id",
+          "service",
+          "name",
+          "kind",
+          "started_at",
+          "duration_ms",
+          "is_error",
+          "status_message",
+          "attributes"
+        ],
+        "type": "object",
+        "properties": {
+          "span_id": {
+            "type": "string"
+          },
+          "parent_span_id": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "service": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "duration_ms": {
+            "type": "number",
+            "format": "double"
+          },
+          "is_error": {
+            "type": "boolean"
+          },
+          "status_message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "StatusAlertDto": {
         "required": [
           "level",
@@ -12185,6 +12784,7 @@
           "blocked_countries",
           "strict_age_countries",
           "telemetry_export",
+          "telemetry_store",
           "payments",
           "alerts"
         ],
@@ -12291,6 +12891,9 @@
           "telemetry_export": {
             "type": "boolean"
           },
+          "telemetry_store": {
+            "type": "boolean"
+          },
           "payments": {
             "$ref": "#/components/schemas/PaymentsStatusDto"
           },
@@ -12299,6 +12902,123 @@
             "items": {
               "$ref": "#/components/schemas/StatusAlertDto"
             }
+          }
+        }
+      },
+      "TelemetryLogDto": {
+        "required": [
+          "id",
+          "at",
+          "service",
+          "level",
+          "category",
+          "message",
+          "exception",
+          "trace_id"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "service": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "exception": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "trace_id": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "TelemetryOverviewDto": {
+        "required": [
+          "store",
+          "export",
+          "retention_days",
+          "slow_ms",
+          "sample_rate",
+          "failed_traces24h",
+          "slow_traces24h",
+          "errors24h",
+          "warnings24h",
+          "last_write",
+          "dropped",
+          "writer_error"
+        ],
+        "type": "object",
+        "properties": {
+          "store": {
+            "type": "boolean"
+          },
+          "export": {
+            "type": "boolean"
+          },
+          "retention_days": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "slow_ms": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sample_rate": {
+            "type": "number",
+            "format": "double"
+          },
+          "failed_traces24h": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "slow_traces24h": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "errors24h": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "warnings24h": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_write": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "dropped": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "writer_error": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -12411,6 +13131,102 @@
           },
           "pagination": {
             "$ref": "#/components/schemas/PaginationDto"
+          }
+        }
+      },
+      "TraceDetailDto": {
+        "required": [
+          "trace_id",
+          "spans",
+          "logs"
+        ],
+        "type": "object",
+        "properties": {
+          "trace_id": {
+            "type": "string"
+          },
+          "spans": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpanDto"
+            }
+          },
+          "logs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TelemetryLogDto"
+            }
+          }
+        }
+      },
+      "TracePageDto": {
+        "required": [
+          "items",
+          "more"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TraceSummaryDto"
+            }
+          },
+          "more": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TraceSummaryDto": {
+        "required": [
+          "trace_id",
+          "service",
+          "name",
+          "started_at",
+          "duration_ms",
+          "is_error",
+          "status_message",
+          "status_code",
+          "spans"
+        ],
+        "type": "object",
+        "properties": {
+          "trace_id": {
+            "type": "string"
+          },
+          "service": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "duration_ms": {
+            "type": "number",
+            "format": "double"
+          },
+          "is_error": {
+            "type": "boolean"
+          },
+          "status_message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status_code": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "spans": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -13007,6 +13823,9 @@
     },
     {
       "name": "Admin: age verification"
+    },
+    {
+      "name": "Admin: telemetry"
     },
     {
       "name": "Admin: app releases"

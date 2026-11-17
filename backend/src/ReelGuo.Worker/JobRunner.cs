@@ -121,6 +121,9 @@ public sealed class JobRunner(
                     .SetProperty(e => e.UpdatedAt, now), stoppingToken);
                 posterKey = result.PosterKey;
                 location = "cos:" + key;
+                // A replaced video: the file played until now is not needed any more.
+                if (episode.VideoKey is { } old && old != key)
+                    await CosCleanup.DeleteUnusedAsync(db, scope.ServiceProvider.GetRequiredService<CosVideoStore>(), [old], logger, stoppingToken);
             }
             else
             {

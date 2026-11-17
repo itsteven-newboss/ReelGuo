@@ -94,13 +94,15 @@ public static class AdminCatalogEndpoints
         series.MapPost("/{id:long}/publish", Publish).WithSummary("Publishes when every publish rule passes; otherwise 400 with the problems listed.");
         series.MapPost("/{id:long}/unpublish", Unpublish).WithSummary("Hides a published series.");
         series.MapPost("/{id:long}/episodes", CreateEpisode).WithSummary("Creates an episode and returns where to upload its video.");
+        series.MapAdminSeriesDeletion();
 
         var episodes = admin.MapGroup("/episodes").WithTags("Admin: catalog");
         episodes.MapPut("/{id:long}", UpdateEpisode).WithSummary("Updates an episode's title, and whether it is free even in a paid series.");
         episodes.MapPost("/{id:long}/upload", ReplaceSource).WithSummary("Starts replacing an episode's video.");
         episodes.MapPost("/{id:long}/uploaded", MarkUploaded).WithSummary("Confirms the upload finished and queues processing.");
         episodes.MapPost("/{id:long}/retry", Retry).WithSummary("Queues processing again after a failure.");
-        episodes.MapDelete("/{id:long}", DeleteEpisode).WithSummary("Deletes an episode and its packaged media.");
+        episodes.MapDelete("/{id:long}", DeleteEpisode).WithSummary("Deletes an episode and its media, including its COS video.");
+        episodes.MapAdminPreview();
 
         // Filesystem storage cannot sign upload URLs; tickets then point here instead.
         admin.MapPut("/uploads/raw/{**key}", UploadRaw).WithTags("Admin: catalog")
@@ -435,12 +437,13 @@ public static class AdminCatalogEndpoints
 
     private static async Task<Results<Ok<EpisodeUploadResponse>, NotFound<ApiErrorResponse>, BadRequest<ApiErrorResponse>>> ReplaceSource(
         long id, ReplaceSourceRequest request, HttpContext http, ReelGuoDbContext db, StorageBuckets storage, CosVideoStore cos,
-        MediaUrlSigner signer, TimeProvider time, CancellationToken ct)
+        MediaUrlSigner signer, TimeProvider time, ILoggerFactory logs, CancellationToken ct)
     {
         var episode = await db.Episodes.Include(e => e.Series).FirstOrDefaultAsync(e => e.Id == id, ct);
         if (episode is null) return TypedResults.NotFound(ApiErrorResponse.Of("not_found", "分集不存在"));
         if (string.IsNullOrWhiteSpace(request.FileName))
             return TypedResults.BadRequest(ApiErrorResponse.Of("file_required", "请选择视频文件"));
+        var previous = episode.SourceKey;
 
         // A ready episode keeps playing its current media until the new upload finishes processing; with COS the
         // new file never takes the name of the object being played.
@@ -452,6 +455,8 @@ public static class AdminCatalogEndpoints
         episode.UpdatedAt = time.GetUtcNow();
         db.AddAudit(time, AdminActor.From(http), "episode.replace_source", "episode", id.ToString());
         await db.SaveChangesAsync(ct);
+        // An earlier upload that never became the played video is not needed any more (the played one is kept).
+        await CosCleanup.DeleteUnusedAsync(db, cos, [previous], logs.CreateLogger("AdminCatalog"), CancellationToken.None);
         return TypedResults.Ok(new EpisodeUploadResponse(ToDto(episode, signer), UploadTicketFor(storage, cos, episode.SourceKey, request.ContentType)));
     }
 
@@ -494,7 +499,8 @@ public static class AdminCatalogEndpoints
     }
 
     private static async Task<Results<NoContent, NotFound<ApiErrorResponse>>> DeleteEpisode(
-        long id, HttpContext http, ReelGuoDbContext db, StorageBuckets storage, TimeProvider time, ILoggerFactory logs, CancellationToken ct)
+        long id, HttpContext http, ReelGuoDbContext db, StorageBuckets storage, CosVideoStore cos, TimeProvider time, ILoggerFactory logs,
+        CancellationToken ct)
     {
         var episode = await db.Episodes.FirstOrDefaultAsync(e => e.Id == id, ct);
         if (episode is null) return TypedResults.NotFound(ApiErrorResponse.Of("not_found", "分集不存在"));
@@ -512,6 +518,7 @@ public static class AdminCatalogEndpoints
         {
             logs.CreateLogger("AdminCatalog").LogWarning(ex, "Could not delete media for episode {EpisodeId}", id);
         }
+        await CosCleanup.DeleteUnusedAsync(db, cos, [episode.SourceKey, episode.VideoKey], logs.CreateLogger("AdminCatalog"), CancellationToken.None);
         return TypedResults.NoContent();
     }
 

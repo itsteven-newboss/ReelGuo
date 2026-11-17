@@ -4472,6 +4472,122 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/series/delete-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** What deleting these series would remove: status, episodes, buyers, comments, COS videos. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DeleteSeriesRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SeriesDeleteImpactDto"][];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/series/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Permanently deletes series with their episodes, media (local and COS), episode purchases and comments. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DeleteSeriesRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DeleteSeriesResult"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/episodes/{id}": {
         parameters: {
             query?: never;
@@ -4535,7 +4651,7 @@ export interface paths {
             };
         };
         post?: never;
-        /** Deletes an episode and its packaged media. */
+        /** Deletes an episode and its media, including its COS video. */
         delete: {
             parameters: {
                 query?: never;
@@ -4772,6 +4888,71 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/episodes/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Where the admin preview player loads this episode's video from. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EpisodePreviewDto"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6561,6 +6742,207 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/telemetry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What is stored, and the last 24 hours at a glance. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TelemetryOverviewDto"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/telemetry/traces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Requests and jobs, newest first. show: problems (failed, error logged or slow; default), errors, slow, all. */
+        get: {
+            parameters: {
+                query?: {
+                    show?: string;
+                    service?: string;
+                    q?: string;
+                    hours?: number;
+                    before?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TracePageDto"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/telemetry/traces/{traceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every stored step of one trace, with the log lines written in it. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    traceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TraceDetailDto"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/telemetry/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Warning and error log lines, newest first. level: warning, error (incl. critical), or all. */
+        get: {
+            parameters: {
+                query?: {
+                    level?: string;
+                    service?: string;
+                    q?: string;
+                    hours?: number;
+                    before?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LogPageDto"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/products": {
         parameters: {
             query?: never;
@@ -8115,6 +8497,20 @@ export interface components {
             reason: components["schemas"]["ReportReason"];
             detail: null | string;
         };
+        DeleteSeriesRequest: {
+            ids: number[];
+        };
+        DeleteSeriesResult: {
+            /** Format: int32 */
+            deleted: number;
+            ids: number[];
+            /** Format: int32 */
+            cos_deleted: number;
+            /** Format: int32 */
+            cos_failed: number;
+            /** Format: int32 */
+            cos_kept: number;
+        };
         EpisodeDto: {
             /** Format: int32 */
             ep_num: number;
@@ -8124,6 +8520,21 @@ export interface components {
             is_free: boolean;
             /** Format: int32 */
             price: number;
+        };
+        EpisodePreviewDto: {
+            /** Format: int64 */
+            episode_id: number;
+            kind: string;
+            url: string;
+            source: string;
+            note: null | string;
+            poster_url: null | string;
+            /** Format: int32 */
+            width: number;
+            /** Format: int32 */
+            height: number;
+            /** Format: date-time */
+            expires_at: null | string;
         };
         /** @enum {unknown} */
         EpisodeStatus: "uploading" | "processing" | "ready" | "failed";
@@ -8323,6 +8734,10 @@ export interface components {
         LoginRequest: {
             username: string;
             password: string;
+        };
+        LogPageDto: {
+            items: components["schemas"]["TelemetryLogDto"][];
+            more: boolean;
         };
         MarkdownPreviewRequest: {
             markdown: string;
@@ -8731,6 +9146,20 @@ export interface components {
             unlocked_episodes: number[];
             vip_active: boolean;
         };
+        SeriesDeleteImpactDto: {
+            /** Format: int64 */
+            id: number;
+            title: string;
+            status: components["schemas"]["SeriesStatus"];
+            /** Format: int32 */
+            episodes: number;
+            /** Format: int32 */
+            buyers: number;
+            /** Format: int32 */
+            comments: number;
+            /** Format: int32 */
+            cos_files: number;
+        };
         SeriesDetailDto: {
             /** Format: int64 */
             id: number;
@@ -8821,6 +9250,22 @@ export interface components {
             telegram: null | string;
             email: null | string;
         };
+        SpanDto: {
+            span_id: string;
+            parent_span_id: null | string;
+            service: string;
+            name: string;
+            kind: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: double */
+            duration_ms: number;
+            is_error: boolean;
+            status_message: null | string;
+            attributes: {
+                [key: string]: string;
+            };
+        };
         StatusAlertDto: {
             level: string;
             message: string;
@@ -8875,8 +9320,44 @@ export interface components {
             /** Format: int32 */
             strict_age_countries: number;
             telemetry_export: boolean;
+            telemetry_store: boolean;
             payments: components["schemas"]["PaymentsStatusDto"];
             alerts: components["schemas"]["StatusAlertDto"][];
+        };
+        TelemetryLogDto: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            at: string;
+            service: string;
+            level: string;
+            category: string;
+            message: string;
+            exception: null | string;
+            trace_id: null | string;
+        };
+        TelemetryOverviewDto: {
+            store: boolean;
+            export: boolean;
+            /** Format: int32 */
+            retention_days: number;
+            /** Format: int32 */
+            slow_ms: number;
+            /** Format: double */
+            sample_rate: number;
+            /** Format: int32 */
+            failed_traces24h: number;
+            /** Format: int32 */
+            slow_traces24h: number;
+            /** Format: int32 */
+            errors24h: number;
+            /** Format: int32 */
+            warnings24h: number;
+            /** Format: date-time */
+            last_write: null | string;
+            /** Format: int64 */
+            dropped: number;
+            writer_error: null | string;
         };
         TopicCardDto: {
             /** Format: int32 */
@@ -8905,6 +9386,30 @@ export interface components {
         TopicPage: {
             items: components["schemas"]["TopicCardDto"][];
             pagination: components["schemas"]["PaginationDto"];
+        };
+        TraceDetailDto: {
+            trace_id: string;
+            spans: components["schemas"]["SpanDto"][];
+            logs: components["schemas"]["TelemetryLogDto"][];
+        };
+        TracePageDto: {
+            items: components["schemas"]["TraceSummaryDto"][];
+            more: boolean;
+        };
+        TraceSummaryDto: {
+            trace_id: string;
+            service: string;
+            name: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: double */
+            duration_ms: number;
+            is_error: boolean;
+            status_message: null | string;
+            /** Format: int32 */
+            status_code: null | number;
+            /** Format: int32 */
+            spans: number;
         };
         UnlockResponse: {
             /** Format: int32 */

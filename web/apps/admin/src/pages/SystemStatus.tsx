@@ -70,7 +70,8 @@ export function SystemStatusPage() {
             <StatTile label="失败任务（24 小时）" value={s.jobs_failed24h} sub="在内容管理中查看并重试" />
             <StatTile label="榜单更新" value={ago(s.rankings_computed_at)} sub="每 10 分钟由 Worker 计算" />
             <StatTile label="最近 1 小时播放" value={s.plays_last_hour.toLocaleString("en-US")} sub={`播放失败 ${s.playback_errors_last_hour} 次`} />
-            <StatTile label="监控数据导出" value={ok(s.telemetry_export, "已开启", "未开启")} sub="OTEL_EXPORTER_OTLP_ENDPOINT" />
+            <StatTile label="运行追踪" value={ok(s.telemetry_store || s.telemetry_export, s.telemetry_store ? "本机保存" : "已导出", "未开启")}
+              sub={s.telemetry_export ? "另外导出到 OTLP" : "失败与慢请求、错误日志，见「运行追踪」"} />
             <StatTile label="待审核评论" value={s.pending_comments} />
             <StatTile label="待处理举报" value={s.open_reports} sub={s.urgent_reports > 0 ? `其中紧急 ${s.urgent_reports} 条` : "无紧急举报"} />
             <StatTile label="已下架剧集" value={s.revoked_series} sub="这些剧集的播放链接已失效" />
