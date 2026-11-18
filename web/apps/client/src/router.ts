@@ -93,7 +93,8 @@ export const href = {
   posts: () => "/posts",
   post: (id: number) => `/post/${id}`,
   wayHome: () => "/go-home",
-  download: () => "/download",
+  /** The app download landing page (its sections are /app/highlights, /app/genres, …). */
+  download: () => "/app/home",
   search: (q?: string) => (q ? `/search?q=${encodeURIComponent(q)}` : "/search"),
   /** /video/{id}, or /video/{id}/ep-{n} for a chosen episode (one URL per episode, for search engines). */
   video: (id: number, ep?: number) => `/video/${id}${ep ? `/ep-${ep}` : ""}`,

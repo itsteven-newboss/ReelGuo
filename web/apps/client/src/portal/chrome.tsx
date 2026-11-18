@@ -1,5 +1,5 @@
 import { BrandMark, Img, markAspect } from "@reelguo/ui";
-import { ArrowUpToLine, ChevronDown, ChevronRight, History, Menu, Search as SearchIcon, Trash2, UserRound, X } from "lucide-react";
+import { ArrowUpToLine, ChevronDown, ChevronRight, CircleUserRound, History, Menu, Search as SearchIcon, Trash2, UserRound, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useCategories, useRanks, useSeries, useSite, useSuggest } from "../api";
 import { fmtCount } from "../player/format";
@@ -49,7 +49,7 @@ function useNavItems(): NavItem[] {
     { label: "排行榜", to: href.ranks(), active: (p) => p.startsWith("/ranks") },
     { label: "博客", to: href.posts(), active: (p) => p.startsWith("/posts") || p.startsWith("/post/"), caret: true },
     { label: "回家的路", to: href.wayHome(), active: (p) => p === "/go-home" },
-    { label: `${BRAND_SHORT}APP`, to: href.download(), active: (p) => p === "/download" },
+    { label: `${BRAND_SHORT}APP`, to: href.download(), active: (p) => p.startsWith("/app") },
   ];
 }
 
@@ -289,10 +289,13 @@ function MobileHeader() {
 
   return (
     <>
-      <div className="relative h-14 flex items-center px-[18px]">
+      <div className="relative h-14 flex items-center pl-[18px] pr-[12px]">
         <button onClick={openMenu} aria-label="菜单" className="w-7 h-7 flex items-center justify-center text-white"><Menu size={24} /></button>
         <div className="absolute left-1/2 top-[5px] -translate-x-1/2"><Logo size="sm" /></div>
         <button onClick={openSearch} aria-label="搜索" className="ml-auto w-7 h-7 flex items-center justify-center text-white"><SearchIcon size={22} /></button>
+        {user
+          ? <Link to={href.me()} aria-label="个人中心" className="ml-3 w-[24px] h-[32px] flex items-center justify-center"><Avatar size={24} name={user.nickname} color={user.avatar_color} /></Link>
+          : <button onClick={openLogin} aria-label="登录/注册" className="ml-3 w-[24px] h-[32px] flex items-center justify-center text-white"><CircleUserRound size={24} strokeWidth={2} /></button>}
       </div>
 
       <Drawer open={menu} side="left" onClose={closeOverlay}>
@@ -411,7 +414,7 @@ export function FloatDock() {
     try { return !nativeApp && sessionStorage.getItem(DOCK_KEY) !== "1"; } catch { return !nativeApp; }
   });
   const hide = () => { setCard(false); try { sessionStorage.setItem(DOCK_KEY, "1"); } catch { /* ignore */ } };
-  const btn = "w-14 h-14 rounded-[9px] flex flex-col items-center justify-center gap-0.5 text-[12px] font-medium leading-[18px]";
+  const btn = "w-[56px] h-[56px] rounded-[9px] flex flex-col items-center justify-center gap-[2px] text-[12px] font-medium leading-[18px]";
   return (
     <div className="fixed right-2 lg:right-[19px] bottom-6 lg:bottom-[30px] z-30 flex flex-col items-end gap-[30px] scale-[.82] lg:scale-100 origin-bottom-right">
       {card && (
@@ -425,7 +428,7 @@ export function FloatDock() {
           <button onClick={hide} aria-label="关闭" className="absolute -top-1 -right-4 w-5 h-5 rounded-full bg-black/60 text-white/80 flex items-center justify-center"><X size={12} /></button>
         </div>
       )}
-      <div className="w-[68px] p-[6px] rounded-[12px] bg-white/5 border border-white/10 backdrop-blur-md flex flex-col gap-1">
+      <div className="w-[68px] p-[5px] rounded-[12px] bg-white/5 border border-white/10 backdrop-blur-md flex flex-col items-center gap-[4px]">
         <Link to={href.me()} className={`${btn} bg-[#ffd321] text-black`}><History size={18} />最近浏览</Link>
         <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} className={`${btn} text-[#a1a1aa] hover:text-white`}><ArrowUpToLine size={18} />回到顶部</button>
       </div>

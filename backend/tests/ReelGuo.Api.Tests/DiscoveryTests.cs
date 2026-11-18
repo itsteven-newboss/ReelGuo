@@ -188,7 +188,11 @@ public sealed class DiscoveryTests(PostgresFixture db) : IClassFixture<PostgresF
         await SeedAsync(api, "推荐甲", ["独特标签甲"]);
         var client = api.CreateClient();
         var s = await Get(client, "/api/v1/search/suggest?seed=1").OkJsonAsync();
-        Assert.Contains("独特标签甲", s.GetProperty("hot_tags").EnumerateArray().Select(t => t.GetString()));
+        var tags = s.GetProperty("hot_tags").EnumerateArray().Select(t => t.GetString()).ToList();
+        Assert.Contains("独特标签甲", tags);
+        // A full row of distinct tags even while the catalog is tiny: padded with common genres.
+        Assert.Equal(20, tags.Count);
+        Assert.Equal(tags.Count, tags.Distinct().Count());
         Assert.InRange(s.GetProperty("recommended").GetArrayLength(), 1, 6);
     }
 

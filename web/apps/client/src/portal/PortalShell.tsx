@@ -2,10 +2,10 @@ import { useEffect } from "react";
 import { PayResultPage } from "../billing/PayResult";
 import { StorePage } from "../billing/StorePage";
 import { WalletPage } from "../billing/WalletPage";
-import { DownloadPage } from "../pages/Download";
+import { AppLanding, LANDING_SECTIONS, type LandingSection } from "../pages/AppLanding";
 import { PostPage } from "../pages/Posts";
 import { SettingsPage } from "../pages/Settings";
-import { installRouter, match, useLocation } from "../router";
+import { installRouter, match, navigate, useLocation } from "../router";
 import { LoginSheet } from "../social/LoginSheet";
 import { ReportSheet } from "../social/Report";
 import { installBackHandler } from "../state/nav";
@@ -32,7 +32,7 @@ function Route() {
   if (path === "/posts") return <PostsPage />;
   if ((m = match("/post/:id", path))) return <PostPage key={m.id} id={Number(m.id)} />;
   if (path === "/go-home") return <WayHomePage />;
-  if (path === "/download") return <DownloadPage />;
+  if (path === "/download") return <Redirect to="/app/home" />;
   if (path === "/search") return <SearchPage />;
   const video = /^\/video\/(\d+)(?:\/ep-(\d+))?\/?$/.exec(path);
   if (video) return <SeriesPage key={video[1]} id={Number(video[1])} ep={video[2] ? Number(video[2]) : undefined} />;
@@ -49,6 +49,20 @@ function Route() {
   );
 }
 
+/** Replaces the URL (old links such as /download). */
+function Redirect({ to }: { to: string }) {
+  useEffect(() => navigate(to, { replace: true }), [to]);
+  return null;
+}
+
+/** /app and /app/{section}: the app download landing page, which has its own header and footer. */
+const landingSection = (path: string): LandingSection | null => {
+  if (path === "/app" || path === "/app/") return "home";
+  const m = /^\/app\/([a-z]+)\/?$/.exec(path);
+  if (!m) return null;
+  return (LANDING_SECTIONS as readonly string[]).includes(m[1]!) ? (m[1] as LandingSection) : "home";
+};
+
 /**
  * The web app's layout, as on the reference site: a top header with the channels as navigation, the page, and a
  * footer with the official addresses. Sheets and dialogs that any page can open live here too.
@@ -58,6 +72,15 @@ export function PortalShell() {
   useEffect(() => installBackHandler(), []);
   // Changing episode (/video/1/ep-2 → /ep-3) keeps the page mounted, so the player carries on.
   const key = useLocation((s) => s.path.replace(/\/ep-\d+\/?$/, ""));
+  const landing = landingSection(key);
+  if (landing) {
+    return (
+      <>
+        <AppLanding section={landing} />
+        <ToastHost />
+      </>
+    );
+  }
   // The desktop header lies over the page: the home hero runs under it, other pages start below it.
   return (
     <div className="relative min-h-dvh flex flex-col bg-[#0b0b0d] text-white">

@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fortawesome/free-brands-svg-icons": "6.7.2",
     "@reelguo/api-client": "workspace:*",
     "@reelguo/ui": "workspace:*",
     "@tanstack/react-query": "^5.107.1",
@@ -21,6 +22,7 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-i18next": "^18.0.1",
+    "uqr": "0.1.2",
     "zustand": "^5.1.0"
   },
   "devDependencies": {

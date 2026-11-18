@@ -233,7 +233,7 @@ public sealed class SeoTests(PostgresFixture db) : IClassFixture<PostgresFixture
             await ctx.SaveChangesAsync(Ct);
         }
 
-        foreach (var path in new[] { "/", "/ranks", "/ranks/hot", "/topics", "/posts", "/go-home", "/download", "/c/all?sort=original", "/terms" })
+        foreach (var path in new[] { "/", "/ranks", "/ranks/hot", "/topics", "/posts", "/go-home", "/app/home", "/app/genres", "/c/all?sort=original", "/terms" })
         {
             var (status, html, _) = await Page(api, path);
             Assert.True(status == HttpStatusCode.OK, $"{path}: HTTP {(int)status}");
@@ -243,6 +243,12 @@ public sealed class SeoTests(PostgresFixture db) : IClassFixture<PostgresFixture
             Assert.Contains("<p>© 黄约短剧 · ", html);                // footer
             Assert.DoesNotContain("ReelGuo", html);                  // the code name never reaches visitors
         }
+
+        // The download page moved to /app/{section}: the old address redirects, unknown sections are not found.
+        var moved = await api.CreateClient(new() { AllowAutoRedirect = false }).SendAsync(new HttpRequestMessage(HttpMethod.Get, "/download").From("US"), Ct);
+        Assert.Equal(HttpStatusCode.MovedPermanently, moved.StatusCode);
+        Assert.Equal("/app/home", moved.Headers.Location?.OriginalString);
+        Assert.Equal(HttpStatusCode.NotFound, (await Page(api, "/app/nope")).Status);
 
         // The ranking lists its series in board order, with the channel (loaded with the series).
         var ranks = (await Page(api, "/ranks/hot")).Body;

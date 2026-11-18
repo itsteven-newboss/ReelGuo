@@ -69,6 +69,7 @@ public static class AdminEndpoints
         admin.MapAdminAnalytics();
         admin.MapAdminBilling();
         admin.MapAdminAppReleases();
+        admin.MapAdminLandingImages();
         admin.MapAdminPortal();
         return admin;
     }

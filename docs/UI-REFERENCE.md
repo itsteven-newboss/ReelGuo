@@ -25,7 +25,7 @@ Code lives in `web/apps/client/src/portal/` unless another path is given.
 | Theme | Dark only. Page `#0b0b0d`; accent `#ffd321` (badges and buttons `#ffd21c`, scores `#ffd900`); the gold gradient `#ffd21c → #f5a623` on primary actions. Text white at 90 / 65 / 60 / 50 / 35 %. | `tokens.css`, `index.css` |
 | Font | `Arial, Helvetica`, then PingFang SC / Microsoft YaHei / Noto Sans SC for Chinese | `tokens.css` |
 | Root size | 14 px, 16 px from 1680 px wide. Headings and hero text are in rem, so they grow on wide screens; the header does not. | `index.css` |
-| Content column | Phones: 100 % − 26 px (13 px gutters). Desktop (≥ 1024 px): `min(100% − 192px, 1440px)`, so 1238 px at 1440 and 1440 px at 1920. | `.rg-wrap` |
+| Content column | Phones: 100 % − 26 px (13 px gutters). Desktop 1024–1279 px: 5 vw margins (`100% − 10vw`). From 1280 px: `min(100% − 192px, 1440px)`, so 1238 px at 1440 and 1440 px at 1920. (Re-measured 2026-11-18.) | `.rg-wrap` |
 | Page scrollbar | 10 px, dark | `index.css` |
 | Breadcrumb | "首页 / 频道 / 剧名", 14 px (12 px phones), white 60 %, the current page in the accent colour | `kit.tsx: Breadcrumb` |
 | Section title | Plain semibold, 1.625 rem (16 px phones), no bar; "more" pill on the right: 87 × 36 (99 × 32 phones), white 10 % fill and border, 12 px text with › | `kit.tsx: SectionTitle, MorePill` |
@@ -44,7 +44,7 @@ Used by every grid (home, channel, topic, search, 猜你喜欢, favourites).
 | Cover | 3:4, radius 0.9 rem (12.6 px), `#242424` behind the image | 3:4, radius 12 |
 | Top-left | One pill: "原创" (original, `#ffd21c`) and / or "新片" (new in the last 7 days, `#89eed3`), 23 px, 12/500 black; split in two when both show | 26 px |
 | Top-right | Score "9.1分", 12/700 `#ffd900` on black 70 % with blur, radius 4.5 | 26 px, radius 6 |
-| Bottom | Left: ▶ play count "44.4w" on black 80 %. Right: "14小时前 更新至3集", or "全21集" when finished, black 80 %, truncated to fit | 11 px text |
+| Bottom | Re-measured 2026-11-18. Left: an orange flame (our own drawing) and the play count "44.4w". Right: the progress only, "更新至3集" (no time since the update), or "全21集" when finished, truncated to fit. Phones: 6 px from the sides and bottom; flame pill 20 px, black 55 %, radius 5; progress pill 23.5 px, black 80 %, radius 4; 11 px text. Desktop, scaling with the window (given at 1440 px): 6 px (0.417 vw) from the sides, 7.5 px (0.52 vw) from the bottom; both black 80 %, 0.875 rem text; flame pill 0.1875 rem × 0.365 vw padding, 12 px (0.833 vw) flame, radius 4.5 px; progress pill 1.6875 rem high, 0.417 vw padding, radius 4.8 px | `PosterCard` |
 | Below | Title 14/500 `#e7e6e6`, one line; up to 4 tag chips 21 px, 12 px white 60 % on white 5 %, radius 3, wrapping | Title white 90 %; chips 20 px |
 | Grid | 7 columns, 18 px column gap | 2 columns, 10 px gap |
 
@@ -64,7 +64,7 @@ Used by every grid (home, channel, topic, search, 猜你喜欢, favourites).
 
 | Element | Spec |
 |---|---|
-| Bar | 56 px, fixed, `#0a0a0a`: 28 px menu icon at 18 px from the left, the logo centred, a 28 px search icon at 18 px from the right. No bottom tab bar. |
+| Bar | 56 px, fixed, `#0a0a0a`: 28 px menu icon at 18 px from the left, the logo centred; on the right a 28 px search icon, then (12 px from the edge) the 24 × 32 account button as on the reference: an outlined user-in-circle icon that opens 登录/注册, or the 24 px avatar linking to 个人中心 when signed in. No bottom tab bar. |
 | Menu | Drawer from the left: account row, then the nav items as 48 px rows |
 | Search | Drawer from the top: input with 取消 (cancel), then the search panel |
 
@@ -83,7 +83,7 @@ Fixed at the right edge (19 px from the edge, 30 px from the bottom; scaled to 8
 | Part | Spec |
 |---|---|
 | 下载 APP card | 88 × 92, radius 10, dark gold gradient with a white 10 % border: 60 px app icon, then a "下载 APP" gold-gradient pill; a small × hides it for the session. Not shown inside the apps. |
-| Buttons | 68 px column, white 5 % with blur, radius 12: "最近浏览" (recently viewed, accent-filled, opens 个人中心) and "回到顶部" (back to top, grey); each 56 × 56, radius 9, 20 px icon over 12/500 text |
+| Buttons | 68 px column, white 5 % with blur, radius 12, 5 px padding: "最近浏览" (recently viewed, accent-filled, opens 个人中心) and "回到顶部" (back to top, grey), centred, 4 px apart; each 56 × 56 px (fixed px, not rem), radius 9, 18 px icon over 12/500 text |
 
 ### Routes
 
@@ -101,17 +101,17 @@ Every page has a real URL, and back / forward work normally. Overlays (sheets, f
 | `/search?q=` | Search (§12) |
 | `/me`, `/me/wallet`, `/settings` | Account, wallet, settings (§13, §14) |
 | `/store`, `/pay/result?order=` | Store and payment result (§14) |
-| `/download` | 下载 App (§15) |
+| `/app/{section}` | 下载 App landing page (§15): `home`, `highlights`, `genres`, `experience`, `wishlist`, `creator`, `about`; `/app` is `home`, and the old `/download` redirects to `/app/home` |
 
 ## 3. Home
 
 | Section | Spec |
 |---|---|
 | Hero (desktop) | Full width under the header, 37.8 vw tall. The cover fills the top 35.2 vw; its bottom edge is cut by a wide ellipse (`50% / 2.45vw`) with a thin light line along the curve. Overlays: `linear-gradient(90deg, black 60 % → transparent 60 %)` and a page-colour fade over the bottom 30 %. Text at the column's left, its bottom at 23 % of the image height: "ReelGuo · tagline" 1.125 rem accent; title 3.0625 rem/600; one line of synopsis 1.0625 rem white 80 %; "🏆 热播总榜No. N │ 9.3分 │ 534.7w次播放" 1.1875 rem; chips (two tags + progress) 2 rem high, white 20 %, radius 4.5. Six thumbnails centred on the curve, 7.13 vw wide (3:4), 0.73 vw apart, radius 0.63 vw, the current one outlined in the accent. Auto-advances every 5 s, pauses on hover. |
-| Hero (phone) | Full width, 40 vw tall, bottom fade: "ReelGuo · tagline" 12/500 accent, title 24/600, "9.2分 44.1w次播放" 12/500; dots at the bottom right (5 px, the current one an 11 px accent bar) |
-| 公告 (announcements) | 30 px under the hero (10 px on phones); 36 px high (37 px phones), radius 4.5 (8): a 67 px `#242321` label with a megaphone icon and "公告", then the active announcements scrolling (38 s loop), 12 px `#bbb` (white on phones), each with an accent "查看详情" (details) link when it has one. Hidden with none active. |
-| 热门标签 (hot tags) | Title, then pills 29 px, 12.25 px `#bbb`, white 5 % fill, radius 18, 7.5 px apart, wrapping. Phones: 68 × 32 pills, 14/500 white 80 %, light gradient fill, scrolling sideways. |
-| Card sections | 29 px above each title: 精选推荐 (editor picks, one row; 6 on phones) · 最近上新 (recently updated, 2 rows) · 热播短剧 (hot dramas, 2 rows), each with its "more" pill (更多推荐 / 全部上新 / 更多热播) |
+| Hero (phone) | Re-measured 2026-11-18 at 390 px. A strip of 16:9 slides 9 px under the header: each slide is the screen width minus 40 px (350 × 197 at 390), radius 8, 20 px in from each side, the previous and next slides 8 px either side so 12 px of each peeks in. Fade `transparent 40 % → black 65 %`. Text 15 px from the left and bottom, 278 px wide: "brand·tagline" 11/500 `#ffd21c` (16 px line), the title 19/700 (24.7 px line), then "tag · tag · 更新至N集" 13 px white 80 %, 4 px apart. Dots 12 px from the slide's right and 14.5 px from its bottom: 4 × 4 white 40 %, the current one a 10 × 4 white bar, 4 px apart. Slides loop and auto-advance every 5 s. Swiping drags the strip with the finger and changes slide past 50 px (shorter swipes spring back); vertical swipes scroll the page; a tap opens the series. (The reference changes slide on release without following the finger.) |
+| 公告 (announcements) | Re-measured 2026-11-18. Desktop sizes scale with the window, given here at 1440 px: 30 px under the hero (2.083 vw; 9.5 px on phones); `max(36px, 2.083vw)` high (37 px phones), radius 4.5 (0.3125 vw; 8 on phones). A 67 px `#242321` label with an accent (`#ffd321`) bell and "公告" (12 px, 13 px at 1920), then the announcements scrolling (38 s loop) over a `#131315` strip (`#19191b` on phones), 12 px `#bbb` (white on phones), each with an accent "查看详情" (details) link when it has one. With none active, a welcome line pointing to 回家的路. |
+| 热门标签 (hot tags) | Re-measured 2026-11-18. 20 tags (the catalogue's popular tags, padded with common genres) in **one row that scrolls sideways, never wraps**. Desktop, at 1440 px: 21 px under the 公告 (1.458 vw); title 1.625 rem / 2.25 rem line in a 2.6 rem row, 11.25 px (0.781 vw) above the pills; pills 2.0625 rem high, 0.875 rem `#bbb`, white 5 % fill, white 4.3 % border, padding 0.885 vw, radius 1.25 vw, 0.521 vw apart. Phones: 68 × 32 pills, 14/500 white 80 %, light gradient fill, 5 px apart, the row running to the screen's right edge. |
+| Card sections | 28.5 px above each title at 1440 (1.979 vw; 23.5 px on phones): 精选推荐 (editor picks, one row; 6 on phones) · 最近上新 (recently updated, 2 rows) · 热播短剧 (hot dramas, 2 rows). Title as in 热门标签; its "more" pill (更多推荐 / 全部上新 / 更多热播) 36 px high (32 on phones), centred in the title row, 12 px text, padding and chevron 0.781 vw (15 px on phones). 15 px (1.042 vw) to the cards; card gaps 1.25 vw × 1.042 vw (18 × 15 at 1440). A row with fewer series than columns leaves the rest empty, as on the reference. |
 | 专题推荐 (topics) | "查看全部" (see all), then three 16:9 tiles (§9), one per row on phones |
 | 官方入口 (official entry) | Under a white 10 % rule: "ReelGuo 官方入口" 1.25 rem/600 `#e6e6e6`, then 14/500 `#999` lines with accent links: the official domain, the Telegram group and email when configured, 回家的路 and 下载 App |
 
@@ -234,8 +234,8 @@ Topics are hand-picked lists of series, managed in Admin → 专题. Only publis
 
 | Element | Spec |
 |---|---|
-| Hero | Centred: "官方权威发布 · 永久有效入口" pill (36 px, `#111`, accent 50 % border), the app icon, "ReelGuo · 官方最新地址发布页" 2.25 rem/600, a two-line explanation 1.25 rem white 50 %, then three 179 × 45 pills: 立即进入主站 (enter, gold gradient) · 复制分享链接 (copy share link, outlined) · 保存回家的路 (save this page, gold gradient) |
-| Panels | White 4 % with a white 10 % border, radius 6, 22 px apart; each with an icon, a 1.625 rem title, an accent note and a 1.25 rem grey line. Inner cards `#0d0d0d`. |
+| Hero | Re-measured 2026-11-18 at 440 px (phone) and 1440 px. Centred: "官方权威发布 · 永久有效入口" pill with a 15 px badge icon (`#111`, accent 50 % border; phones 40 px, 16 px text, radius 8, padding 20; desktop 36 px, 14 px, radius 12, padding 12), then the **logo lockup** (mark + name + domain, 88 px high on phones, 66 px on desktop; 32 / 45 px under the pill), "ReelGuo · 官方最新地址发布页" (18/600 phones, 2.25 rem/600 desktop; 24 / 30 px under the logo), a two-line explanation (13 px `#888` in a 320 px column on phones; 1.25 rem/500 white 50 % desktop), then three pills: 立即进入主站 (enter, gold gradient) · 复制分享链接 (copy share link, outlined) · 保存回家的路 (save this page, gold gradient). Phones: one row of equal pills 10 px apart, 40 px high, 15/600, 28 px under the text. Desktop: 178.5 × 45, 21/600, 37.5 px apart, 75 px under the text. On phones the whole page keeps 16 px from the screen edges. |
+| Panels | White 4 % with a white 10 % border, radius 6 (8 with 12 px padding on phones), 22 px apart; each with an icon, a 1.625 rem title, an accent note and a 1.25 rem grey line. Inner cards `#0d0d0d`. |
 | 最新可用地址 | Address cards in three columns: "备用地址 01" with 当前 (current) or 可用 (available), the address 1.625 rem/600, then 立即进入 (gold) and 复制地址 (outlined) pills |
 | 官方域名与地址 | Two-column rows: label, address, "复制并保存" (copy) pill |
 | 防失联方式 | Up to four cards: 邮箱自动回复 (email), TG 官方交流群 (Telegram) when configured, 收藏本页 (bookmark), 下载 App |
@@ -276,7 +276,7 @@ The reference product has no paid content. These screens follow common short-dra
 | Screen | Spec | Code |
 |---|---|---|
 | Start page (in the app) | Black, the app icon, "ReelGuo", a spinner and "正在连接…" (connecting…); when nothing answers, "无法连接服务器" (can't reach the server) with 重试 (retry). Footer "本 App 仅面向年满 18 周岁的成年人" (adults 18+ only). | `native/boot/` |
-| 下载 App (`/download`) | One card per platform (newest release): icon, name, version and date, download pill, notes, install tip, SHA-256; then the iPhone card ("添加到主屏幕", add to home screen) | `pages/Download.tsx` |
+| 下载 App (`/app/{section}`) | Since 2026-11-18 a standalone landing page laid out like the reference product's own download site (measured at 1440 and 440 px; sizes scale with the window, as the reference's artwork does). It has no site header or footer: its own header (logo, tabs 首页 · 内容亮点 · 剧场类型 · 心愿榜 · 创作者 · 关于我们, gold "客户端" button) and footer (logo, addresses, 服务支持 / 关于我们 / 法律信息, copyright). Sections, all black and gold: **首页**: as on the reference, one picture (desktop 1440 × 608, phone 440 × 620; the title and slogan are part of it): the uploaded 首页主视觉, or our default brand artwork (`public/landing/home-pc.webp`, `home-mobile.webp`, made by `D:/reelguo-work/tools/hero-art/make.mjs`). Desktop: a QR code of `/app/home` over its lower left, 立即下载 · 探索更多 · Windows 下载 · macOS 下载 (Apple-silicon / Intel chooser) over its lower right. Phones: under it, overlapping its bottom 64 px, 手机客户端下载 (gold phone icon): 197 × 55 buttons with a radial brown fill (`radial-gradient(112% 162% at 98% 0%, #5b3009, #331c05 50%, #1f1104 75%, #0b0702)`), a `#ffdea6` border, radius 13.5, a 24.6 px pale-gold Apple logo (Font Awesome, CC BY 4.0) or whole Android robot, 16/800 gold title and 12.8 px white line: 苹果手机下载 (add-to-home-screen steps), 安卓手机下载, 安卓备用下载 (the APK through another mirror); then 电脑客户端下载: Windows / macOS · **内容亮点** (the reference's copy: 高能剧情 / 秒速反转，上头不停 · 持续上新 / 热门内容，天天有新 · 个性推荐 / 越看越懂你，刷剧更爽, each with a gold medal — ring, orbit, sparkle and a glossy clapperboard / flame / heart; desktop 1440 × 186 with medals at x 209 / 603 / 1004 and dividers at 513 / 911; phones 440 × 258, rows 83 px apart) · **剧场类型** (up to four channels, each with its hottest cover) · **沉浸式体验** (the reference's copy and layout: italic gold title with a small circle and rule, 上下滑动，沉浸刷剧, 轻松滑动切换，拒绝等待精彩剧情，一刷就停不下来 (two lines on desktop), then 一滑即播 / 上下滑动切换剧情，丝滑流畅 · 猜你喜欢 / 根据喜好智能推荐，越看越合口味 · 多元题材 / 都市、古风、悬疑、穿越、逆袭……多种题材任你探索, each with a gold medal (ring broken at the four points, sparkles; pointing hand / heart / film reel), medals 60 / 50 px across, 90 / 70 px apart, at x 185 / 18 with text at x 272 / 80; then a phone and four tilted posters on a glowing stage) · **心愿榜** (the 推荐 ranking's top seven, crowns on the top three, 我要许愿) · **创作者计划** (contact link) · **关于我们** (brand strip). Tabs scroll to their section and the URL follows the scroll. The reference's artwork is not used: covers, logo and CSS only, with our own copy. Downloads come from the published releases (Admin → App 版本); a missing build says 即将上线. **Pictures:** by default from series covers (ordered by 编辑推荐权重, then the most watched); any of 21 slots can be replaced in Admin → **下载页图片**: backgrounds for 首页 / 剧场类型 / 沉浸式体验 / 心愿榜 / 创作者计划 / 关于我们 in a desktop and a phone version (either serves the other screen when only one is uploaded), the four 剧场类型 card pictures, and the 沉浸式体验 phone screen and its four posters. An uploaded 首页主视觉 replaces the default first-screen picture; the QR code and buttons stay on top. **创作者计划** is a full-section background picture (uploaded, or a series cover warmed towards gold) with the text and the 了解创作者计划 button over its darker left side, as on the reference. **关于我们** is a banner (uploaded, or six gold-tinted covers) with the logo mark, name, "AI · Short Drama" and slogan in a dark box. | `pages/AppLanding.tsx`, admin `pages/LandingImages.tsx` |
 | Update prompt | System dialog "发现新版本" (new version available) with 立即更新 (update now) / 稍后 (later); mandatory releases offer only 立即更新 | `native/src/updates.rs` |
 
 ## 16. Not copied

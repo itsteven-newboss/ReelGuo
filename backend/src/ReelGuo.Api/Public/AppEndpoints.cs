@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using ReelGuo.Api.Admin;
 using ReelGuo.Api.Infrastructure;
 using ReelGuo.Data;
 using ReelGuo.Data.Entities;
@@ -59,6 +60,7 @@ public static class AppEndpoints
         var app = v1.MapGroup("/app").WithTags("App");
         app.MapGet("/bootstrap", Bootstrap).WithSummary("Mirror list and update status for a native app (platform = android, windows-x86_64, …).");
         app.MapGet("/releases", Latest).WithSummary("The newest published release per platform (download page).");
+        app.MapLandingImages();
         // The desktop updater's own format; not part of the web client's contract.
         app.MapGet("/updates/{target}/{arch}/{current}", TauriUpdate).ExcludeFromDescription();
         return v1;

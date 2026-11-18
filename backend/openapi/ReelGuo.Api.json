@@ -2542,6 +2542,36 @@
         }
       }
     },
+    "/api/v1/app/landing-images": {
+      "get": {
+        "tags": [
+          "App"
+        ],
+        "summary": "Images uploaded for the download page, by slot.",
+        "responses": {
+          "451": {
+            "description": "Unavailable For Legal Reasons",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LandingImagesDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/topics": {
       "get": {
         "tags": [
@@ -7006,6 +7036,140 @@
         }
       }
     },
+    "/api/admin/landing-images": {
+      "get": {
+        "tags": [
+          "Admin: landing images"
+        ],
+        "summary": "The uploaded download-page images (slots without one use series covers).",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdminLandingImageDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/landing-images/{slot}": {
+      "post": {
+        "tags": [
+          "Admin: landing images"
+        ],
+        "summary": "Uploads a slot's image (JPEG, PNG or WebP, up to 10 MB) as the raw request body.",
+        "parameters": [
+          {
+            "name": "slot",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminLandingImageDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin: landing images"
+        ],
+        "summary": "Removes a slot's image, so the page goes back to its default.",
+        "parameters": [
+          {
+            "name": "slot",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/topics": {
       "get": {
         "tags": [
@@ -7744,6 +7908,30 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "AdminLandingImageDto": {
+        "required": [
+          "slot",
+          "url",
+          "updated_at",
+          "updated_by"
+        ],
+        "type": "object",
+        "properties": {
+          "slot": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
           }
         }
       },
@@ -10193,6 +10381,20 @@
           "count": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "LandingImagesDto": {
+        "required": [
+          "images"
+        ],
+        "type": "object",
+        "properties": {
+          "images": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }
       },
@@ -13829,6 +14031,9 @@
     },
     {
       "name": "Admin: app releases"
+    },
+    {
+      "name": "Admin: landing images"
     },
     {
       "name": "Admin: portal"

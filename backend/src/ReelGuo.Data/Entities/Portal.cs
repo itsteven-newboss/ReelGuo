@@ -44,3 +44,17 @@ public sealed class SeriesRating
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }
+
+/// <summary>
+/// 下载页图片: an image uploaded in admin for one slot of the app download landing page (/app). Slots without one use
+/// series covers.
+/// </summary>
+public sealed class LandingImage
+{
+    /// <summary>Slot id, e.g. <c>home_d</c> (首页主视觉, desktop) or <c>genre_1</c>; the API lists the valid ones.</summary>
+    public required string Slot { get; set; }
+    /// <summary>Storage key in the public media bucket (p/landing/…).</summary>
+    public required string Key { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+    public required string UpdatedBy { get; set; }
+}

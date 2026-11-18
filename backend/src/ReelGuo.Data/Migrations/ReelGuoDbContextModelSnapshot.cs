@@ -656,6 +656,35 @@ namespace ReelGuo.Data.Migrations
                     b.ToTable("follows", (string)null);
                 });
 
+            modelBuilder.Entity("ReelGuo.Data.Entities.LandingImage", b =>
+                {
+                    b.Property<string>("Slot")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("slot");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("key");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Slot")
+                        .HasName("pk_landing_images");
+
+                    b.ToTable("landing_images", (string)null);
+                });
+
             modelBuilder.Entity("ReelGuo.Data.Entities.MediaJob", b =>
                 {
                     b.Property<long>("Id")

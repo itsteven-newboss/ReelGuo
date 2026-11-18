@@ -40,9 +40,10 @@ body { -webkit-tap-highlight-color: transparent; font-size: 14px; }
 .rg-logo__domain > span { font: italic 700 1.06em/1 Arial, "Helvetica Neue", Helvetica, sans-serif; letter-spacing: .02em; }
 .rg-logo__domain b { font-weight: inherit; color: #f6ce1c; }
 
-/* Content column: 13 px gutters on phones, 96 px margins on desktop, at most 1440 px. */
+/* Content column: 13 px gutters on phones, 5 vw margins on small desktops, 96 px from 1280 px, at most 1440 px. */
 .rg-wrap { width: calc(100% - 26px); margin-inline: auto; }
-@media (min-width: 1024px) { .rg-wrap { width: min(calc(100% - 192px), 1440px); } }
+@media (min-width: 1024px) { .rg-wrap { width: calc(100% - 10vw); } }
+@media (min-width: 1280px) { .rg-wrap { width: min(calc(100% - 192px), 1440px); } }
 
 /* Surfaces, as on the reference site. */
 :root:not(.theme-light) {

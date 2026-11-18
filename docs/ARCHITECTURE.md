@@ -265,8 +265,8 @@ Tables are snake_case. Enums are stored as text. ✓ marks tables that exist.
 | ✓ 5 | `/play` answers 402 `episode_locked` for paid episodes; series episodes carry `is_free` and `price`; `/config` adds `monetization`; `GET /api/v1/store`; `GET /api/v1/me/wallet`, `PUT /me/wallet/settings`, `GET /me/wallet/entries`; `GET /series/{id}/access`; `POST /series/{id}/episodes/{ep}/unlock`; `POST /orders`, `GET /orders/{orderNo}` |
 | ✓ 5 | `POST /api/payments/{provider}/webhook`; sandbox checkout page `GET\|POST /api/payments/sandbox/checkout/{orderNo}` (development) |
 | ✓ 5 | Admin: `products`, `orders` (list, `refund`), `members/{id}/wallet` (+ `adjust`), `analytics/revenue?days=`; series `episode_price` / `free_episodes`; `system/status` adds `payments` |
-| ✓ 6 | `GET /api/v1/app/bootstrap?platform=&version=` (mirrors + update status), `GET /api/v1/app/releases` (download page), `GET /api/v1/app/updates/{target}/{arch}/{current}` (Tauri updater feed: 200 or 204). Not age-gated (the shell calls them before the web app loads); country-blocked like all of `/api/v1` |
-| ✓ 6 | Admin: `app-releases` (list, create, edit / publish / withdraw, delete) |
+| ✓ 6 | `GET /api/v1/app/bootstrap?platform=&version=` (mirrors + update status), `GET /api/v1/app/releases` (download page), `GET /api/v1/app/landing-images` (the download page's uploaded pictures, slot → URL), `GET /api/v1/app/updates/{target}/{arch}/{current}` (Tauri updater feed: 200 or 204). Not age-gated (the shell calls them before the web app loads); country-blocked like all of `/api/v1` |
+| ✓ 6 | Admin: `app-releases` (list, create, edit / publish / withdraw, delete); `landing-images` (下载页图片: list, upload a slot's JPEG/PNG/WebP up to 10 MB as the raw body, `DELETE` = 恢复默认; replaced files are deleted from storage; audited as `landing_image.set` / `.reset`) |
 | ✓ Portal | `GET /api/v1/site` (tagline, active announcements, mirrors, permanent domain, Telegram, email), `GET /api/v1/topics`, `GET /api/v1/topics/{id}`, `GET\|PUT /api/v1/series/{id}/rating`; `/feed?sort=latest\|updated\|hot\|picks\|random`; channel `sort=latest\|hot\|picks\|original\|random\|score`; cards add `last_episode_at` and the channel; series detail adds `rating`; rank items add `description` |
 | ✓ Portal | Admin: `topics` and `announcements` (CRUD, audited as `topic.*` / `announcement.*`) |
 
@@ -468,7 +468,7 @@ unpublished series still play for admins. COS videos use the same short-lived si
 **Search:**
 - Matches titles, exact tags, descriptions and author names, with LIKE wildcards escaped.
 - Title matches rank first, then hot score.
-- The search page's suggestions show popular tags, weighted by series popularity and padded with common genres. 换一批 (refresh) shows a different deterministic sample each time.
+- The suggestions endpoint returns 20 popular tags (the home page's 热门标签 row), weighted by series popularity and padded with common genres. 换一批 (refresh) shows a different deterministic sample each time.
 
 **Listings** (`/feed` and channel pages) take a `sort`:
 
@@ -685,7 +685,8 @@ page path with the built `index.html` plus that page's content (`backend/src/Ree
   rankings, posts, addresses). Text from the catalogue is HTML-escaped; post bodies are the server-sanitised HTML.
 - **Pages.** `/`, `/c/{slug}` (`?sort=original`, `?page=`), `/video/{id}` and one URL per episode
   `/video/{id}/ep-{n}` (old `?ep=` links canonicalise to it), `/ranks/{kind}`, `/topics`, `/topics/{id}`, `/posts`
-  (`?page=`), `/post/{id}`, `/go-home`, `/download`, the legal pages. Account, store, payment, settings and search
+  (`?page=`), `/post/{id}`, `/go-home`, `/app/{section}` (the download landing page, canonical `/app/home`; `/download`
+  redirects there permanently), the legal pages. Account, store, payment, settings and search
   pages are never indexed. Unknown paths get the app's not-found page with a 404; unknown series, episodes, topics
   and posts too.
 - **Same rules as the API.** Licence territories and dates per visitor; blocked countries get the app with no content
@@ -758,7 +759,7 @@ private Tencent COS bucket, and plays the uploaded MP4 itself (`ReelGuo.Data/Med
 | Shareable links | Every route is shareable: `/video/{id}/ep-{n}` (old `?ep=` links still work), `/c/{slug}?sort=`, `/topics/{id}`, `/ranks/{kind}`, `/post/{id}`, `/search?q=`, `/go-home`, … (full list in UI-REFERENCE §2). |
 | Settings | 启动时静音 (mute on start; on by default, as in the reference), clear caches and on-device records, version, legal links. The site is dark only, like the reference. |
 | Age gate | Asked on the first visit and remembered on the device. Nothing is visible behind it: the server-rendered page text (§9.13) sits beneath it, covered, for search engines. |
-| App stores | Apple and Google don't accept adult apps. Distribution is the web/PWA plus the 下载 App page (`/download`): the APK, the desktop installers, and how to add the site to the iPhone home screen. |
+| App stores | Apple and Google don't accept adult apps. Distribution is the web/PWA plus the 下载 App landing page (`/app/home`): the APK, the desktop installers, and how to add the site to the iPhone home screen. |
 | Wake lock | The screen stays on while a video plays (Screen Wake Lock API, taken again when the page comes back). |
 
 ## 11. Compliance checklist

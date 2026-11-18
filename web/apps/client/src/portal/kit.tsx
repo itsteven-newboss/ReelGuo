@@ -1,8 +1,7 @@
 import { Img, Spinner } from "@reelguo/ui";
-import { ChevronDown, ChevronLeft, ChevronRight, Play } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import type { VideoCard } from "../api";
-import { fmtAgo } from "../player/format";
 import { href, Link } from "../router";
 
 /*
@@ -52,17 +51,20 @@ export function PageTitle({ children, sub, right }: { children: ReactNode; sub?:
 /** Pill link at the right of a section title: "更多推荐 ›". */
 export function MorePill({ label, to }: { label: string; to: string }) {
   return (
-    <Link to={to} className="ml-auto h-8 lg:h-9 pl-4 pr-3 lg:pl-[13px] lg:pr-3 rounded-full bg-white/10 border border-white/10 hover:bg-white/15 text-[12px] text-white flex items-center gap-1 shrink-0">
-      {label}<ChevronRight size={13} />
+    <Link to={to} className="ml-auto self-center h-[32px] lg:h-[36px] px-[15px] lg:px-[.78125vw] gap-[4px] lg:gap-[.2083vw] rounded-full bg-white/10 border border-white/10 hover:bg-white/15 text-[12px] text-white flex items-center shrink-0">
+      {label}<ChevronRight className="w-[15px] h-[15px] lg:w-[.78125vw] lg:h-[.78125vw]" />
     </Link>
   );
 }
 
-/** "精选推荐 …… 更多推荐 ›": plain semibold title (16 px phone, 1.625 rem desktop). */
+/**
+ * "精选推荐 …… 更多推荐 ›": plain semibold title (16 px phone, 1.625 rem desktop) at the top of a 2.6 rem row, the pill
+ * centred in it; 15 px to the cards on phones, 15 px at 1440 scaling with the window on desktop.
+ */
 export function SectionTitle({ title, more, className = "" }: { title: ReactNode; more?: { label: string; to: string }; className?: string }) {
   return (
-    <div className={`flex items-center gap-3 h-8 lg:h-9 mb-[14px] lg:mb-[15px] ${className}`}>
-      <h2 className="text-[16px] lg:text-[1.625rem] font-semibold text-white leading-none">{title}</h2>
+    <div className={`flex items-center lg:items-start gap-3 h-[32px] lg:h-[2.6rem] mb-[15px] lg:mb-[1.0417vw] ${className}`}>
+      <h2 className="text-[16px] lg:text-[1.625rem] font-semibold text-white leading-[22.4px] lg:leading-[2.25rem]">{title}</h2>
       {more && <MorePill {...more} />}
     </div>
   );
@@ -95,8 +97,21 @@ export function CardBadges({ original, fresh, className = "" }: { original: bool
 }
 
 /** 3:4 drama card: badges, score, play count and update chips on the cover; title and tag chips below. */
+/** The play count's flame (our own drawing): an orange flame with a yellow core. */
+export function FlameIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 12 12" className={className} aria-hidden="true">
+      <path fill="#ff7a1a" d="M6.2.5c.3 1.9 1.8 2.9 2.8 4.2.8 1 1.2 2 1.2 3.1 0 2-1.8 3.7-4.2 3.7S1.8 9.8 1.8 7.8c0-1.4.7-2.5 1.6-3.3.1.9.5 1.6 1.2 2C4.4 4.6 4.9 2.3 6.2.5Z" />
+      <path fill="#ffc93c" d="M6.1 6.3c.2.9 1.1 1.4 1.5 2.2.2.3.3.7.3 1 0 1-.8 1.9-1.9 1.9S4.1 10.6 4.1 9.6c0-.7.4-1.3.9-1.7.1.5.3.8.7 1 0-1 .1-1.8.4-2.6Z" />
+    </svg>
+  );
+}
+
+/**
+ * Drama card. Bottom of the poster, as on the reference: 🔥 play count at the left, the episode progress ("更新至5集")
+ * at the right; desktop sizes scale with the window (given at 1440 px: 6 px from the sides, 7.5 px from the bottom).
+ */
 export function PosterCard({ v }: { v: VideoCard }) {
-  const updated = v.last_episode_at ?? v.published_at;
   return (
     <div className="min-w-0">
       <Link to={href.video(v.id)} className="group block relative w-full overflow-hidden rounded-[12px] lg:rounded-[0.9rem] bg-[#242424]" style={{ aspectRatio: "3 / 4" }}>
@@ -107,13 +122,13 @@ export function PosterCard({ v }: { v: VideoCard }) {
             {v.score.toFixed(1)}分
           </span>
         )}
-        <div className="absolute left-[6px] right-[6px] bottom-[6px] lg:bottom-[7px] flex items-end gap-1">
-          <span className="h-5 lg:h-[23px] px-[6px] lg:px-[5px] rounded-[5px] lg:rounded-[4.5px] bg-black/55 lg:bg-black/80 text-[11px] lg:text-[12.25px] text-white flex items-center gap-1 shrink-0 tabular-nums">
-            <Play size={10} className="fill-current" />{fmtPlays(v.hot)}
+        <div className="absolute left-[6px] right-[6px] bottom-[6px] lg:left-[.4167vw] lg:right-[.4167vw] lg:bottom-[.52vw] flex items-end gap-1">
+          <span title={`${fmtPlays(v.hot)}次播放`}
+            className="h-[20px] lg:h-auto px-[6px] lg:px-[.3646vw] lg:py-[.1875rem] rounded-[5px] lg:rounded-[.3125vw] bg-black/55 lg:bg-black/80 text-[11px] lg:text-[.875rem] leading-[18px] lg:leading-[1.25rem] text-white flex items-center gap-[2px] lg:gap-[.15625vw] shrink-0 tabular-nums">
+            <FlameIcon className="w-[12px] h-[12px] lg:w-[.8333vw] lg:h-[.8333vw] shrink-0" />{fmtPlays(v.hot)}
           </span>
-          <span className="ml-auto min-w-0 h-6 px-[6px] rounded-[4px] lg:rounded-[4.8px] bg-black/80 text-[11px] lg:text-[12.25px] text-white flex items-center gap-1 whitespace-nowrap overflow-hidden">
-            {updated && !v.is_finished && <i className="not-italic truncate">{fmtAgo(updated)}</i>}
-            <span className="truncate">{progressLabel(v)}</span>
+          <span className="ml-auto min-w-0 h-[23.5px] lg:h-[1.6875rem] px-[6px] lg:px-[.4167vw] rounded-[4px] lg:rounded-[.3353vw] bg-black/80 text-[11px] lg:text-[.875rem] leading-[23.5px] lg:leading-[1.6875rem] text-white whitespace-nowrap truncate">
+            {progressLabel(v)}
           </span>
         </div>
       </Link>
@@ -130,7 +145,7 @@ export function PosterCard({ v }: { v: VideoCard }) {
 }
 
 /** 2 columns on phones, 7 on desktop (gaps as measured). */
-export const GRID = "grid grid-cols-2 lg:grid-cols-7 gap-x-[10px] lg:gap-x-[18px] gap-y-3 lg:gap-y-4";
+export const GRID = "grid grid-cols-2 lg:grid-cols-7 gap-x-[10px] lg:gap-x-[1.25vw] gap-y-3 lg:gap-y-[1.0417vw]";
 
 export function PosterGrid({ items, className = "" }: { items: VideoCard[]; className?: string }) {
   return <div className={`${GRID} ${className}`}>{items.map((v) => <PosterCard key={v.id} v={v} />)}</div>;

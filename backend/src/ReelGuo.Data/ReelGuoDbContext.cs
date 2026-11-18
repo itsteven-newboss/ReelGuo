@@ -39,6 +39,7 @@ public sealed class ReelGuoDbContext(DbContextOptions<ReelGuoDbContext> options)
     public DbSet<EpisodeUnlock> EpisodeUnlocks => Set<EpisodeUnlock>();
     public DbSet<PaymentEvent> PaymentEvents => Set<PaymentEvent>();
     public DbSet<AppRelease> AppReleases => Set<AppRelease>();
+    public DbSet<LandingImage> LandingImages => Set<LandingImage>();
     public DbSet<Topic> Topics => Set<Topic>();
     public DbSet<TopicSeries> TopicSeries => Set<TopicSeries>();
     public DbSet<Announcement> Announcements => Set<Announcement>();
@@ -380,6 +381,14 @@ public sealed class ReelGuoDbContext(DbContextOptions<ReelGuoDbContext> options)
             e.Property(x => x.Signature).HasMaxLength(2000);
             e.Property(x => x.Sha256).HasMaxLength(64);
             e.Property(x => x.Notes).HasMaxLength(2000);
+            e.Property(x => x.UpdatedBy).HasMaxLength(128);
+        });
+
+        model.Entity<LandingImage>(e =>
+        {
+            e.HasKey(x => x.Slot);
+            e.Property(x => x.Slot).HasMaxLength(40);
+            e.Property(x => x.Key).HasMaxLength(300);
             e.Property(x => x.UpdatedBy).HasMaxLength(128);
         });
 

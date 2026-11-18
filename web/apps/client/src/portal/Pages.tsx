@@ -1,13 +1,13 @@
 import { unwrap } from "@reelguo/api-client";
-import { BrandMark, Img, Spinner } from "@reelguo/ui";
+import { Img, Spinner } from "@reelguo/ui";
 import { useQuery } from "@tanstack/react-query";
-import { Crown, Flame, Search as SearchIcon, Sparkles, Star, TrendingUp } from "lucide-react";
+import { BadgeCheck, Crown, Flame, Search as SearchIcon, Sparkles, Star, TrendingUp } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { api, useCategories, useListingPage, useRanks, useSearch, useSeriesList, useSite, useTopic, useTopics, type ChannelSort, type RankKind } from "../api";
 import { fmtCount } from "../player/format";
 import { href, Link, navigate, useLocation } from "../router";
 import { useUi } from "../state/ui";
-import { SearchPanel, useSearchSubmit } from "./chrome";
+import { SearchPanel, useSearchSubmit, Wordmark } from "./chrome";
 import { TopicTile } from "./Home";
 import { Breadcrumb, Container, EmptyState, Faq, LoadMore, PageTitle, Pager, Panel, PillTabs, PosterGrid, PosterSkeleton, UnderlineTabs } from "./kit";
 import { BRAND, BRAND_SHORT } from "../brand";
@@ -290,7 +290,7 @@ const GOLD = "linear-gradient(90deg,#ffd21c 0px,#f5a623 100%)";
 
 function WayPanel({ title, note, sub, children }: { title: string; note?: string; sub?: string; children: ReactNode }) {
   return (
-    <section className="rounded-[6px] bg-white/[.04] border border-white/10 p-4 lg:px-6 lg:py-8">
+    <section className="rounded-[8px] lg:rounded-[6px] bg-white/[.04] border border-white/10 p-[12px] lg:px-6 lg:py-8">
       <h2 className="flex items-center flex-wrap gap-x-[11px] gap-y-1">
         <span className="w-9 h-9 rounded-full bg-[#ffd21c]/10 text-[#ffd21c] flex items-center justify-center lg:mr-[2px]"><Sparkles size={16} /></span>
         <span className="text-[18px] lg:text-[1.625rem] font-semibold leading-[27px] text-[#eee]">{title}</span>
@@ -303,6 +303,10 @@ function WayPanel({ title, note, sub, children }: { title: string; note?: string
 }
 
 const card = "rounded-[6px] bg-[#0d0d0d] border border-white/10";
+/** This page keeps 16 px from the screen edges on phones (the site's column has 13 px). */
+const WAY_GUTTER = "max-lg:px-[3px]";
+/** The hero's three actions: one row of equal pills on phones (40 px, 15/600), 178.5 × 45 on desktop (21/600). */
+const wayBtn = "h-[40px] lg:h-[45px] lg:w-[178.5px] rounded-full border text-[15px] lg:text-[21px] font-semibold flex items-center justify-center whitespace-nowrap";
 const outlineBtn = "h-9 rounded-full border border-[#ffd21c]/50 text-[#ffd21c] text-[12px] font-semibold flex items-center justify-center hover:bg-[#ffd21c]/10";
 
 export function WayHomePage() {
@@ -327,22 +331,29 @@ export function WayHomePage() {
 
   return (
     <>
-      <Container><Breadcrumb items={[{ label: "首页", to: "/" }, { label: "回家的路" }]} /></Container>
+      <Container className={WAY_GUTTER}><Breadcrumb items={[{ label: "首页", to: "/" }, { label: "回家的路" }]} /></Container>
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(45% 60% at 50% 45%, rgba(255,210,28,.12), transparent 70%)" }} />
-        <div className="rg-wrap relative pt-10 lg:pt-[42px] pb-10 lg:pb-[43px] text-center">
-          <span className="inline-flex h-9 px-[34px] rounded-[12px] bg-[#111] border border-[#ffd21c]/50 text-[#ffd21c] text-[13px] lg:text-[14px] font-medium items-center">官方权威发布 · 永久有效入口</span>
-          <div className="mt-10 lg:mt-[56px] flex justify-center"><BrandMark fit={88} /></div>
-          <h1 className="mt-6 lg:mt-[33px] text-[22px] lg:text-[2.25rem] font-semibold leading-[34px] text-white">{BRAND} · 官方最新地址发布页</h1>
-          <p className="mt-[15px] mx-auto max-w-[665px] text-[14px] lg:text-[1.25rem] font-medium leading-[21px] text-white/50">本页面由{BRAND}官方维护，实时同步最新可用线路与备用入口，方便在不同网络环境下快速返回。</p>
-          <div className="mt-8 lg:mt-[76px] flex flex-wrap items-center justify-center gap-4 lg:gap-[37px]">
-            <Link to="/" className="w-[179px] h-[45px] rounded-full text-[18px] lg:text-[21px] font-semibold text-black flex items-center justify-center" style={{ background: GOLD }}>立即进入主站</Link>
-            <button onClick={() => copy(pageUrl, "分享链接已复制")} className="w-[179px] h-[45px] rounded-full border border-[#ffd21c] text-[18px] lg:text-[21px] font-semibold text-[#ffd21c]">复制分享链接</button>
-            <button onClick={() => copy(pageUrl, "已复制，请添加到收藏夹或保存到备忘录")} className="w-[179px] h-[45px] rounded-full text-[17px] font-bold text-black" style={{ background: GOLD }}>保存回家的路</button>
+        {/* Measured on the reference at 440 px (phone) and 1440 px: badge pill, the logo lockup (mark + name + domain),
+            title, a narrow paragraph on phones, then the three actions. */}
+        <div className={`rg-wrap ${WAY_GUTTER} relative pt-[24px] lg:pt-[42px] pb-[32px] lg:pb-[43px] text-center`}>
+          <span className="inline-flex h-[40px] lg:h-[36px] px-[20px] lg:px-[12px] gap-[8px] rounded-[8px] lg:rounded-[12px] bg-[#111] border border-[#ffd21c]/50 text-[#ffd21c] text-[16px] lg:text-[14px] font-medium items-center">
+            <BadgeCheck size={15} strokeWidth={2.2} className="shrink-0" />官方权威发布 · 永久有效入口
+          </span>
+          <div className="mt-[32px] lg:mt-[45px] flex justify-center">
+            <span className="lg:hidden"><Wordmark scale={15} /></span>
+            <span className="hidden lg:block"><Wordmark scale={11.25} /></span>
+          </div>
+          <h1 className="mt-[24px] lg:mt-[30px] text-[18px] lg:text-[2.25rem] font-semibold leading-[24.3px] lg:leading-[34px] text-white">{BRAND} · 官方最新地址发布页</h1>
+          <p className="mt-[12px] lg:mt-[15px] mx-auto max-w-[320px] lg:max-w-[665px] text-[13px] lg:text-[1.25rem] lg:font-medium leading-[20px] lg:leading-[21px] text-[#888] lg:text-white/50">本页面由{BRAND}官方维护，实时同步最新可用线路与备用入口，方便在不同网络环境下快速返回。</p>
+          <div className="mt-[28px] lg:mt-[75px] grid grid-cols-3 gap-[10px] lg:flex lg:items-center lg:justify-center lg:gap-[37.5px]">
+            <Link to="/" className={`${wayBtn} border-transparent text-black`} style={{ background: GOLD }}>立即进入主站</Link>
+            <button onClick={() => copy(pageUrl, "分享链接已复制")} className={`${wayBtn} border-[#ffd21c] text-[#ffd21c]`}>复制分享链接</button>
+            <button onClick={() => copy(pageUrl, "已复制，请添加到收藏夹或保存到备忘录")} className={`${wayBtn} border-transparent text-black`} style={{ background: GOLD }}>保存回家的路</button>
           </div>
         </div>
       </section>
-      <Container className="flex flex-col gap-[22px]">
+      <Container className={`flex flex-col gap-[22px] ${WAY_GUTTER}`}>
         <WayPanel title="最新可用地址" note="（直连无需代理）" sub="以下线路均经过可用性检查，任一地址无法打开时换下一个。">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-[27px]">
             {lines.map((a, i) => (

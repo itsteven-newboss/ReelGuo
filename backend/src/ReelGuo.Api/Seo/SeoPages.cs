@@ -55,6 +55,9 @@ public static class SeoEndpoints
 
     private static readonly string[] PrivatePages = ["/search", "/me", "/me/wallet", "/store", "/pay/result", "/settings"];
 
+    /// <summary>Sections of the app download landing page, each with its own URL (/app/genres, …).</summary>
+    private static readonly HashSet<string> AppSections = ["home", "highlights", "genres", "experience", "wishlist", "creator", "about"];
+
     public static void MapSeo(this WebApplication app)
     {
         var pages = app.MapGroup("").ExcludeFromDescription();
@@ -76,7 +79,12 @@ public static class SeoEndpoints
         pages.MapMethods("/posts", methods, (HttpContext h, Ctx c, CancellationToken ct) => Serve(h, c, ct, (country, ct2) => Posts(c, h, ct2)));
         pages.MapMethods("/post/{id:long}", methods, (long id, HttpContext h, Ctx c, CancellationToken ct) => Serve(h, c, ct, (country, ct2) => Post(c, id, country, ct2)));
         pages.MapMethods("/go-home", methods, (HttpContext h, Ctx c, CancellationToken ct) => Serve(h, c, ct, (_, ct2) => WayHome(c, ct2)));
-        pages.MapMethods("/download", methods, (HttpContext h, Ctx c, CancellationToken ct) => Serve(h, c, ct, (_, ct2) => Download(c, ct2)));
+        // The app download landing page: /app/{section} (one page, its sections share the /app/home canonical).
+        // /download was its address before.
+        pages.MapMethods("/download", methods, () => Results.Redirect("/app/home", permanent: true));
+        pages.MapMethods("/app", methods, (HttpContext h, Ctx c, CancellationToken ct) => Serve(h, c, ct, (_, ct2) => Download(c, ct2)));
+        pages.MapMethods("/app/{section}", methods, (string section, HttpContext h, Ctx c, CancellationToken ct) =>
+            Serve(h, c, ct, (_, ct2) => AppSections.Contains(section) ? Download(c, ct2) : NotFound(c, ct2)));
         foreach (var (path, title) in LegalPages)
             pages.MapMethods(path, methods, (HttpContext h, Ctx c, CancellationToken ct) => Serve(h, c, ct, (_, ct2) => Legal(c, path, title, ct2), legal: true));
         foreach (var path in PrivatePages)
@@ -166,7 +174,7 @@ public static class SeoEndpoints
         b.Append($" <a href=\"/c/all?sort=original\">{Brand.Short}原创</a>");
         foreach (var ch in channels.Where(x => x.Status == CategoryStatus.Active))
             b.Append(" <a href=\"/c/").Append(Html.Url(ch.Slug)).Append("\">").Append(Html.Text(ch.Name)).Append("</a>");
-        b.Append($" <a href=\"/topics\">专题</a> <a href=\"/ranks\">排行榜</a> <a href=\"/posts\">博客</a> <a href=\"/go-home\">回家的路</a> <a href=\"/download\">{Brand.Short}APP</a></nav></header>\n");
+        b.Append($" <a href=\"/topics\">专题</a> <a href=\"/ranks\">排行榜</a> <a href=\"/posts\">博客</a> <a href=\"/go-home\">回家的路</a> <a href=\"/app/home\">{Brand.Short}APP</a></nav></header>\n");
         b.Append("<noscript><p><strong>本站含有成人内容，仅限年满 18 周岁的成年人访问。</strong></p></noscript>\n");
         var list = crumbs.ToList();
         if (list.Count > 1)
@@ -181,7 +189,7 @@ public static class SeoEndpoints
             b.Append("</nav>\n");
         }
         b.Append("<main>").Append(main).Append("</main>\n");
-        b.Append("<footer><nav aria-label=\"页脚\"><a href=\"/go-home\">回家的路</a> <a href=\"/download\">下载 App</a> <a href=\"/c/all\">最近上新</a> <a href=\"/ranks\">热门推荐</a> <a href=\"/topics\">专题合集</a>");
+        b.Append("<footer><nav aria-label=\"页脚\"><a href=\"/go-home\">回家的路</a> <a href=\"/app/home\">下载 App</a> <a href=\"/c/all\">最近上新</a> <a href=\"/ranks\">热门推荐</a> <a href=\"/topics\">专题合集</a>");
         foreach (var (path, title) in LegalPages) b.Append(" <a href=\"").Append(path).Append("\">").Append(title).Append("</a>");
         b.Append($"</nav><p>© {SiteName} · 本站内容仅面向年满 18 周岁的成年人</p></footer>");
         return b.ToString();
@@ -506,13 +514,13 @@ public static class SeoEndpoints
     private static async Task<SeoPage> Download(Ctx c, CancellationToken ct)
     {
         var releases = await c.Db.AppReleases.AsNoTracking().Where(r => r.Published).OrderByDescending(r => r.PublishedAt).Take(20).ToListAsync(ct);
-        var crumbs = new List<(string, string?)> { ("首页", "/"), ("下载 App", "/download") };
+        var crumbs = new List<(string, string?)> { ("首页", "/"), ("下载 App", "/app/home") };
         var m = new StringBuilder($"<h1>下载{SiteName} App</h1><p>桌面版与安卓版 App，自动切换可用线路。iPhone 可将网页添加到主屏幕使用。</p><ul>");
         foreach (var r in releases.GroupBy(r => r.Platform).Select(g => g.First()))
             m.Append("<li>").Append(Html.Text(r.Platform)).Append(" · ").Append(Html.Text(r.Version)).Append("</li>");
         m.Append("</ul>");
         var body = await FrameAsync(c, crumbs, m.ToString(), ct);
-        return new SeoPage(200, $"下载 App - {SiteName}", $"下载{SiteName}桌面版与安卓版 App。", "/download", true, body);
+        return new SeoPage(200, $"下载 App - {SiteName}", $"下载{SiteName}桌面版与安卓版 App。", "/app/home", true, body);
     }
 
     private static async Task<SeoPage> Legal(Ctx c, string path, string title, CancellationToken ct)
@@ -577,7 +585,7 @@ public static class SeoEndpoints
             foreach (var t in await c.Db.Topics.AsNoTracking().Where(t => t.Published).Select(t => new { t.Id, t.UpdatedAt }).ToListAsync(ct)) urls.Add(($"/topics/{t.Id}", t.UpdatedAt));
             urls.Add(("/posts", null));
             urls.Add(("/go-home", null));
-            urls.Add(("/download", null));
+            urls.Add(("/app/home", null));
             foreach (var path in LegalPages.Keys) urls.Add((path, null));
         }
         else if (name == "posts.xml")

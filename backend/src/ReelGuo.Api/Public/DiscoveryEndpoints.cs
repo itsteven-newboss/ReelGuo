@@ -46,8 +46,13 @@ public static partial class DiscoveryEndpoints
     public const int MaxSamplesPerBatch = 20;
     private static readonly HashSet<string> Browsers = ["chrome", "safari", "firefox", "edge", "samsung", "other"];
 
-    /// <summary>Fallback genre chips when the catalog is too small to compute popular tags.</summary>
-    private static readonly string[] FallbackTags = ["都市", "逆袭", "古风", "重生", "豪门", "校园", "仙侠", "职场", "奇幻", "脑洞", "热血", "甜宠"];
+    /// <summary>How many tags the home page's 热门标签 row shows: one row of 20, as on the reference.</summary>
+    public const int HotTagCount = 20;
+
+    /// <summary>Common genres that pad the tag row while the catalog is too small to fill it with its own tags.</summary>
+    private static readonly string[] FallbackTags =
+        ["都市", "逆袭", "古风", "重生", "豪门", "校园", "仙侠", "职场", "奇幻", "脑洞", "热血", "甜宠",
+         "现代", "悬疑", "武侠", "穿越", "复仇", "虐恋", "战神", "萌宝", "神医", "喜剧", "家庭", "末世"];
 
     public static RouteGroupBuilder MapDiscovery(this RouteGroupBuilder v1)
     {
@@ -186,7 +191,7 @@ public static partial class DiscoveryEndpoints
         // Tags weighted by how popular their series are, padded with common genres.
         var tags = popular.SelectMany((s, i) => s.Tags.Select(t => (Tag: t, Weight: 30 - i)))
             .GroupBy(x => x.Tag).OrderByDescending(g => g.Sum(x => x.Weight)).Select(g => g.Key)
-            .Concat(FallbackTags).Distinct().Take(12).ToList();
+            .Concat(FallbackTags).Distinct().Take(HotTagCount).ToList();
 
         // "换一批": a different deterministic sample for each seed.
         var rng = new Random(seed ?? 0);
