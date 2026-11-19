@@ -41,7 +41,14 @@ public sealed record SeriesInput(
     /// <summary>Coins per paid episode (0 = the whole series is free).</summary>
     int EpisodePrice = 0,
     /// <summary>Leading episodes that are always free.</summary>
-    int FreeEpisodes = Pricing.DefaultFreeEpisodes);
+    int FreeEpisodes = Pricing.DefaultFreeEpisodes,
+    /// <summary>The cards' status badge; left out, it is kept as it is (新片 for a new series).</summary>
+    CardBadge? CardBadge = null);
+
+/// <summary>原创 and / or the status badge for several series; a field left out is not changed.</summary>
+public sealed record SetLabelsRequest(List<long> Ids, bool? IsOriginal, CardBadge? CardBadge);
+
+public sealed record SetLabelsResult(int Updated);
 
 public sealed record AdminEpisodeDto(
     long Id, int EpisodeNumber, string Title, EpisodeStatus Status, int Progress, string? Error,
@@ -49,7 +56,7 @@ public sealed record AdminEpisodeDto(
 
 public sealed record AdminSeriesDto(
     long Id, string CategorySlug, string Title, string Description, List<string> Tags, double Score,
-    bool IsFinished, bool IsOriginal, int TotalEpisodes, string? AuthorName, string? ExternalId, string? CoverUrl,
+    bool IsFinished, bool IsOriginal, CardBadge CardBadge, int TotalEpisodes, string? AuthorName, string? ExternalId, string? CoverUrl,
     SeriesStatus Status, DateTimeOffset? PublishedAt,
     string? RightsHolder, string? ContractRef, DateOnly? LicenceStart, DateOnly? LicenceEnd, List<string> Territories,
     bool? AiGenerated, bool? HasRealPerson, string? ConsentRef, int RecommendWeight, int EpisodePrice, int FreeEpisodes,
@@ -57,7 +64,7 @@ public sealed record AdminSeriesDto(
 
 public sealed record AdminSeriesListItem(
     long Id, string Title, string CategorySlug, string CategoryName, SeriesStatus Status, int ReadyEpisodes, int EpisodeRows,
-    int Processing, int Failed, string? CoverUrl, DateTimeOffset UpdatedAt);
+    int Processing, int Failed, string? CoverUrl, DateTimeOffset UpdatedAt, bool IsOriginal, CardBadge CardBadge);
 
 public sealed record AdminSeriesPage(List<AdminSeriesListItem> Items, int Page, int Size, int Total);
 
@@ -90,6 +97,7 @@ public static class AdminCatalogEndpoints
         series.MapPost("/", CreateSeries).WithSummary("Creates a draft series.");
         series.MapGet("/{id:long}", GetSeries).WithSummary("Series with episodes and outstanding publish problems.");
         series.MapPut("/{id:long}", UpdateSeries).WithSummary("Updates series metadata and rights data.");
+        series.MapPost("/labels", SetLabels).WithSummary("Sets 原创 and / or the cards' status badge on up to 100 series at once.");
         series.MapPost("/{id:long}/cover", UploadCover).WithSummary("Uploads the cover image (JPEG, PNG or WebP, up to 5 MB) as the raw request body.");
         series.MapPost("/{id:long}/publish", Publish).WithSummary("Publishes when every publish rule passes; otherwise 400 with the problems listed.");
         series.MapPost("/{id:long}/unpublish", Unpublish).WithSummary("Hides a published series.");
@@ -159,7 +167,7 @@ public static class AdminCatalogEndpoints
         var rows = await query.OrderByDescending(x => x.UpdatedAt).Skip((p - 1) * s).Take(s)
             .Select(x => new
             {
-                x.Id, x.Title, x.Category.Slug, CategoryName = x.Category.Name, x.Status, x.CoverKey, x.UpdatedAt,
+                x.Id, x.Title, x.Category.Slug, CategoryName = x.Category.Name, x.Status, x.CoverKey, x.UpdatedAt, x.IsOriginal, x.CardBadge,
                 Ready = x.Episodes.Count(e => e.Status == EpisodeStatus.Ready),
                 Rows = x.Episodes.Count,
                 Processing = x.Episodes.Count(e => e.Status == EpisodeStatus.Processing || e.Status == EpisodeStatus.Uploading),
@@ -168,7 +176,7 @@ public static class AdminCatalogEndpoints
             .ToListAsync(ct);
 
         var items = rows.Select(x => new AdminSeriesListItem(x.Id, x.Title, x.Slug, x.CategoryName, x.Status, x.Ready, x.Rows,
-            x.Processing, x.Failed, signer.PublicUrlOrNull(x.CoverKey), x.UpdatedAt)).ToList();
+            x.Processing, x.Failed, signer.PublicUrlOrNull(x.CoverKey), x.UpdatedAt, x.IsOriginal, x.CardBadge)).ToList();
         return TypedResults.Ok(new AdminSeriesPage(items, p, s, total));
     }
 
@@ -254,6 +262,7 @@ public static class AdminCatalogEndpoints
         series.Score = Math.Round(input.Score, 1);
         series.IsFinished = input.IsFinished;
         series.IsOriginal = input.IsOriginal;
+        if (input.CardBadge is { } badge) series.CardBadge = badge;
         series.TotalEpisodes = input.TotalEpisodes;
         series.ExternalId = externalId;
         series.RightsHolder = Clean(input.RightsHolder);
@@ -286,7 +295,7 @@ public static class AdminCatalogEndpoints
             ? []
             : PublishRules.Check(s, s.Category, ready, DateOnly.FromDateTime(time.GetUtcNow().UtcDateTime));
         return new AdminSeriesDto(
-            s.Id, s.Category.Slug, s.Title, s.Description, s.Tags, s.Score, s.IsFinished, s.IsOriginal, s.TotalEpisodes,
+            s.Id, s.Category.Slug, s.Title, s.Description, s.Tags, s.Score, s.IsFinished, s.IsOriginal, s.CardBadge, s.TotalEpisodes,
             s.Author?.Nickname, s.ExternalId, signer.PublicUrlOrNull(s.CoverKey), s.Status, s.PublishedAt,
             s.RightsHolder, s.ContractRef, s.LicenceStart, s.LicenceEnd, s.Territories, s.AiGenerated, s.HasRealPerson, s.ConsentRef,
             s.RecommendWeight, s.EpisodePrice, s.FreeEpisodes, s.Episodes.Select(e => ToDto(e, signer)).ToList(), problems, s.CreatedAt, s.UpdatedAt);
@@ -321,6 +330,25 @@ public static class AdminCatalogEndpoints
         db.AddAudit(time, AdminActor.From(http), "series.cover", "series", id.ToString());
         await db.SaveChangesAsync(ct);
         return TypedResults.Ok(new CoverResponse(signer.PublicUrl(key)));
+    }
+
+    private static async Task<Results<Ok<SetLabelsResult>, BadRequest<ApiErrorResponse>>> SetLabels(
+        SetLabelsRequest request, HttpContext http, ReelGuoDbContext db, TimeProvider time, CancellationToken ct)
+    {
+        var ids = (request.Ids ?? []).Distinct().ToList();
+        if (ids.Count is 0 or > AdminSeriesDeletion.MaxBatch)
+            return TypedResults.BadRequest(ApiErrorResponse.Of("invalid_ids", $"请选择 1-{AdminSeriesDeletion.MaxBatch} 部剧"));
+        if (request.IsOriginal is null && request.CardBadge is null)
+            return TypedResults.BadRequest(ApiErrorResponse.Of("nothing_to_set", "请选择要设置的标签"));
+
+        var now = time.GetUtcNow();
+        var updated = await db.Series.Where(s => ids.Contains(s.Id)).ExecuteUpdateAsync(u => u
+            .SetProperty(s => s.IsOriginal, s => request.IsOriginal ?? s.IsOriginal)
+            .SetProperty(s => s.CardBadge, s => request.CardBadge ?? s.CardBadge)
+            .SetProperty(s => s.UpdatedAt, now), ct);
+        db.AddAudit(now, AdminActor.From(http), "series.labels", "series", string.Join(",", ids), new { request.IsOriginal, request.CardBadge });
+        await db.SaveChangesAsync(ct);
+        return TypedResults.Ok(new SetLabelsResult(updated));
     }
 
     /// <summary>Identifies the image type from its first bytes rather than trusting the file name.</summary>

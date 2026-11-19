@@ -266,6 +266,8 @@ Tables are snake_case. Enums are stored as text. ✓ marks tables that exist.
 | ✓ 5 | `POST /api/payments/{provider}/webhook`; sandbox checkout page `GET\|POST /api/payments/sandbox/checkout/{orderNo}` (development) |
 | ✓ 5 | Admin: `products`, `orders` (list, `refund`), `members/{id}/wallet` (+ `adjust`), `analytics/revenue?days=`; series `episode_price` / `free_episodes`; `system/status` adds `payments` |
 | ✓ 6 | `GET /api/v1/app/bootstrap?platform=&version=` (mirrors + update status), `GET /api/v1/app/releases` (download page), `GET /api/v1/app/landing-images` (the download page's uploaded pictures, slot → URL), `GET /api/v1/app/updates/{target}/{arch}/{current}` (Tauri updater feed: 200 or 204). Not age-gated (the shell calls them before the web app loads); country-blocked like all of `/api/v1` |
+| ✓ | Legal pages: `GET /api/legal/{slug}` (full text as sanitised HTML + `under_review`; outside `/api/v1`, so never region-blocked). Admin: `legal` (list with text; `PUT /legal/{slug}` turns the 待法务审核 notice on or off, audited as `legal.review`; on by default) |
+| ✓ | Admin: `series/labels` (bulk 原创 on / off and the cards' status badge for up to 100 series; series also carry `card_badge`: `new` (default for new series) / `hot` / `auto` / `none`, and new series default to `is_original = true`) |
 | ✓ 6 | Admin: `app-releases` (list, create, edit / publish / withdraw, delete); `landing-images` (下载页图片: list, upload a slot's JPEG/PNG/WebP up to 10 MB as the raw body, `DELETE` = 恢复默认; replaced files are deleted from storage; audited as `landing_image.set` / `.reset`) |
 | ✓ Portal | `GET /api/v1/site` (tagline, active announcements, mirrors, permanent domain, Telegram, email), `GET /api/v1/topics`, `GET /api/v1/topics/{id}`, `GET\|PUT /api/v1/series/{id}/rating`; `/feed?sort=latest\|updated\|hot\|picks\|random`; channel `sort=latest\|hot\|picks\|original\|random\|score`; cards add `last_episode_at` and the channel; series detail adds `rating`; rank items add `description` |
 | ✓ Portal | Admin: `topics` and `announcements` (CRUD, audited as `topic.*` / `announcement.*`) |
@@ -740,6 +742,12 @@ private Tencent COS bucket, and plays the uploaded MP4 itself (`ReelGuo.Data/Med
   - The browser then creates the draft series (filling only empty fields, plus optional rights defaults) and its
     cover, and uploads the episodes two at a time with retries.
   - In Chrome and Edge it re-lists the remembered folder every 3 minutes to send newly downloaded files.
+- **Updates never cut off this work** (2026-11-18). While 优化视频 or an upload runs, the console reports it every
+  30 s (`POST /api/admin/activity`, kept in memory for 90 s); `update.ps1` reads `/health/busy` on the server (direct
+  loopback requests only) and waits before backing up and before switching releases (`-Force` skips). 优化视频
+  remembers its two folders (IndexedDB) and whether it finished: after a reload, a closed tab or a sign-out, 文件夹上传
+  offers 继续优化, which reuses them and skips finished episodes. The API's data-protection application name is fixed
+  (`ReelGuo`), so admin sign-ins survive the switch to a release in another folder.
 - **Settings.** `Video:Provider`, `Video:Cos:{SecretId, SecretKey, Bucket, Region, Folder, CdnHost,
   PlaybackUrlMinutes, UploadUrlMinutes}`. With `Cos` and any of the first four missing, or a bucket name without its
   APPID, the API and the worker refuse to start and say which. `Video:Cos:Endpoint` exists only for tests (a local

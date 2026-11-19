@@ -15,6 +15,8 @@
       4. Builds the new release into its own folder while the current one keeps running.
       5. Switches to it: stops the services, points C:\reelguo-staging\current at the new release, starts them
          (about a minute of downtime). Database migrations run when the API starts.
+         While an admin is optimizing or uploading videos in the admin console, it waits for them to finish first
+         (also before step 3), so their work is never cut off. -Force skips the wait.
       6. Waits until the site is ready and checks it; keeps the last 5 releases.
 
     If the new version does not become ready, nothing is rolled back automatically (the database may already be
@@ -32,12 +34,16 @@
 
 .PARAMETER AllowDirty
     Continue although this folder has uncommitted changes.
+
+.PARAMETER Force
+    Update at once, even while an admin is optimizing or uploading videos (their work stops and must be continued).
 #>
 param(
     [string]$Ref,
     [switch]$SkipPull,
     [switch]$SkipBackup,
-    [switch]$AllowDirty
+    [switch]$AllowDirty,
+    [switch]$Force
 )
 
 . (Join-Path $PSScriptRoot 'common.ps1')
@@ -79,6 +85,7 @@ if ($before -eq $after) { Write-Ok "code: $after (unchanged; rebuilding anyway)"
 
 # ---------------------------------------------------------------------------------------------------------------
 $previous = Get-CurrentRelease
+if (-not $Force) { Wait-AdminIdle }
 $backupFile = ''
 if (-not $SkipBackup) {
     Write-Step 'Backing up the database'
@@ -89,6 +96,7 @@ if (-not $SkipBackup) {
 $release = New-Release
 $releaseId = Split-Path $release -Leaf
 Install-ReelGuoServices      # picks up changes to the service definitions, if any
+if (-not $Force) { Wait-AdminIdle }   # again: work may have started while the release was building
 Switch-Release $releaseId
 
 if (-not (Wait-Healthy 420)) {

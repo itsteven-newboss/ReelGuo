@@ -1,4 +1,4 @@
-// Brand images from one source picture: the 黄约短剧 mark (a transparent PNG, any size or shape). To change the icon,
+// Brand images from one source picture: the 黄月短剧 mark (a transparent PNG, any size or shape). To change the icon,
 // replace the source (or pass --source), run `pnpm brand:icons` and commit what it writes:
 //
 //   web/packages/ui/src/brand/mark-{64,128,256}.webp + mark.ts   the mark on the sites' pages (BrandMark, srcset)

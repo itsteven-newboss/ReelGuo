@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using ReelGuo.Api.Admin;
+using ReelGuo.Api.Legal;
 using ReelGuo.Api.Billing;
 using ReelGuo.Api.Geo;
 using ReelGuo.Api.Infrastructure;
@@ -20,6 +21,7 @@ using ReelGuo.Data.Media;
 using ReelGuo.Data.Storage;
 using ReelGuo.Data.Telemetry;
 using ReelGuo.Api.Seo;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Hosting.WindowsServices;
 using Scalar.AspNetCore;
 
@@ -73,6 +75,7 @@ builder.Services.AddSingleton<PageTemplate>();
 builder.Services.AddScoped<SeoEndpoints.Ctx>();
 builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.Section));
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<AdminActivity>();
 builder.Services.AddSingleton<ICountryResolver, CountryResolver>();
 builder.Services.AddSingleton<IBlockedCountryStore, BlockedCountryStore>();
 builder.Services.AddSingleton<IRevokedSeriesStore, RevokedSeriesStore>();
@@ -91,6 +94,9 @@ builder.Services.AddSingleton(sp => new PostRenderer(
 builder.Services.Configure<EdgeOptions>(builder.Configuration.GetSection(EdgeOptions.Section));
 
 builder.Services.AddReelGuoNetwork(builder.Configuration);
+// One fixed application name: each release runs from its own folder, and the default (the content root) would
+// change with every update and sign all admins out mid-work.
+builder.Services.AddDataProtection().SetApplicationName("ReelGuo");
 builder.Services.AddAdminAuth();
 builder.Services.AddUserAuth(builder.Configuration);
 builder.Services.Configure<ModerationOptions>(builder.Configuration.GetSection(ModerationOptions.Section));
@@ -142,8 +148,10 @@ if (app.Environment.IsDevelopment())
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = c => c.Tags.Contains("ready") });
 app.MapWorkerHealth();
+app.MapBusyCheck();
 
 app.MapPublicApi();
+app.MapLegal();
 app.MapAdminApi();
 app.MapMediaEdge();
 app.MapEdgeApi();

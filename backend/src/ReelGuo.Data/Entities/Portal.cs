@@ -58,3 +58,16 @@ public sealed class LandingImage
     public DateTimeOffset UpdatedAt { get; set; }
     public required string UpdatedBy { get; set; }
 }
+
+/// <summary>
+/// Whether a legal page (用户协议, 隐私政策, …) still shows that it awaits legal review. A page without a row shows the
+/// notice; admins turn it off in 法律条款 once the text is approved.
+/// </summary>
+public sealed class LegalReview
+{
+    /// <summary>terms, privacy, content-policy or recharge-terms.</summary>
+    public required string Slug { get; set; }
+    public bool UnderReview { get; set; } = true;
+    public DateTimeOffset UpdatedAt { get; set; }
+    public required string UpdatedBy { get; set; }
+}

@@ -1,3 +1,4 @@
+using ReelGuo.Api.Legal;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -70,6 +71,8 @@ public static class AdminEndpoints
         admin.MapAdminBilling();
         admin.MapAdminAppReleases();
         admin.MapAdminLandingImages();
+        admin.MapAdminActivity();
+        admin.MapAdminLegal();
         admin.MapAdminPortal();
         return admin;
     }

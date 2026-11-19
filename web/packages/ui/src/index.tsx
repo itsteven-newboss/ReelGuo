@@ -6,7 +6,7 @@ export { BRAND, BRAND_SHORT } from "./brand/name";
 export { markAspect };
 
 /**
- * The brand mark (黄约短剧). Give its displayed width or height in CSS px, or `fit`: the largest size that fits a square
+ * The brand mark (黄月短剧). Give its displayed width or height in CSS px, or `fit`: the largest size that fits a square
  * of that many px whatever the mark's shape. The browser picks the sharpest of the generated files for that size and
  * the screen's pixel density. To change the mark: `pnpm brand:icons`.
  */

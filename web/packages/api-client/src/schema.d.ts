@@ -4,6 +4,53 @@
  */
 
 export interface paths {
+    "/api/legal/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A legal page's text and whether it is still awaiting legal review (not region-blocked). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    slug: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LegalPageDto"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/edge/config": {
         parameters: {
             query?: never;
@@ -3504,6 +3551,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Heartbeat from the admin console while it optimizes or uploads videos (updates wait for it). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AdminActivityRequest"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/geo/country-codes": {
         parameters: {
             query?: never;
@@ -4249,6 +4352,64 @@ export interface paths {
             };
         };
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/series/labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sets 原创 and / or the cards' status badge on up to 100 series at once. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetLabelsRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SetLabelsResult"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -7623,6 +7784,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/legal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The legal pages with their text and review notice setting. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminLegalPageDto"][];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/legal/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Turns a page's 待法务审核 notice on or off. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    slug: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["LegalReviewInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminLegalPageDto"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/topics": {
         parameters: {
             query?: never;
@@ -8015,6 +8281,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AdminActivityRequest: {
+            kind: string;
+            detail: null | string;
+            active: boolean;
+        };
         AdminAnnouncementDto: {
             /** Format: int32 */
             id: number;
@@ -8122,6 +8393,16 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
             updated_by: string;
+        };
+        AdminLegalPageDto: {
+            slug: string;
+            path: string;
+            title: string;
+            html: string;
+            under_review: boolean;
+            /** Format: date-time */
+            updated_at: null | string;
+            updated_by: null | string;
         };
         AdminLoginRequest: {
             username: string;
@@ -8337,6 +8618,7 @@ export interface components {
             score: number;
             is_finished: boolean;
             is_original: boolean;
+            card_badge: components["schemas"]["CardBadge"];
             /** Format: int32 */
             total_episodes: number;
             author_name: null | string;
@@ -8386,6 +8668,8 @@ export interface components {
             cover_url: null | string;
             /** Format: date-time */
             updated_at: string;
+            is_original: boolean;
+            card_badge: components["schemas"]["CardBadge"];
         };
         AdminSeriesPage: {
             items: components["schemas"]["AdminSeriesListItem"][];
@@ -8610,6 +8894,11 @@ export interface components {
             updated_at: string;
             updated_by: string;
         };
+        /**
+         * @default auto
+         * @enum {unknown}
+         */
+        CardBadge: "auto" | "new" | "hot" | "none";
         CategoryDto: {
             slug: string;
             name: string;
@@ -8806,6 +9095,16 @@ export interface components {
             images: {
                 [key: string]: string;
             };
+        };
+        LegalPageDto: {
+            slug: string;
+            path: string;
+            title: string;
+            html: string;
+            under_review: boolean;
+        };
+        LegalReviewInput: {
+            under_review: boolean;
         };
         LibraryApplyRequest: {
             category_slug: string;
@@ -9429,6 +9728,7 @@ export interface components {
              * @default 3
              */
             free_episodes: number;
+            card_badge?: null | components["schemas"]["CardBadge"];
         };
         /** @enum {unknown} */
         SeriesStatus: "draft" | "published" | "hidden" | "removed";
@@ -9438,6 +9738,15 @@ export interface components {
         SetAgeVerifiedRequest: {
             verified: boolean;
             note: null | string;
+        };
+        SetLabelsRequest: {
+            ids: number[];
+            is_original: null | boolean;
+            card_badge: null | components["schemas"]["CardBadge"];
+        };
+        SetLabelsResult: {
+            /** Format: int32 */
+            updated: number;
         };
         SetMemberStatusRequest: {
             active: boolean;
@@ -9688,6 +9997,7 @@ export interface components {
             last_episode_at: null | string;
             category_slug?: null | string;
             category_name?: null | string;
+            card_badge?: components["schemas"]["CardBadge"];
         };
         VideoCardPage: {
             items: components["schemas"]["VideoCardDto"][];

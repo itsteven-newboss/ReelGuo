@@ -44,7 +44,8 @@ const zhCN = {
     privacy: "隐私政策",
     contentPolicy: "内容政策",
     rechargeTerms: "充值协议",
-    pending: "本页内容待法务审核后发布。",
+    pending: "本页内容为草稿，正在等待法务审核，正式版本以审核通过后发布的为准。",
+    loadFailed: "暂时无法加载本页内容，请稍后刷新重试。",
     backHome: "返回首页",
   },
   home: {

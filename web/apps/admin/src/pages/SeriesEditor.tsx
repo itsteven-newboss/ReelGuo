@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ImagePlus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, CSRF_HEADER } from "../session";
-import { Button, Card, ErrorText, Field, PageHeader, StatusBadge, inputClass } from "../ui";
+import { Button, Card, CARD_BADGES, CardBadgePills, ErrorText, Field, PageHeader, StatusBadge, inputClass, type CardBadge } from "../ui";
 import { DeleteSeriesDialog } from "./DeleteSeriesDialog";
 import { EpisodesPanel } from "./Episodes";
 
@@ -21,6 +21,7 @@ type FormState = {
   total_episodes: string;
   is_finished: boolean;
   is_original: boolean;
+  card_badge: CardBadge;
   author_name: string;
   external_id: string;
   rights_holder: string;
@@ -38,7 +39,8 @@ type FormState = {
 
 const EMPTY: FormState = {
   category_slug: "", title: "", description: "", tags: "", score: "0", total_episodes: "0",
-  is_finished: false, is_original: true, author_name: "", external_id: "",
+  // New series start as 原创 + 新片 (the server's default too).
+  is_finished: false, is_original: true, card_badge: "new", author_name: "", external_id: "",
   // 版权与合规 is optional; a new series starts as the server's defaults (PublishRules.ApplyNewSeriesDefaults).
   rights_holder: "huangyueai", contract_ref: "", licence_start: "", licence_end: "", territories: "*",
   ai_generated: "no", has_real_person: "no", consent_ref: "", recommend_weight: "0", episode_price: "0", free_episodes: "3",
@@ -52,7 +54,7 @@ function toForm(s: SeriesDto): FormState {
   return {
     category_slug: s.category_slug, title: s.title, description: s.description, tags: s.tags.join("，"),
     score: String(s.score), total_episodes: String(s.total_episodes), is_finished: s.is_finished, is_original: s.is_original,
-    author_name: s.author_name ?? "", external_id: s.external_id ?? "",
+    card_badge: s.card_badge, author_name: s.author_name ?? "", external_id: s.external_id ?? "",
     rights_holder: s.rights_holder ?? "", contract_ref: s.contract_ref ?? "",
     licence_start: s.licence_start ?? "", licence_end: s.licence_end ?? "", territories: s.territories.join(", "),
     ai_generated: tri(s.ai_generated), has_real_person: tri(s.has_real_person), consent_ref: s.consent_ref ?? "",
@@ -64,7 +66,7 @@ function toInput(f: FormState): SeriesInput {
   return {
     category_slug: f.category_slug, title: f.title, description: f.description, tags: splitList(f.tags),
     score: Number(f.score) || 0, total_episodes: Number(f.total_episodes) || 0, is_finished: f.is_finished, is_original: f.is_original,
-    author_name: f.author_name || null, external_id: f.external_id || null,
+    card_badge: f.card_badge, author_name: f.author_name || null, external_id: f.external_id || null,
     rights_holder: f.rights_holder || null, contract_ref: f.contract_ref || null,
     licence_start: f.licence_start || null, licence_end: f.licence_end || null,
     territories: splitList(f.territories.toUpperCase()),
@@ -211,6 +213,15 @@ export function SeriesEditor({ id, onBack, onCreated }: { id: number | "new"; on
               <label className="flex items-center gap-2"><input type="checkbox" checked={form.is_finished} onChange={(e) => set("is_finished", e.target.checked)} />已完结</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={form.is_original} onChange={(e) => set("is_original", e.target.checked)} />原创</label>
             </div>
+            <Field label="卡片角标" hint={`${CARD_BADGES.find((b) => b.value === form.card_badge)?.hint ?? ""}。「原创」由上面的勾选决定，也会让本剧出现在原创频道。`}>
+              <div className="flex items-center gap-3">
+                <select value={form.card_badge} onChange={(e) => set("card_badge", e.target.value as CardBadge)} className={`${inputClass} w-[160px]`}>
+                  {CARD_BADGES.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
+                </select>
+                <span className="text-[12px] text-dim">预览</span>
+                <CardBadgePills original={form.is_original} badge={form.card_badge} />
+              </div>
+            </Field>
             <Field label="编辑推荐权重（0-100）" hint="大于 0 即进入推荐榜，数值越大越靠前">
               <input type="number" min={0} max={100} value={form.recommend_weight} onChange={(e) => set("recommend_weight", e.target.value)} className={inputClass} />
             </Field>

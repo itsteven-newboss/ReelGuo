@@ -67,9 +67,9 @@ async fn desktop<R: Runtime>(app: AppHandle<R>, origin: String, required: bool) 
 
     let notes = update.body.clone().unwrap_or_default();
     let message = if required {
-        format!("黄约短剧 {} 已发布，需要更新后才能继续使用。\n\n{notes}", update.version)
+        format!("黄月短剧 {} 已发布，需要更新后才能继续使用。\n\n{notes}", update.version)
     } else {
-        format!("黄约短剧 {} 已发布。\n\n{notes}", update.version)
+        format!("黄月短剧 {} 已发布。\n\n{notes}", update.version)
     };
     let buttons = if required {
         MessageDialogButtons::OkCustom("立即更新".into())
@@ -97,7 +97,7 @@ async fn android<R: Runtime>(app: AppHandle<R>, _origin: String, bootstrap: Boot
     }
     let Some(latest) = bootstrap.latest else { return };
     let required = bootstrap.update_required;
-    let mut message = format!("黄约短剧 {} 已发布。", latest.version);
+    let mut message = format!("黄月短剧 {} 已发布。", latest.version);
     if required {
         message.push_str("需要更新后才能继续使用。");
     }

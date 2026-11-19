@@ -26,7 +26,7 @@ function channelFaq(name: string) {
 }
 
 /* ---------------------------------------------------------------------------------------------
- * Channel: /c/:slug (/c/all = every channel, ?sort=original = 黄约原创): "【名称】 介绍", pill tabs, 7 × 6 grid,
+ * Channel: /c/:slug (/c/all = every channel, ?sort=original = 黄月原创): "【名称】 介绍", pill tabs, 7 × 6 grid,
  * numbered pages and an FAQ, as on the reference.
  * ------------------------------------------------------------------------------------------- */
 

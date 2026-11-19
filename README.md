@@ -2,7 +2,7 @@
 
 Vertical short-drama platform for adults: a C# (.NET 10) API and media worker, a React web app installable as a PWA, a React admin console, and a Cloudflare Worker for the media CDN.
 
-Visitors see it as **黄约短剧** (huangyueai.com). The name is set in two places, `web/packages/ui/src/brand/name.ts` and `backend/src/ReelGuo.Api/Brand.cs`. "ReelGuo" is the code name. It stays wherever software reads it: package and service names, headers, the app's user agent, and `app_name` in `/api/v1/config`, which the desktop and Android apps check.
+Visitors see it as **黄月短剧** (huangyueai.com). The name is set in two places, `web/packages/ui/src/brand/name.ts` and `backend/src/ReelGuo.Api/Brand.cs`. "ReelGuo" is the code name. It stays wherever software reads it: package and service names, headers, the app's user agent, and `app_name` in `/api/v1/config`, which the desktop and Android apps check.
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): decisions, system design, flows, country blocking, compliance, roadmap
 - [docs/UI-REFERENCE.md](docs/UI-REFERENCE.md): screen-by-screen UI spec and build status

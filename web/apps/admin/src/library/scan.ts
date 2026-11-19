@@ -226,13 +226,12 @@ function store(mode: IDBTransactionMode): Promise<IDBObjectStore> {
   });
 }
 
-/** The folder handle picked last time, if the browser can keep one. Never throws. */
-export async function rememberedFolder(): Promise<FileSystemDirectoryHandle | null> {
+async function recall<T>(key: string): Promise<T | null> {
   try {
     const s = await store("readonly");
     return await new Promise((resolve) => {
-      const req = s.get("last");
-      req.onsuccess = () => resolve((req.result as FileSystemDirectoryHandle | undefined) ?? null);
+      const req = s.get(key);
+      req.onsuccess = () => resolve((req.result as T | undefined) ?? null);
       req.onerror = () => resolve(null);
     });
   } catch {
@@ -240,26 +239,41 @@ export async function rememberedFolder(): Promise<FileSystemDirectoryHandle | nu
   }
 }
 
-export async function rememberFolder(handle: FileSystemDirectoryHandle) {
+async function keep(key: string, value: unknown) {
   try {
-    (await store("readwrite")).put(handle, "last");
+    (await store("readwrite")).put(value, key);
   } catch {
     /* a private window or blocked storage: the folder is simply picked again next time */
   }
 }
 
+/** The folder handle picked last time, if the browser can keep one. Never throws. */
+export const rememberedFolder = () => recall<FileSystemDirectoryHandle>("last");
+export const rememberFolder = (handle: FileSystemDirectoryHandle) => keep("last", handle);
+
+/**
+ * 优化视频's folders, kept so that after a reload, a closed tab or a sign-out the admin continues with one click
+ * instead of picking the folders again (and maybe a new, empty output folder, which would redo every episode).
+ */
+export type OptimizeMemory = { source: FileSystemDirectoryHandle; target: FileSystemDirectoryHandle; unfinished: boolean };
+export const rememberedOptimize = () => recall<OptimizeMemory>("optimize");
+export const rememberOptimize = (memory: OptimizeMemory) => keep("optimize", memory);
+
+type AccessMode = "read" | "readwrite";
 type PermissionHandle = FileSystemDirectoryHandle & {
-  queryPermission?: (d: { mode: "read" }) => Promise<PermissionState>;
-  requestPermission?: (d: { mode: "read" }) => Promise<PermissionState>;
+  queryPermission?: (d: { mode: AccessMode }) => Promise<PermissionState>;
+  requestPermission?: (d: { mode: AccessMode }) => Promise<PermissionState>;
 };
 
-/** Read access to a remembered folder: asks again where the browser wants a click (usually once per visit). */
-export async function canRead(handle: FileSystemDirectoryHandle, ask: boolean) {
+/** Access to a remembered folder: asks again where the browser wants a click (usually once per visit). */
+export async function canAccess(handle: FileSystemDirectoryHandle, ask: boolean, mode: AccessMode = "read") {
   const h = handle as PermissionHandle;
   if (!h.queryPermission) return true;
-  if ((await h.queryPermission({ mode: "read" })) === "granted") return true;
-  return ask && h.requestPermission ? (await h.requestPermission({ mode: "read" })) === "granted" : false;
+  if ((await h.queryPermission({ mode })) === "granted") return true;
+  return ask && h.requestPermission ? (await h.requestPermission({ mode })) === "granted" : false;
 }
+
+export const canRead = (handle: FileSystemDirectoryHandle, ask: boolean) => canAccess(handle, ask, "read");
 
 export const canPickFolders = () => typeof (window as unknown as { showDirectoryPicker?: unknown }).showDirectoryPicker === "function";
 

@@ -7,8 +7,8 @@ namespace ReelGuo.Api;
 /// </summary>
 public static class Brand
 {
-    public const string Name = "黄约短剧";
+    public const string Name = "黄月短剧";
 
-    /// <summary>Short form inside compound labels: 黄约原创, 黄约APP.</summary>
-    public const string Short = "黄约";
+    /// <summary>Short form inside compound labels: 黄月原创, 黄月APP.</summary>
+    public const string Short = "黄月";
 }

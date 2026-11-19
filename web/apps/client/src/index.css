@@ -16,7 +16,7 @@ body { -webkit-tap-highlight-color: transparent; font-size: 14px; }
 
 /* Brand lockup (chrome.tsx Wordmark), laid out like the reference's logo. Everything is in em, so the font size scales
  * the whole lockup: 10 px gives its 160 x 58.7. The name uses a 4-character subset of Noto Sans SC Black (SIL OFL,
- * src/brand/OFL.txt), from https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@900&text=黄约短剧 ; get a new
+ * src/brand/OFL.txt), from https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@900&text=黄月短剧 ; get a new
  * subset the same way if the name changes. */
 @font-face {
   font-family: "RG Wordmark";
@@ -65,6 +65,7 @@ body { -webkit-tap-highlight-color: transparent; font-size: 14px; }
 .rg-ssr small { color: #999; }
 .rg-ssr header nav a, .rg-ssr footer a { margin-right: 10px; }
 .rg-ssr .article img { max-width: 100%; height: auto; }
+.rg-ssr .legal-review { padding: 10px 12px; border: 1px solid rgba(255, 211, 33, .35); background: rgba(255, 211, 33, .07); color: #ffd321; border-radius: 8px; }
 html.rg-js .rg-ssr { display: none; }
 html.rg-js.gate-shown .rg-ssr { display: block; }
 html.gate-shown { overflow: hidden; }
@@ -111,4 +112,7 @@ input, textarea { user-select: text; }
 .article-body li { margin: 4px 0; }
 .article-body blockquote { margin: 10px 0; padding: 8px 12px; border-left: 3px solid var(--p-primary); background: var(--p-hover); border-radius: 6px; }
 .article-body hr { border: 0; border-top: 1px solid var(--p-s4); margin: 14px 0; }
+/* Legal pages: the same body, a little larger for long reading. */
+.legal-body { font-size: 14px; }
+.legal-body h2 { font-size: 16px; margin-top: 22px; }
 .article-body code { font-family: ui-monospace, monospace; font-size: 12px; background: var(--p-s3); padding: 1px 4px; border-radius: 4px; }

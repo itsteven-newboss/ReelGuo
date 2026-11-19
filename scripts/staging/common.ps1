@@ -723,6 +723,34 @@ function Invoke-Http([string]$Url, [int]$TimeoutSec = 10) {
     }
 }
 
+# Waits while an admin is optimizing or uploading videos in the admin console: they report it every 30 s, and a
+# restart now would cut their work off. Asks the API directly on this server (/health/busy answers nothing that came
+# through Caddy or Cloudflare). An older release without that check, or a stopped API, means nothing to wait for.
+function Wait-AdminIdle {
+    $url = "$(Get-ApiBase)/health/busy"
+    $waiting = $false
+    while ($true) {
+        $r = Invoke-Http $url 5
+        if ($r.Status -ne 200) { return }
+        try { $state = $r.Body | ConvertFrom-Json } catch { return }
+        if (-not $state.busy) {
+            if ($waiting) { Write-Ok 'the admin work has finished; continuing' }
+            return
+        }
+        if (-not $waiting) {
+            Write-Step 'Waiting: an admin is optimizing or uploading videos'
+            Write-Note 'The update continues by itself when they finish (checked every minute).'
+            Write-Note 'Ctrl+C cancels; nothing has been changed yet. To update anyway, run again with -Force.'
+            $waiting = $true
+        }
+        foreach ($i in @($state.items)) {
+            $what = if ($i.kind -eq 'optimize') { 'optimizing videos' } else { 'uploading videos' }
+            Write-Note ("{0:HH:mm} {1}: {2} {3} (last report {4} s ago)" -f (Get-Date), $i.admin, $what, $i.detail, $i.seconds_ago)
+        }
+        Start-Sleep -Seconds 60
+    }
+}
+
 function Wait-Healthy([int]$TimeoutSec = 300) {
     Write-Step "Waiting for the site to become ready (up to $([int]($TimeoutSec / 60)) minutes)"
     $url = "$(Get-LocalBase)/health/ready"

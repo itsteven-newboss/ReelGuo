@@ -112,3 +112,26 @@ export function formatTime(iso: string | null | undefined) {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString("zh-CN", { hour12: false });
 }
+
+/** The cards' status badge (set per series). */
+export type CardBadge = "new" | "hot" | "auto" | "none";
+export const CARD_BADGES: { value: CardBadge; label: string; hint: string }[] = [
+  { value: "new", label: "新片", hint: "一直显示「新片」（新剧的默认值）" },
+  { value: "hot", label: "热播", hint: "一直显示「热播」" },
+  { value: "auto", label: "自动", hint: "在热播榜前 10 时显示「热播」，否则上线 7 天内显示「新片」" },
+  { value: "none", label: "不显示", hint: "只显示「原创」（若已勾选）" },
+];
+
+/** The badges as viewers see them on the cards: 原创 and the status badge, joined into one pill. */
+export function CardBadgePills({ original, badge }: { original: boolean; badge: CardBadge }) {
+  const status = badge === "new" ? { text: "新片", bg: "#89eed3" } : badge === "hot" ? { text: "热播", bg: "#ff591c" } : null;
+  if (!original && !status) return <span className="text-[11.5px] text-dim">{badge === "auto" ? "自动" : "无"}</span>;
+  const pill = "h-[20px] px-[7px] text-[11px] font-medium text-[#111] inline-flex items-center leading-none";
+  return (
+    <span className="inline-flex whitespace-nowrap" title={badge === "auto" ? "状态角标：自动（热播 / 新片）" : undefined}>
+      {original && <span className={`${pill} bg-[#ffd21c] ${status ? "rounded-l-full" : "rounded-full"}`}>原创</span>}
+      {status && <span className={`${pill} ${original ? "rounded-r-full" : "rounded-full"}`} style={{ background: status.bg }}>{status.text}</span>}
+      {badge === "auto" && <span className="ml-1 text-[11px] text-dim self-center">自动</span>}
+    </span>
+  );
+}

@@ -5,6 +5,46 @@
     "version": "v1"
   },
   "paths": {
+    "/api/legal/{slug}": {
+      "get": {
+        "tags": [
+          "Legal"
+        ],
+        "summary": "A legal page's text and whether it is still awaiting legal review (not region-blocked).",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegalPageDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/edge/config": {
       "get": {
         "tags": [
@@ -3233,6 +3273,49 @@
         }
       }
     },
+    "/api/admin/activity": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Heartbeat from the admin console while it optimizes or uploads videos (updates wait for it).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminActivityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/geo/country-codes": {
       "get": {
         "tags": [
@@ -3961,6 +4044,56 @@
           },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/series/labels": {
+      "post": {
+        "tags": [
+          "Admin: catalog"
+        ],
+        "summary": "Sets 原创 and / or the cards' status badge on up to 100 series at once.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetLabelsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetLabelsResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
@@ -7170,6 +7303,99 @@
         }
       }
     },
+    "/api/admin/legal": {
+      "get": {
+        "tags": [
+          "Admin: legal"
+        ],
+        "summary": "The legal pages with their text and review notice setting.",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdminLegalPageDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/legal/{slug}": {
+      "put": {
+        "tags": [
+          "Admin: legal"
+        ],
+        "summary": "Turns a page's 待法务审核 notice on or off.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LegalReviewInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminLegalPageDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/topics": {
       "get": {
         "tags": [
@@ -7561,6 +7787,28 @@
   },
   "components": {
     "schemas": {
+      "AdminActivityRequest": {
+        "required": [
+          "kind",
+          "detail",
+          "active"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
       "AdminAnnouncementDto": {
         "required": [
           "id",
@@ -7932,6 +8180,48 @@
           },
           "updated_by": {
             "type": "string"
+          }
+        }
+      },
+      "AdminLegalPageDto": {
+        "required": [
+          "slug",
+          "path",
+          "title",
+          "html",
+          "under_review",
+          "updated_at",
+          "updated_by"
+        ],
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "html": {
+            "type": "string"
+          },
+          "under_review": {
+            "type": "boolean"
+          },
+          "updated_at": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -8656,6 +8946,7 @@
           "score",
           "is_finished",
           "is_original",
+          "card_badge",
           "total_episodes",
           "author_name",
           "external_id",
@@ -8708,6 +8999,9 @@
           },
           "is_original": {
             "type": "boolean"
+          },
+          "card_badge": {
+            "$ref": "#/components/schemas/CardBadge"
           },
           "total_episodes": {
             "type": "integer",
@@ -8837,7 +9131,9 @@
           "processing",
           "failed",
           "cover_url",
-          "updated_at"
+          "updated_at",
+          "is_original",
+          "card_badge"
         ],
         "type": "object",
         "properties": {
@@ -8882,6 +9178,12 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "is_original": {
+            "type": "boolean"
+          },
+          "card_badge": {
+            "$ref": "#/components/schemas/CardBadge"
           }
         }
       },
@@ -9694,6 +9996,15 @@
           }
         }
       },
+      "CardBadge": {
+        "enum": [
+          "auto",
+          "new",
+          "hot",
+          "none"
+        ],
+        "default": "auto"
+      },
       "CategoryDto": {
         "required": [
           "slug",
@@ -10395,6 +10706,44 @@
             "additionalProperties": {
               "type": "string"
             }
+          }
+        }
+      },
+      "LegalPageDto": {
+        "required": [
+          "slug",
+          "path",
+          "title",
+          "html",
+          "under_review"
+        ],
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "html": {
+            "type": "string"
+          },
+          "under_review": {
+            "type": "boolean"
+          }
+        }
+      },
+      "LegalReviewInput": {
+        "required": [
+          "under_review"
+        ],
+        "type": "object",
+        "properties": {
+          "under_review": {
+            "type": "boolean"
           }
         }
       },
@@ -12734,6 +13083,16 @@
             "type": "integer",
             "format": "int32",
             "default": 3
+          },
+          "card_badge": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CardBadge"
+              }
+            ]
           }
         }
       },
@@ -12771,6 +13130,51 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "SetLabelsRequest": {
+        "required": [
+          "ids",
+          "is_original",
+          "card_badge"
+        ],
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "is_original": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "card_badge": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CardBadge"
+              }
+            ]
+          }
+        }
+      },
+      "SetLabelsResult": {
+        "required": [
+          "updated"
+        ],
+        "type": "object",
+        "properties": {
+          "updated": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -13709,6 +14113,9 @@
               "null",
               "string"
             ]
+          },
+          "card_badge": {
+            "$ref": "#/components/schemas/CardBadge"
           }
         }
       },
@@ -13946,6 +14353,9 @@
   },
   "tags": [
     {
+      "name": "Legal"
+    },
+    {
       "name": "Edge"
     },
     {
@@ -14034,6 +14444,9 @@
     },
     {
       "name": "Admin: landing images"
+    },
+    {
+      "name": "Admin: legal"
     },
     {
       "name": "Admin: portal"

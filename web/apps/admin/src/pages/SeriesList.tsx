@@ -1,13 +1,20 @@
 import { unwrap } from "@reelguo/api-client";
 import { Spinner } from "@reelguo/ui";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../session";
-import { Button, Card, PageHeader, StatusBadge, formatTime, inputClass } from "../ui";
+import { Button, Card, CARD_BADGES, CardBadgePills, ErrorText, PageHeader, StatusBadge, formatTime, inputClass, type CardBadge } from "../ui";
 import { DeleteSeriesDialog } from "./DeleteSeriesDialog";
 
 const STATUSES = [["", "全部状态"], ["draft", "草稿"], ["published", "已发布"], ["hidden", "已下架"]] as const;
+
+/** 设置角标 for the selected series: 原创 on / off, or the status badge. */
+const LABEL_ACTIONS: { key: string; label: string; body: { is_original?: boolean; card_badge?: CardBadge } }[] = [
+  { key: "orig-on", label: "设为原创", body: { is_original: true } },
+  { key: "orig-off", label: "取消原创", body: { is_original: false } },
+  ...CARD_BADGES.map((b) => ({ key: `badge-${b.value}`, label: `状态角标：${b.label}`, body: { card_badge: b.value } })),
+];
 
 export function SeriesListPage({ onOpen }: { onOpen: (id: number | "new") => void }) {
   const [q, setQ] = useState("");
@@ -16,6 +23,19 @@ export function SeriesListPage({ onOpen }: { onOpen: (id: number | "new") => voi
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [deleting, setDeleting] = useState<number[] | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const setLabels = useMutation({
+    mutationFn: async (action: (typeof LABEL_ACTIONS)[number]) => {
+      const r = unwrap(await api.POST("/api/admin/series/labels", {
+        body: { ids: [...selected], is_original: action.body.is_original ?? null, card_badge: action.body.card_badge ?? null },
+      }));
+      return { ...r, label: action.label };
+    },
+    onSuccess: (r) => {
+      setNotice(`已为 ${r.updated} 部剧「${r.label}」。`);
+      void qc.invalidateQueries({ queryKey: ["admin", "series"] });
+    },
+  });
   // Selection is per page: changing the filter or page starts over.
   useEffect(() => setSelected(new Set()), [q, status, page]);
 
@@ -55,6 +75,11 @@ export function SeriesListPage({ onOpen }: { onOpen: (id: number | "new") => voi
           <div className="ml-auto flex items-center gap-2">
             <span className="text-[12.5px] text-mut">已选 {selected.size} 部</span>
             <Button variant="ghost" onClick={() => setSelected(new Set())}>取消选择</Button>
+            <select value="" disabled={setLabels.isPending} className={`${inputClass} w-[150px]`} aria-label="设置角标"
+              onChange={(e) => { const a = LABEL_ACTIONS.find((x) => x.key === e.target.value); if (a) { setNotice(null); setLabels.mutate(a); } }}>
+              <option value="">{setLabels.isPending ? "设置中…" : "设置角标…"}</option>
+              {LABEL_ACTIONS.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
+            </select>
             <Button variant="danger" onClick={() => { setNotice(null); setDeleting([...selected]); }}>
               <Trash2 size={14} className="inline -mt-0.5 mr-1" />删除
             </Button>
@@ -62,6 +87,7 @@ export function SeriesListPage({ onOpen }: { onOpen: (id: number | "new") => voi
         )}
       </div>
       {notice && <p className="mb-3 text-[12.5px] text-mut">{notice}</p>}
+      <ErrorText error={setLabels.error} />
 
       <Card className="overflow-hidden">
         {list.isPending ? (
@@ -80,13 +106,14 @@ export function SeriesListPage({ onOpen }: { onOpen: (id: number | "new") => voi
                 <th className="px-4 py-2.5 font-medium">剧名</th>
                 <th className="px-4 py-2.5 font-medium">频道</th>
                 <th className="px-4 py-2.5 font-medium">状态</th>
+                <th className="px-4 py-2.5 font-medium">卡片角标</th>
                 <th className="px-4 py-2.5 font-medium">分集</th>
                 <th className="px-4 py-2.5 font-medium">更新时间</th>
               </tr>
             </thead>
             <tbody>
               {list.data.items.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-10 text-center text-dim">还没有剧集。点「新建剧集」或使用「批量导入」。</td></tr>
+                <tr><td colSpan={8} className="px-4 py-10 text-center text-dim">还没有剧集。点「新建剧集」或使用「批量导入」。</td></tr>
               )}
               {list.data.items.map((s) => (
                 <tr key={s.id} onClick={() => onOpen(s.id)}
@@ -104,6 +131,7 @@ export function SeriesListPage({ onOpen }: { onOpen: (id: number | "new") => voi
                   <td className="px-4 py-2.5 font-medium">{s.title}</td>
                   <td className="px-4 py-2.5 text-mut">{s.category_name}</td>
                   <td className="px-4 py-2.5"><StatusBadge status={s.status} /></td>
+                  <td className="px-4 py-2.5"><CardBadgePills original={s.is_original} badge={s.card_badge} /></td>
                   <td className="px-4 py-2.5 text-mut whitespace-nowrap">
                     就绪 {s.ready_episodes} / {s.episode_rows}
                     {s.processing > 0 && <span className="ml-2 text-primary">处理中 {s.processing}</span>}

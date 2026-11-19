@@ -68,14 +68,14 @@ const MARK = (() => {
 })();
 
 /**
- * Brand lockup, laid out like the reference's logo: the mark, 黄约短剧 with a small AI, and the address under it.
+ * Brand lockup, laid out like the reference's logo: the mark, 黄月短剧 with a small AI, and the address under it.
  * `scale` is px per em: 10 gives 160 × 58.7. Styles: .rg-logo in index.css.
  */
 export function Wordmark({ scale = 10 }: { scale?: number }) {
   return (
     <span className="rg-logo" style={{ fontSize: scale }} aria-hidden="true">
       <BrandMark width={Math.round(MARK.width * scale)} className="rg-logo__mark" style={MARK.style} />
-      <span className="rg-logo__name"><span><span className="rg-logo__hl">黄约</span><span className="rg-logo__wt">短剧</span></span></span>
+      <span className="rg-logo__name"><span><span className="rg-logo__hl">黄月</span><span className="rg-logo__wt">短剧</span></span></span>
       <span className="rg-logo__ai"><span>AI</span></span>
       <span className="rg-logo__domain"><span>huangyue<b>ai</b>.com</span></span>
     </span>
@@ -85,7 +85,7 @@ export function Wordmark({ scale = 10 }: { scale?: number }) {
 /** Logo link home, sized as on the reference: 160 × 58.7 (desktop header, footer), 142.9 × 52.4 (phone menu), 125.5 × 46 (phone header). */
 export function Logo({ size = "lg" }: { size?: "lg" | "md" | "sm" }) {
   return (
-    <Link to="/" className="block w-fit shrink-0" aria-label="黄约短剧 首页">
+    <Link to="/" className="block w-fit shrink-0" aria-label="黄月短剧 首页">
       <Wordmark scale={size === "sm" ? 7.84 : size === "md" ? 8.93 : 10} />
     </Link>
   );
@@ -291,8 +291,13 @@ function MobileHeader() {
     <>
       <div className="relative h-14 flex items-center pl-[18px] pr-[12px]">
         <button onClick={openMenu} aria-label="菜单" className="w-7 h-7 flex items-center justify-center text-white"><Menu size={24} /></button>
-        <div className="absolute left-1/2 top-[5px] -translate-x-1/2"><Logo size="sm" /></div>
-        <button onClick={openSearch} aria-label="搜索" className="ml-auto w-7 h-7 flex items-center justify-center text-white"><SearchIcon size={22} /></button>
+        <div className="ml-[8px] shrink-0"><Logo size="sm" /></div>
+        <span className="flex-1 min-w-[10px]" />
+        {/* 搜索短剧, as on the reference: a 160 × 32 pill with the placeholder (narrower on small screens) that opens search. */}
+        <button onClick={openSearch} aria-label="搜索短剧"
+          className="w-[160px] min-w-[96px] shrink h-[32px] px-[10px] gap-[5px] rounded-[30px] bg-[#272727] text-[#aaa] text-[13px] flex items-center">
+          <SearchIcon size={14} strokeWidth={2.6} className="shrink-0 mx-px" /><span className="truncate">搜索短剧</span>
+        </button>
         {user
           ? <Link to={href.me()} aria-label="个人中心" className="ml-3 w-[24px] h-[32px] flex items-center justify-center"><Avatar size={24} name={user.nickname} color={user.avatar_color} /></Link>
           : <button onClick={openLogin} aria-label="登录/注册" className="ml-3 w-[24px] h-[32px] flex items-center justify-center text-white"><CircleUserRound size={24} strokeWidth={2} /></button>}

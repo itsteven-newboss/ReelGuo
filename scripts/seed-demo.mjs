@@ -138,8 +138,8 @@ async function main() {
         console.log("uploaded");
         rows.push([
           `DEMO-${s + 1}`, `"${demo.title}"`, demo.category, ep, `第${ep}集`, file,
-          `"示例内容，用于开发和测试。由 ffmpeg 生成，不含任何真实人物。"`, demo.tags, "黄约短剧示例工作室",
-          (7.5 + (s % 4) * 0.4).toFixed(1), EPISODES + 3, "否", "黄约短剧（示例）", "DEMO-0001", today, "*", "是", "否",
+          `"示例内容，用于开发和测试。由 ffmpeg 生成，不含任何真实人物。"`, demo.tags, "黄月短剧示例工作室",
+          (7.5 + (s % 4) * 0.4).toFixed(1), EPISODES + 3, "否", "黄月短剧（示例）", "DEMO-0001", today, "*", "是", "否",
           // The first demo series is paid (episodes 3+ cost 30 coins), to try the paywall and the sandbox store.
           s === 0 ? 30 : 0, s === 0 ? 2 : 3,
         ].join(","));

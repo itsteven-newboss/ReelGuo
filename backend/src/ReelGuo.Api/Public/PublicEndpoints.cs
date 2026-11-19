@@ -30,7 +30,7 @@ public sealed record VideoCardDto(
     long Id, string Title, string? Cover, string Description, List<string> Tags, double Score,
     int EpisodeCount, int TotalEpisodes, long Hot, long LikeCount, long CollectCount, long CommentCount,
     bool IsFinished, bool IsOriginal, AuthorDto? Author, DateTimeOffset? PublishedAt, DateTimeOffset? LastEpisodeAt,
-    string? CategorySlug = null, string? CategoryName = null);
+    string? CategorySlug = null, string? CategoryName = null, CardBadge CardBadge = CardBadge.Auto);
 
 public sealed record PaginationDto(int Page, int Pages, int Size, int Total);
 
@@ -173,7 +173,7 @@ public static class PublicEndpoints
     internal static VideoCardDto ToCard(Series s, MediaUrlSigner signer) => new(
         s.Id, s.Title, signer.PublicUrlOrNull(s.CoverKey), s.Description, s.Tags, s.Score,
         s.EpisodeCount, Math.Max(s.TotalEpisodes, s.EpisodeCount), s.PlayCount, s.LikeCount, s.CollectCount, s.CommentCount,
-        s.IsFinished, s.IsOriginal, ToAuthor(s.Author), s.PublishedAt, s.LastEpisodeAt, s.Category?.Slug, s.Category?.Name);
+        s.IsFinished, s.IsOriginal, ToAuthor(s.Author), s.PublishedAt, s.LastEpisodeAt, s.Category?.Slug, s.Category?.Name, s.CardBadge);
 
     private static async Task<Results<Ok<SeriesDetailDto>, NotFound<ApiErrorResponse>>> GetSeries(
         long id, HttpContext http, ReelGuoDbContext db, ICountryResolver resolver, MediaUrlSigner signer, IOptions<BillingOptions> billing,

@@ -40,6 +40,7 @@ public sealed class ReelGuoDbContext(DbContextOptions<ReelGuoDbContext> options)
     public DbSet<PaymentEvent> PaymentEvents => Set<PaymentEvent>();
     public DbSet<AppRelease> AppReleases => Set<AppRelease>();
     public DbSet<LandingImage> LandingImages => Set<LandingImage>();
+    public DbSet<LegalReview> LegalReviews => Set<LegalReview>();
     public DbSet<Topic> Topics => Set<Topic>();
     public DbSet<TopicSeries> TopicSeries => Set<TopicSeries>();
     public DbSet<Announcement> Announcements => Set<Announcement>();
@@ -56,6 +57,7 @@ public sealed class ReelGuoDbContext(DbContextOptions<ReelGuoDbContext> options)
         // Store enums as readable text rather than integers.
         builder.Properties<CategoryStatus>().HaveConversion<string>().HaveMaxLength(32);
         builder.Properties<SeriesStatus>().HaveConversion<string>().HaveMaxLength(32);
+        builder.Properties<CardBadge>().HaveConversion<string>().HaveMaxLength(16);
         builder.Properties<EpisodeStatus>().HaveConversion<string>().HaveMaxLength(32);
         builder.Properties<UserRole>().HaveConversion<string>().HaveMaxLength(32);
         builder.Properties<UserStatus>().HaveConversion<string>().HaveMaxLength(32);
@@ -381,6 +383,13 @@ public sealed class ReelGuoDbContext(DbContextOptions<ReelGuoDbContext> options)
             e.Property(x => x.Signature).HasMaxLength(2000);
             e.Property(x => x.Sha256).HasMaxLength(64);
             e.Property(x => x.Notes).HasMaxLength(2000);
+            e.Property(x => x.UpdatedBy).HasMaxLength(128);
+        });
+
+        model.Entity<LegalReview>(e =>
+        {
+            e.HasKey(x => x.Slug);
+            e.Property(x => x.Slug).HasMaxLength(40);
             e.Property(x => x.UpdatedBy).HasMaxLength(128);
         });
 

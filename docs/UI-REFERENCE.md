@@ -42,7 +42,7 @@ Used by every grid (home, channel, topic, search, 猜你喜欢, favourites).
 | Part | Desktop | Phone |
 |---|---|---|
 | Cover | 3:4, radius 0.9 rem (12.6 px), `#242424` behind the image | 3:4, radius 12 |
-| Top-left | One pill: "原创" (original, `#ffd21c`) and / or "新片" (new in the last 7 days, `#89eed3`), 23 px, 12/500 black; split in two when both show | 26 px |
+| Top-left | Re-measured 2026-11-18. One pill: "原创" (`#ffd21c`, the series' 原创 setting) first, then one status badge, set per series in admin (卡片角标: 新片 `#89eed3` · 热播 `#ff591c` · 不显示 · 自动 = 热播 while in the top 10 of the 热播榜, else 新片 for 7 days after publishing). New series start as 原创 + 新片 (editor, 文件夹上传 and 批量导入 alike); series from before 2026-11-18 keep 自动. 23 px, 12/500 black, padding 7.5 px; joined into one pill when both show, 热播 meeting 原创 on a slanted seam. The reference shows the same combinations: 原创+热播, 原创+新片, 原创, 热播, 新片 | 26 px, padding 9.75 px |
 | Top-right | Score "9.1分", 12/700 `#ffd900` on black 70 % with blur, radius 4.5 | 26 px, radius 6 |
 | Bottom | Re-measured 2026-11-18. Left: an orange flame (our own drawing) and the play count "44.4w". Right: the progress only, "更新至3集" (no time since the update), or "全21集" when finished, truncated to fit. Phones: 6 px from the sides and bottom; flame pill 20 px, black 55 %, radius 5; progress pill 23.5 px, black 80 %, radius 4; 11 px text. Desktop, scaling with the window (given at 1440 px): 6 px (0.417 vw) from the sides, 7.5 px (0.52 vw) from the bottom; both black 80 %, 0.875 rem text; flame pill 0.1875 rem × 0.365 vw padding, 12 px (0.833 vw) flame, radius 4.5 px; progress pill 1.6875 rem high, 0.417 vw padding, radius 4.8 px | `PosterCard` |
 | Below | Title 14/500 `#e7e6e6`, one line; up to 4 tag chips 21 px, 12 px white 60 % on white 5 %, radius 3, wrapping | Title white 90 %; chips 20 px |
@@ -64,7 +64,7 @@ Used by every grid (home, channel, topic, search, 猜你喜欢, favourites).
 
 | Element | Spec |
 |---|---|
-| Bar | 56 px, fixed, `#0a0a0a`: 28 px menu icon at 18 px from the left, the logo centred; on the right a 28 px search icon, then (12 px from the edge) the 24 × 32 account button as on the reference: an outlined user-in-circle icon that opens 登录/注册, or the 24 px avatar linking to 个人中心 when signed in. No bottom tab bar. |
+| Bar | 56 px, fixed, `#0a0a0a`: 28 px menu icon at 18 px from the left, the logo 8 px after it; on the right, as on the reference (measured at 440 px), the 搜索短剧 pill (160 × 32, `#272727`, radius 30, padding 0 10, a 16 px `#aaa` magnifier and 13 px `#aaa` placeholder; it narrows on small screens and opens the search drawer), then 12 px later and 12 px from the edge the 24 × 32 account button: an outlined user-in-circle icon that opens 登录/注册, or the 24 px avatar linking to 个人中心 when signed in. No bottom tab bar. |
 | Menu | Drawer from the left: account row, then the nav items as 48 px rows |
 | Search | Drawer from the top: input with 取消 (cancel), then the search panel |
 
@@ -258,6 +258,7 @@ Topics are hand-picked lists of series, managed in Admin → 专题. Only publis
 | 个人中心 (`/me`) | Account card: signed out, "登录 / 注册" with the reasons to sign in; signed in, avatar, nickname and counts. Wallet strip (§14), download card (hidden inside the apps), 设置 (settings), 退出登录 (log out, confirmed once). Tabs 我的收藏 (favourites) / 观看历史 (history) with poster grids; history shows "第 N 集 · 0:42" and resumes there. |
 | 设置 (`/settings`) | Sections 播放 (playback: 启动时静音, mute on start), 本地数据 (local data: counts, clear caches with confirmation), 关于 (about: version, app version or 下载 App, legal pages). Toggle 46 × 26. |
 | Login dialog | 400 px dialog (also on phones): app icon, "用户登录注册" (sign in / register), a pill switch 登录 / 注册, labelled 账号 (account) and 密码 (password) inputs (42 px pills), the hint "登录后可使用收藏、评论和个人中心功能。" (sign in to use favourites, comments and the account page), and a full-width accent button. Register adds 昵称（可选）(nickname, optional) and the 18+ / terms checkbox; no email is collected. |
+| 法律条款 (`/terms`, `/privacy`, `/content-policy`, `/recharge-terms`) | Since 2026-11-18 each page shows its full text (用户协议, 隐私政策, 内容政策, 充值协议; Markdown in `backend/src/ReelGuo.Api/Legal/Texts/`, served by `GET /api/legal/{slug}` outside the region block and in the server-rendered page). Above it, a gold-bordered notice "本页内容为草稿，正在等待法务审核，正式版本以审核通过后发布的为准。" while the page is under review: on by default, switched per page in Admin → **法律条款** (which also previews the text). Reachable without the 18+ gate and from blocked regions. | `pages/Legal.tsx`, admin `pages/LegalPages.tsx` |
 | 18+ gate | Full screen, dark with a soft accent glow: logo + "ReelGuo / AI 短剧", "本站含有成人内容，仅限年满 18 周岁的成年人访问。" (adult content, 18+ only) in two lines, the primary pill "我已年满 18 周岁，进入网站" (I'm 18+, enter) with a white ring, the secondary pill "未满 18 周岁，离开" (under 18, leave), the footnote "进入即表示您确认已年满 18 周岁，并同意遵守当地法律法规。" (entering confirms you are 18+ and will follow local law), and the legal links. Nothing renders behind it. |
 
 ## 14. Paid content (ReelGuo addition) ✅

@@ -25,9 +25,9 @@ export default defineConfig({
       includeAssets: ["favicon.ico", "icons/apple-touch-icon.png"],
       manifest: {
         // The name under the installed app's icon (src/brand.ts has the same).
-        name: "黄约短剧",
-        short_name: "黄约短剧",
-        description: "黄约短剧 · AI 短剧与原创短剧在线观看",
+        name: "黄月短剧",
+        short_name: "黄月短剧",
+        description: "黄月短剧 · AI 短剧与原创短剧在线观看",
         lang: "zh-CN",
         start_url: "/",
         display: "standalone",

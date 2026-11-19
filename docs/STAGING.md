@@ -212,7 +212,12 @@ The script:
 
 1. **Checks** the server and the settings.
 2. **Fetches the code** with `git pull --ff-only`. It stops if someone has edited files on the server; see §8.
-3. **Backs up the database.** If the backup fails, it stops before changing anything.
+3. **Waits while an admin is optimizing or uploading videos** in the admin console (优化视频, 文件夹上传), so
+   their work is never cut off. The console reports such work every 30 s; the script asks the API directly on the
+   server (`/health/busy`, which answers nothing that came through Caddy or Cloudflare), shows who is working and how
+   far they are once a minute, and continues by itself when they finish. It checks again right before step 5, in case
+   work started while the release was building. Ctrl+C cancels safely (nothing has changed yet); `-Force` skips the wait.
+   Then it **backs up the database.** If the backup fails, it stops before changing anything.
 4. **Builds the new release** into its own folder while the current version keeps running.
 5. **Switches to it:** it stops the services, points `current` at the new release, and starts them. The site is down
    for about a minute. Database migrations run when the API starts.
@@ -226,6 +231,7 @@ The script:
 | `-SkipPull` | Deploy the code already in `C:\reelguo` (for example copied over by hand). |
 | `-SkipBackup` | Skip the database backup (not advised). |
 | `-AllowDirty` | Continue although files in `C:\reelguo` were changed on the server. |
+| `-Force` | Update at once, even while an admin is optimizing or uploading videos. Their work stops: 文件夹上传 continues by itself afterwards (持续上传), and 优化视频 offers 继续优化 with the same folders. |
 
 Changed only `staging.env`? You don't need an update: run `.\scripts\staging\ops.ps1 config`, which writes the
 settings into the running release and restarts it.

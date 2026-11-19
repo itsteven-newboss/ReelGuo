@@ -238,9 +238,9 @@ public sealed class SeoTests(PostgresFixture db) : IClassFixture<PostgresFixture
             var (status, html, _) = await Page(api, path);
             Assert.True(status == HttpStatusCode.OK, $"{path}: HTTP {(int)status}");
             var title = html[(html.IndexOf("<title>", StringComparison.Ordinal) + 7)..html.IndexOf("</title>", StringComparison.Ordinal)];
-            Assert.True(title.Contains("黄约"), $"{path}: title '{title}'");
-            Assert.Contains("<strong>黄约短剧</strong>", html);      // header
-            Assert.Contains("<p>© 黄约短剧 · ", html);                // footer
+            Assert.True(title.Contains("黄月"), $"{path}: title '{title}'");
+            Assert.Contains("<strong>黄月短剧</strong>", html);      // header
+            Assert.Contains("<p>© 黄月短剧 · ", html);                // footer
             Assert.DoesNotContain("ReelGuo", html);                  // the code name never reaches visitors
         }
 
@@ -262,5 +262,33 @@ public sealed class SeoTests(PostgresFixture db) : IClassFixture<PostgresFixture
         await using var api = db.CreateApi();
         var response = await api.CreateClient().SendAsync(new HttpRequestMessage(HttpMethod.Get, "/topics").From("US"), Ct);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Legal_pages_carry_their_full_text_and_the_review_notice_while_it_is_on()
+    {
+        await using var api = Api();
+        var admin = await AdminClient.SignInAsync(api);
+        await admin.AdminSendAsync(HttpMethod.Put, "/api/admin/legal/terms", new { under_review = true }).OkJsonAsync();
+
+        var (status, html, _) = await Page(api, "/terms");
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Contains("<p class=\"legal-review\">本页内容为草稿", html);
+        Assert.Contains("仅限年满 18 周岁", html);
+        Assert.Contains("<h2>一、年龄与使用资格</h2>", html);
+
+        // Turned off: gone at once (legal pages are not cached), the text stays.
+        await admin.AdminSendAsync(HttpMethod.Put, "/api/admin/legal/terms", new { under_review = false }).OkJsonAsync();
+        html = (await Page(api, "/terms")).Body;
+        Assert.DoesNotContain("legal-review", html);
+        Assert.Contains("仅限年满 18 周岁", html);
+
+        // Blocked regions get the page too.
+        await admin.AdminSendAsync(HttpMethod.Put, "/api/admin/geo/blocked-countries/DE", new { note = "test" }).OkJsonAsync();
+        var blocked = await Page(api, "/privacy", "DE");
+        Assert.Equal(HttpStatusCode.OK, blocked.Status);
+        Assert.Contains("我们收集的信息", blocked.Body);
+        await admin.AdminSendAsync(HttpMethod.Delete, "/api/admin/geo/blocked-countries/DE");
+        await admin.AdminSendAsync(HttpMethod.Put, "/api/admin/legal/terms", new { under_review = true }).OkJsonAsync();
     }
 }

@@ -1,7 +1,8 @@
 import { Img, Spinner } from "@reelguo/ui";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { useState, type ReactNode } from "react";
-import type { VideoCard } from "../api";
+import { useMemo, useState, type ReactNode } from "react";
+import { useRanks, type VideoCard } from "../api";
+import { statusBadge } from "./badges";
 import { href, Link } from "../router";
 
 /*
@@ -85,13 +86,30 @@ export function fmtPlays(n: number): string {
 }
 
 /** 原创 · 新片 badges: one pill, split when both show. */
-export function CardBadges({ original, fresh, className = "" }: { original: boolean; fresh: boolean; className?: string }) {
-  if (!original && !fresh) return null;
-  const base = "h-[26px] lg:h-[23px] px-[10px] lg:px-[7.5px] text-[12px] font-medium text-[#111] flex items-center leading-none";
+/** How many of the 热播榜 (hot ranking) count as 热播 on the cards. */
+const HOT_TOP = 10;
+
+/** Series in the top of the 热播榜 (refreshed by the worker every 10 minutes; one cached request per page). */
+export function useHotIds() {
+  const hot = useRanks("hot");
+  return useMemo(() => new Set((hot.data?.items ?? []).slice(0, HOT_TOP).map((r) => r.video_id)), [hot.data]);
+}
+
+/**
+ * Cover badges, as on the reference: 原创 (set in admin) first, then the status badge, 热播 or 新片 (see statusBadge).
+ * Joined into one pill when both show; 热播 meets 原创 on a slanted seam.
+ */
+export function CardBadges({ original, status, className = "" }: { original: boolean; status: "hot" | "new" | null; className?: string }) {
+  if (!original && !status) return null;
+  const base = "h-[26px] lg:h-[23px] px-[9.75px] lg:px-[7.5px] text-[12px] font-medium text-[#111] flex items-center leading-none";
   return (
     <span className={`flex ${className}`}>
-      {original && <span className={`${base} bg-[#ffd21c] ${fresh ? "rounded-l-full" : "rounded-full"}`}>原创</span>}
-      {fresh && <span className={`${base} bg-[#89eed3] ${original ? "rounded-r-full" : "rounded-full"}`}>新片</span>}
+      {original && <span className={`${base} bg-[#ffd21c] ${status ? "rounded-l-full" : "rounded-full"}`}>原创</span>}
+      {status === "hot" && (
+        <span className={`${base} bg-[#ff591c] ${original ? "rounded-r-full -ml-[5px] pl-[14.75px] lg:pl-[12.5px]" : "rounded-full"}`}
+          style={original ? { clipPath: "polygon(5px 0, 100% 0, 100% 100%, 0 100%)" } : undefined}>热播</span>
+      )}
+      {status === "new" && <span className={`${base} bg-[#89eed3] ${original ? "rounded-r-full" : "rounded-full"}`}>新片</span>}
     </span>
   );
 }
@@ -112,11 +130,12 @@ export function FlameIcon({ className = "" }: { className?: string }) {
  * at the right; desktop sizes scale with the window (given at 1440 px: 6 px from the sides, 7.5 px from the bottom).
  */
 export function PosterCard({ v }: { v: VideoCard }) {
+  const hotIds = useHotIds();
   return (
     <div className="min-w-0">
       <Link to={href.video(v.id)} className="group block relative w-full overflow-hidden rounded-[12px] lg:rounded-[0.9rem] bg-[#242424]" style={{ aspectRatio: "3 / 4" }}>
         <div className="absolute inset-0 transition-transform duration-300 group-hover:scale-[1.04]"><Img src={v.cover} /></div>
-        <CardBadges original={v.is_original} fresh={isNew(v)} className="absolute top-[6px] left-[6px]" />
+        <CardBadges original={v.is_original} status={statusBadge(v.card_badge, hotIds.has(v.id), isNew(v))} className="absolute top-[6px] left-[6px]" />
         {v.score > 0 && (
           <span className="absolute top-[6px] right-[6px] h-[26px] lg:h-[23px] px-[7px] lg:px-[5px] rounded-[6px] lg:rounded-[4.5px] bg-black/70 backdrop-blur-sm text-[12px] font-bold text-[#ffd900] flex items-center tabular-nums">
             {v.score.toFixed(1)}分

@@ -23,6 +23,19 @@ public sealed class Category
     public List<Series> Series { get; set; } = [];
 }
 
+/// <summary>The status badge on the series' cards, after 原创 (set in admin).</summary>
+public enum CardBadge
+{
+    /// <summary>热播 while in the top 10 of the 热播榜, else 新片 for 7 days after publishing (series from before 2026-11-18).</summary>
+    Auto,
+    /// <summary>新片, always (the default for new series).</summary>
+    New,
+    /// <summary>热播, always.</summary>
+    Hot,
+    /// <summary>No status badge.</summary>
+    None,
+}
+
 public enum SeriesStatus
 {
     Draft,
@@ -55,7 +68,10 @@ public sealed class Series
     public int FreeEpisodes { get; set; } = Catalog.Pricing.DefaultFreeEpisodes;
     public SeriesStatus Status { get; set; }
     public bool IsFinished { get; set; }
-    public bool IsOriginal { get; set; }
+    /// <summary>原创: the 原创 badge on cards and a place in the 原创 listing. New series start as 原创.</summary>
+    public bool IsOriginal { get; set; } = true;
+    /// <summary>The status badge on cards; new series start with 新片.</summary>
+    public CardBadge CardBadge { get; set; } = CardBadge.New;
     public int TotalEpisodes { get; set; }
     public int EpisodeCount { get; set; }
     public DateTimeOffset? PublishedAt { get; set; }

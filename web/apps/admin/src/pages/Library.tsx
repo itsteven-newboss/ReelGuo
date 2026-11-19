@@ -3,9 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, FolderOpen, Pause, Play, RefreshCw, Square, Upload, Wand2 } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import {
-  buildIndex, canPickFolders, canRead, listingFor, pickFolder, rememberFolder, rememberedFolder, videoKey, walkFileList, walkHandle,
+  buildIndex, canPickFolders, canRead, listingFor, pickFolder, rememberFolder, rememberedFolder, rememberedOptimize, videoKey, walkFileList, walkHandle,
   type FolderIndex, type TitlePlan,
 } from "../library/scan";
+import { useActivityHeartbeat } from "../activity";
 import { api, CSRF_HEADER } from "../session";
 import { formatBytes, uploadFile } from "../upload";
 import { Button, Card, ErrorText, Field, inputClass, PageHeader } from "../ui";
@@ -120,6 +121,12 @@ export function LibraryPage({ onOpenSeries }: { onOpenSeries: (id: number) => vo
   pausedRef.current = paused;
 
   useEffect(() => { void rememberedFolder().then(setRemembered); }, []);
+  // An optimisation cut off by a reload or a sign-out: offered straight away, with its folders.
+  const [unfinishedOptimize, setUnfinishedOptimize] = useState(false);
+  const [resumeOptimize, setResumeOptimize] = useState(false);
+  useEffect(() => { void rememberedOptimize().then((m) => setUnfinishedOptimize(!!m?.unfinished)); }, []);
+  const uploadedNow = Object.values(live).filter((s) => s.state === "done").length;
+  useActivityHeartbeat("upload", running, `${uploadedNow} done`);
 
   const note = (line: string) => setLog((l) => [`${new Date().toLocaleTimeString("zh-CN", { hour12: false })} ${line}`, ...l].slice(0, 200));
 
@@ -434,9 +441,17 @@ export function LibraryPage({ onOpenSeries }: { onOpenSeries: (id: number) => vo
         </details>
       </Card>
 
+      {!optimizing && unfinishedOptimize && (
+        <Card className="p-4 mb-4 flex items-center gap-3 border border-primary/40">
+          <Wand2 size={18} className="text-primary shrink-0" />
+          <div className="flex-1 text-[13px]">上次的视频优化还没有完成。点击继续，会用原来的两个文件夹从停下的地方接着做，已完成的集不会重新优化。</div>
+          <Button variant="primary" onClick={() => { setResumeOptimize(true); setOptimizing(true); setUnfinishedOptimize(false); }}>继续优化</Button>
+        </Card>
+      )}
+
       {optimizing && (
         <Suspense fallback={<Card className="p-5 mb-4 text-[12.5px] text-mut">正在加载视频优化工具…</Card>}>
-          <OptimizePanel onClose={() => setOptimizing(false)} onUseFolder={(dir) => void openOptimized(dir)} />
+          <OptimizePanel resume={resumeOptimize} onClose={() => { setOptimizing(false); setResumeOptimize(false); }} onUseFolder={(dir) => void openOptimized(dir)} />
         </Suspense>
       )}
 

@@ -9,6 +9,7 @@ using ReelGuo.Api.Geo;
 using ReelGuo.Data.Media;
 using ReelGuo.Api.Public;
 using ReelGuo.Data;
+using ReelGuo.Data.Content;
 using ReelGuo.Data.Entities;
 
 namespace ReelGuo.Api.Seo;
@@ -48,10 +49,7 @@ public static class SeoEndpoints
     private static readonly (string Kind, RankKind Rank, string Name)[] Boards =
         [("hot", RankKind.Hot, "热播榜"), ("recommend", RankKind.Recommend, "推荐榜"), ("potential", RankKind.Potential, "飙升榜")];
 
-    private static readonly Dictionary<string, string> LegalPages = new()
-    {
-        ["/terms"] = "用户协议", ["/privacy"] = "隐私政策", ["/content-policy"] = "内容政策", ["/recharge-terms"] = "充值协议",
-    };
+    private static readonly Dictionary<string, string> LegalPages = ReelGuo.Api.Legal.LegalPages.All.ToDictionary(p => p.Path, p => p.Title);
 
     private static readonly string[] PrivatePages = ["/search", "/me", "/me/wallet", "/store", "/pay/result", "/settings"];
 
@@ -104,7 +102,8 @@ public static class SeoEndpoints
 
     /// <summary>Everything a page renderer needs, injected once.</summary>
     public sealed class Ctx(ReelGuoDbContext db, MediaUrlSigner signer, PageTemplate template, IOptions<SeoOptions> seo, IOptions<SiteOptions> site,
-        IOptions<AppOptions> app, ICountryResolver countries, IBlockedCountryStore blocked, IAgeRuleStore ages, IMemoryCache cache, TimeProvider time)
+        IOptions<AppOptions> app, ICountryResolver countries, IBlockedCountryStore blocked, IAgeRuleStore ages, IMemoryCache cache, TimeProvider time,
+        PostRenderer renderer)
     {
         public ReelGuoDbContext Db { get; } = db;
         public MediaUrlSigner Signer { get; } = signer;
@@ -117,6 +116,7 @@ public static class SeoEndpoints
         public IAgeRuleStore Ages { get; } = ages;
         public IMemoryCache Cache { get; } = cache;
         public TimeProvider Time { get; } = time;
+        public PostRenderer Renderer { get; } = renderer;
         public DateOnly Today => PublicEndpoints.Today(Time);
         public IQueryable<Series> Visible(string country) => Db.Series.AsNoTracking().VisibleTo(country, Today);
     }
@@ -134,9 +134,11 @@ public static class SeoEndpoints
 
         // Blocked countries and strict age-verification countries get the app without content (the app explains why).
         SeoPage page;
-        if (!legal && (await c.Blocked.GetAsync(ct)).Contains(country))
+        if (legal)
+            page = await build(country, ct);   // small, and an admin's 法务审核 switch should show at once
+        else if ((await c.Blocked.GetAsync(ct)).Contains(country))
             page = new SeoPage(StatusCodes.Status451UnavailableForLegalReasons, SiteName, "当前地区暂不提供服务", null, false, "");
-        else if (!legal && await c.Ages.ModeForAsync(country, ct) == AgeCheckMode.Strict)
+        else if (await c.Ages.ModeForAsync(country, ct) == AgeCheckMode.Strict)
             page = new SeoPage(StatusCodes.Status200OK, SiteName, "当前地区需完成年龄验证后才能观看", null, false, "");
         else
         {
@@ -525,7 +527,11 @@ public static class SeoEndpoints
 
     private static async Task<SeoPage> Legal(Ctx c, string path, string title, CancellationToken ct)
     {
-        var body = await FrameAsync(c, [("首页", "/"), (title, path)], $"<h1>{title}</h1>", ct);
+        var page = ReelGuo.Api.Legal.LegalPages.ByPath(path)!;
+        var notice = await ReelGuo.Api.Legal.LegalPages.UnderReviewAsync(c.Db, page.Slug, ct)
+            ? $"<p class=\"legal-review\">{Html.Text(ReelGuo.Api.Legal.LegalPages.ReviewNotice)}</p>" : "";
+        var text = ReelGuo.Api.Legal.LegalPages.Html(page, c.Renderer);
+        var body = await FrameAsync(c, [("首页", "/"), (title, path)], $"<h1>{title}</h1>{notice}<article>{text}</article>", ct);
         return new SeoPage(200, $"{title} - {SiteName}", $"{SiteName}{title}。", path, true, body);
     }
 

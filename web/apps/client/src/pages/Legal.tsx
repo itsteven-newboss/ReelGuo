@@ -1,4 +1,10 @@
+import { unwrap } from "@reelguo/api-client";
+import { Spinner } from "@reelguo/ui";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { api } from "../api";
+import { BRAND } from "../brand";
 
 export const LEGAL_PATHS = {
   "/terms": "legal.terms",
@@ -28,34 +34,38 @@ export function LegalLinks({ className = "" }: { className?: string }) {
 }
 
 /**
- * Placeholder legal pages. These are reachable without the age gate and from blocked regions.
- * The text is written by the legal team before launch; the key commitments are listed here so the
- * pages are never empty.
+ * The legal pages (用户协议, 隐私政策, 内容政策, 充值协议), reachable without the age gate and from blocked regions.
+ * Their text comes from the server (one copy, also in the server-rendered page). While a page's text awaits legal
+ * review (Admin → 法律条款, on by default) a notice sits above it.
  */
 export function LegalPage({ path }: { path: LegalPath }) {
   const { t } = useTranslation();
+  const slug = path.slice(1);
+  const page = useQuery({
+    queryKey: ["legal", slug],
+    queryFn: async () => unwrap(await api.GET("/api/legal/{slug}", { params: { path: { slug } } })),
+    staleTime: 5 * 60_000,
+  });
+  useEffect(() => {
+    const prev = document.title;
+    document.title = `${t(LEGAL_PATHS[path])} - ${BRAND}`;
+    return () => { document.title = prev; };
+  }, [path, t]);
+  // Until the server answers (or if it can't), the notice shows: it is on unless an admin turned it off.
+  const underReview = page.data?.under_review ?? true;
   return (
     <div className="absolute inset-0 bg-bg scroll-y">
       <article className="max-w-[720px] mx-auto px-5 py-8 text-on">
         <h1 className="text-[22px] font-bold">{t(LEGAL_PATHS[path])}</h1>
-        <p className="mt-3 text-[13px] text-mut">{t("legal.pending")}</p>
-        {path === "/content-policy" && (
-          <ul className="mt-6 space-y-2 text-[14px] leading-relaxed list-disc pl-5">
-            <li>本站内容仅面向年满 18 周岁的成年人。</li>
-            <li>所有角色均为成年人，包括 AI 生成与动画形式的角色。</li>
-            <li>未经本人书面同意，不发布任何真实人物的肖像或形象。</li>
-            <li>本站不提供任何“换脸”生成功能。</li>
-            <li>任何人都可以举报违规内容，我们会尽快审核并下架。</li>
-          </ul>
+        {underReview && (
+          <p className="mt-3 px-3 py-2.5 rounded-[8px] border border-primary/35 bg-primary/[.07] text-[12.5px] leading-relaxed text-primary">{t("legal.pending")}</p>
         )}
-        {path === "/recharge-terms" && (
-          <ul className="mt-6 space-y-2 text-[14px] leading-relaxed list-disc pl-5">
-            <li>金币是本站内的虚拟道具，仅可用于解锁剧集，不可提现、转让或兑换现金。</li>
-            <li>已解锁的剧集可在账号内永久观看（内容因版权或法律原因下架的除外）。</li>
-            <li>VIP 为一次性购买的有效期权益，到期后不会自动续费；有效期内再次购买会顺延。</li>
-            <li>银行卡账单上的商户名称以充值页面显示为准。</li>
-            <li>退款按适用法律及本协议处理；发生退款或拒付时，将扣回对应的金币或 VIP 天数。</li>
-          </ul>
+        {page.isPending ? (
+          <div className="flex justify-center py-12"><Spinner /></div>
+        ) : page.isError ? (
+          <p className="mt-6 text-[13px] text-mut">{t("legal.loadFailed")}</p>
+        ) : (
+          <div className="mt-4 article-body legal-body" dangerouslySetInnerHTML={{ __html: page.data.html }} />
         )}
         <a href="/" className="inline-block mt-8 text-[13px] text-primary">{t("legal.backHome")}</a>
       </article>

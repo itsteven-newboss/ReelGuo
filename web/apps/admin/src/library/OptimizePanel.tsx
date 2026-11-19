@@ -1,4 +1,5 @@
-import { CheckCircle2, FolderInput, FolderOutput, Square, Upload, Wand2, X } from "lucide-react";
+import { CheckCircle2, FolderInput, FolderOutput, History, Square, Upload, Wand2, X } from "lucide-react";
+import { useActivityHeartbeat } from "../activity";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, ErrorText } from "../ui";
 import { formatBytes } from "../upload";
@@ -6,6 +7,7 @@ import {
   checkFolders, convertEpisode, copyExtras, existingSize, optimizerSupport, outputPath, planOptimize, writeFileAt,
   type OptimizeJob, type OptimizePlan,
 } from "./optimize";
+import { canAccess, rememberedOptimize, rememberOptimize, type OptimizeMemory } from "./scan";
 
 type JobState = { state: "working" | "done" | "exists" | "failed"; progress: number; outBytes?: number; speed?: number; error?: string };
 const jobKey = (j: Pick<OptimizeJob, "title" | "number">) => `${j.title}\n${j.number}`;
@@ -24,8 +26,10 @@ async function pickDirectory(mode: "read" | "readwrite", id: string): Promise<Fi
 /**
  * 优化视频: turns a delivery folder into one the folder upload takes as it is (see optimize.ts), on this PC, in the
  * browser. Pick the delivery, pick an empty output folder, start; finished episodes are skipped when started again.
+ * The two folders are remembered: after a reload, a closed tab or a sign-out, 继续上次的优化 picks up where it stopped
+ * (`resume` does that straight away). While it runs the server is told, so updates wait for it.
  */
-export function OptimizePanel({ onUseFolder, onClose }: { onUseFolder: (dir: FileSystemDirectoryHandle) => void; onClose: () => void }) {
+export function OptimizePanel({ onUseFolder, onClose, resume = false }: { onUseFolder: (dir: FileSystemDirectoryHandle) => void; onClose: () => void; resume?: boolean }) {
   const [support, setSupport] = useState<string | null | undefined>(undefined);
   const [source, setSource] = useState<FileSystemDirectoryHandle | null>(null);
   const [target, setTarget] = useState<FileSystemDirectoryHandle | null>(null);
@@ -36,8 +40,14 @@ export function OptimizePanel({ onUseFolder, onClose }: { onUseFolder: (dir: Fil
   const [finished, setFinished] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const stopper = useRef<AbortController | null>(null);
+  const [memory, setMemory] = useState<OptimizeMemory | null>(null);
 
   useEffect(() => { void optimizerSupport().then(setSupport); }, []);
+  useEffect(() => { void rememberedOptimize().then(setMemory); }, []);
+  // Leaving the page (sign-out, another section) stops the run, so a later 继续 never runs alongside a hidden one.
+  useEffect(() => () => stopper.current?.abort(), []);
+
+  const remember = (next: OptimizeMemory) => { setMemory(next); void rememberOptimize(next); };
 
   // Closing the tab mid-run would lose the episode being converted.
   useEffect(() => {
@@ -59,6 +69,7 @@ export function OptimizePanel({ onUseFolder, onClose }: { onUseFolder: (dir: Fil
         if (problem) { setError(new Error(problem)); return; }
       }
       setSource(dir);
+      if (target) remember({ source: dir, target, unfinished: memory?.unfinished ?? false });
       setPlan(null);
       setStates({});
       setFinished(false);
@@ -81,14 +92,46 @@ export function OptimizePanel({ onUseFolder, onClose }: { onUseFolder: (dir: Fil
         if (problem) { setError(new Error(problem)); return; }
       }
       setTarget(dir);
+      if (source) remember({ source, target: dir, unfinished: memory?.unfinished ?? false });
       setFinished(false);
     } catch (e) {
       setError(e);
     }
   }
 
-  async function start() {
+  /** Picks up the remembered folders (asking the browser for access again) and continues where it stopped. */
+  async function resumeLast(m: OptimizeMemory) {
+    setError(null);
+    try {
+      if (!(await canAccess(m.source, true, "read")) || !(await canAccess(m.target, true, "readwrite"))) {
+        setError(new Error("浏览器没有授权访问上次的文件夹，请点「继续上次的优化」后在弹窗中选择「允许」，或重新选择两个文件夹"));
+        return;
+      }
+      setSource(m.source);
+      setTarget(m.target);
+      setStates({});
+      setFinished(false);
+      setScan({ done: 0, total: 0 });
+      const p = await planOptimize(m.source, (done, total) => setScan({ done, total }));
+      setPlan(p);
+      setScan(null);
+      await start(p, m.target, m.source);
+    } catch (e) {
+      setError(e);
+      setScan(null);
+    }
+  }
+
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (resume && !resumed.current && memory && support === null) { resumed.current = true; void resumeLast(memory); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resume, memory, support]);
+
+  async function start(givenPlan = plan, givenTarget = target, givenSource = source) {
+    const plan = givenPlan, target = givenTarget;
     if (!plan || !target) return;
+    if (givenSource) remember({ source: givenSource, target, unfinished: true });
     const stop = new AbortController();
     stopper.current = stop;
     setRunning(true);
@@ -123,7 +166,10 @@ export function OptimizePanel({ onUseFolder, onClose }: { onUseFolder: (dir: Fil
           set(key, { state: "failed", progress: 0, error: e instanceof Error ? e.message : "失败" });
         }
       }
-      if (!stop.signal.aborted) setFinished(true);
+      if (!stop.signal.aborted) {
+        setFinished(true);
+        if (givenSource) remember({ source: givenSource, target, unfinished: false });
+      }
     } catch (e) {
       setError(e);
     } finally {
@@ -146,6 +192,8 @@ export function OptimizePanel({ onUseFolder, onClose }: { onUseFolder: (dir: Fil
     }
     return { jobs: jobs.length, convert: convert.length, copy: jobs.length - convert.length, bytes: jobs.reduce((n, j) => n + j.bytes, 0), done, failed, inBytes, outBytes };
   }, [plan, states]);
+
+  useActivityHeartbeat("optimize", running, `${totals.done}/${totals.jobs}`);
 
   const titles = useMemo(() => {
     const map = new Map<string, OptimizeJob[]>();
@@ -173,6 +221,16 @@ export function OptimizePanel({ onUseFolder, onClose }: { onUseFolder: (dir: Fil
 
       {support === null && (
         <>
+          {memory && !source && !target && !scan && (
+            <div className={`mt-4 rounded-(--r-md) p-3 flex items-center gap-3 ${memory.unfinished ? "bg-primary/10 border border-primary/40" : "bg-s2"}`}>
+              <History size={18} className="text-primary shrink-0" />
+              <div className="flex-1 min-w-0 text-[12.5px]">
+                {memory.unfinished ? "上次的优化还没有完成" : "上次优化的文件夹"}：<b>{memory.source.name}</b> → <b>{memory.target.name}</b>
+                <div className="text-mut mt-0.5">从停下的地方继续：已完成的集会直接跳过，不会重新优化。</div>
+              </div>
+              <Button variant="primary" onClick={() => void resumeLast(memory)}><Wand2 size={14} className="inline -mt-0.5 mr-1" />继续上次的优化</Button>
+            </div>
+          )}
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-(--r-md) bg-s2 p-3">
               <div className="text-[12px] text-mut">1. 原始文件夹（交付的视频）</div>
@@ -200,7 +258,7 @@ export function OptimizePanel({ onUseFolder, onClose }: { onUseFolder: (dir: Fil
               {running ? (
                 <Button variant="danger" onClick={() => stopper.current?.abort()}><Square size={13} className="inline -mt-0.5 mr-1" />停止</Button>
               ) : (
-                <Button variant="primary" disabled={!target || totals.jobs === 0} onClick={() => void start()}>
+                <Button variant="primary" disabled={!target || totals.jobs === 0} onClick={() => void start(plan, target, source)}>
                   <Wand2 size={14} className="inline -mt-0.5 mr-1" />{totals.done + totals.failed > 0 ? "继续优化" : "开始优化"}
                 </Button>
               )}

@@ -1,12 +1,13 @@
 import { unwrap, ApiError } from "@reelguo/api-client";
 import { BRAND, BrandMark, Spinner } from "@reelguo/ui";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, BarChart3, Clapperboard, Coins, FileUp, Flag, Flame, FolderUp, Globe, History, Images, KeyRound, Layers, LayoutGrid, LogOut, Megaphone, MessageSquareText, Receipt, ScanSearch, ShieldCheck, Smartphone, Trophy, UserRound, Users } from "lucide-react";
+import { Activity, BarChart3, Clapperboard, Coins, FileUp, Flag, Flame, FolderUp, Globe, History, Images, KeyRound, Layers, LayoutGrid, LogOut, Megaphone, MessageSquareText, Receipt, Scale, ScanSearch, ShieldCheck, Smartphone, Trophy, UserRound, Users } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { AdminsPage } from "./pages/Admins";
 import { AnnouncementsPage } from "./pages/Announcements";
 import { AppReleasesPage } from "./pages/AppReleases";
 import { LandingImagesPage } from "./pages/LandingImages";
+import { LegalPagesAdmin } from "./pages/LegalPages";
 import { AgeRulesPage } from "./pages/AgeRules";
 import { AnalyticsPage } from "./pages/Analytics";
 import { SystemStatusPage } from "./pages/SystemStatus";
@@ -28,7 +29,7 @@ import { SeriesListPage } from "./pages/SeriesList";
 import { TopicsPage } from "./pages/Topics";
 import { api, setSession, signOut, useSession, type AdminSession } from "./session";
 
-type Section = "status" | "tracing" | "analytics" | "series" | "library" | "import" | "posts" | "topics" | "announcements" | "ranks" | "channels" | "comments" | "reports" | "members" | "orders" | "products" | "geo" | "age" | "app" | "landing" | "admins" | "audit";
+type Section = "status" | "tracing" | "analytics" | "series" | "library" | "import" | "posts" | "topics" | "announcements" | "ranks" | "channels" | "comments" | "reports" | "members" | "orders" | "products" | "geo" | "age" | "app" | "landing" | "legal" | "admins" | "audit";
 
 const NAV: { key: Section; label: string; icon: ReactNode }[] = [
   { key: "status", label: "系统状态", icon: <Activity size={17} /> },
@@ -49,6 +50,7 @@ const NAV: { key: Section; label: string; icon: ReactNode }[] = [
   { key: "products", label: "商品", icon: <Coins size={17} /> },
   { key: "geo", label: "地区屏蔽", icon: <Globe size={17} /> },
   { key: "age", label: "年龄验证", icon: <ShieldCheck size={17} /> },
+  { key: "legal", label: "法律条款", icon: <Scale size={17} /> },
   { key: "app", label: "App 版本", icon: <Smartphone size={17} /> },
   { key: "landing", label: "下载页图片", icon: <Images size={17} /> },
   { key: "admins", label: "管理员", icon: <Users size={17} /> },
@@ -105,6 +107,7 @@ function Layout({ session }: { session: AdminSession }) {
   else if (section === "age") page = <AgeRulesPage />;
   else if (section === "app") page = <AppReleasesPage />;
   else if (section === "landing") page = <LandingImagesPage />;
+  else if (section === "legal") page = <LegalPagesAdmin />;
   else if (section === "admins") page = <AdminsPage currentUserId={session.id} />;
   else page = <AuditLogPage />;
 

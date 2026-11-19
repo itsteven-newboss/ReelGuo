@@ -685,6 +685,33 @@ namespace ReelGuo.Data.Migrations
                     b.ToTable("landing_images", (string)null);
                 });
 
+            modelBuilder.Entity("ReelGuo.Data.Entities.LegalReview", b =>
+                {
+                    b.Property<string>("Slug")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("slug");
+
+                    b.Property<bool>("UnderReview")
+                        .HasColumnType("boolean")
+                        .HasColumnName("under_review");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Slug")
+                        .HasName("pk_legal_reviews");
+
+                    b.ToTable("legal_reviews", (string)null);
+                });
+
             modelBuilder.Entity("ReelGuo.Data.Entities.MediaJob", b =>
                 {
                     b.Property<long>("Id")
@@ -1636,6 +1663,12 @@ namespace ReelGuo.Data.Migrations
                     b.Property<long?>("AuthorId")
                         .HasColumnType("bigint")
                         .HasColumnName("author_id");
+
+                    b.Property<string>("CardBadge")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("card_badge");
 
                     b.Property<int>("CategoryId")
                         .HasColumnType("integer")

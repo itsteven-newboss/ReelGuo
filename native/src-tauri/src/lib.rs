@@ -53,7 +53,7 @@ pub fn run() {
                 .on_navigation(move |url| shell::allow_navigation(&navigation, url));
             #[cfg(desktop)]
             let window = window
-                .title("黄约短剧")
+                .title("黄月短剧")
                 .inner_size(1280.0, 800.0)
                 // The web app switches to its desktop layout at 900 px.
                 .min_inner_size(900.0, 600.0)

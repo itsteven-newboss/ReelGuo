@@ -22,4 +22,9 @@
     <ProjectReference Include="..\ReelGuo.Data\ReelGuo.Data.csproj" />
   </ItemGroup>
 
+  <!-- The legal pages' text (用户协议, 隐私政策, 内容政策, 充值协议), read as legal/<slug>.md. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Legal\Texts\*.md" LogicalName="legal/%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>
