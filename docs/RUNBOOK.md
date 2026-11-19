@@ -235,12 +235,23 @@ deploy. A new app build is needed only when `native/` changes.
 | Key | Used for | Where it lives |
 |---|---|---|
 | Updater signing key | Desktop apps install only updates signed with it | Generated in development as `.tools/signing/reelguo-updater.key`; public key in `native/src-tauri/tauri.conf.json`. For production, generate a new key with a password (`pnpm --filter @reelguo/native tauri signer generate -w <file>`) and put its public key in the config |
-| Android keystore | Android accepts an update only from the same key | Create once (`keytool -genkey -v -keystore release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias reelguo`), never replace |
+| Android keystore | Android accepts an update only from the same key | Created on 2026-11-19 as `.tools/signing/reelguo-android.p12` (PKCS12, alias `reelguo`, valid to 2054; password in `reelguo-android.password.txt` next to it). Never replace. (Made with OpenSSL; `keytool -genkey -v -keystore release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias reelguo` makes an equivalent one) |
 
-**Building.** Run the **Native apps** workflow in GitHub Actions (or push a tag `app-v0.6.0`). It needs the
-`REELGUO_ORIGINS` repository variable (for example `https://app.example.com,https://app2.example.net`) and the secrets
-listed at the top of `.github/workflows/native.yml`. Bump `version` in `native/src-tauri/tauri.conf.json`,
-`Cargo.toml` and `native/package.json` first.
+**Building.** Run the **Native apps** workflow in GitHub Actions (or push a tag `app-v0.6.0`). Bump `version` in
+`native/src-tauri/tauri.conf.json`, `Cargo.toml` and `native/package.json` first. It needs these in GitHub under
+Settings → Secrets and variables → Actions (each job checks them first and names any that are missing):
+
+| Tab | Name | Value |
+|---|---|---|
+| Variables | `REELGUO_ORIGINS` | The app's server addresses, comma-separated, preferred first (`https://huangyueai.com`). Compiled into the apps: changing it needs a new build |
+| Secrets | `TAURI_SIGNING_PRIVATE_KEY` | The content of `.tools/signing/reelguo-updater.key` |
+| Secrets | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Only when the updater key has a password (the development key has none) |
+| Secrets | `ANDROID_KEYSTORE_BASE64` | The content of `.tools/signing/reelguo-android.p12.base64.txt` (`base64 -w0` of the keystore) |
+| Secrets | `ANDROID_KEYSTORE_PASSWORD` | The content of `.tools/signing/reelguo-android.password.txt` |
+| Secrets | `ANDROID_KEY_ALIAS` | `reelguo` |
+
+When the run finishes, its **Artifacts** list holds `android` (the signed APK), `desktop-windows-latest` (the
+`-setup.exe` and its `.sig`), `desktop-macos-latest` and `desktop-ubuntu-22.04`.
 
 **Publishing:**
 1. In **App 版本** (app versions), add one release per platform. **上传安装包** (upload installer) stores the file on

@@ -4,9 +4,11 @@ name: Native apps
 # Runs on demand and for app-v* tags. Publishing a build to viewers stays a human step: upload the files to the
 # download host, then add the release in Admin → App 版本 (docs/RUNBOOK.md §9).
 #
-# Needs, in the repository settings:
-#   variable REELGUO_ORIGINS                    the app's server addresses, comma-separated, preferred first
-#   secrets  TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) the updater signing key (.tools/signing/reelguo-updater.key)
+# Needs, in the repository settings (Settings → Secrets and variables → Actions); each job checks them first and
+# names any that are missing:
+#   variable REELGUO_ORIGINS               the app's server addresses, comma-separated, preferred first
+#   secrets  TAURI_SIGNING_PRIVATE_KEY     the updater signing key: the content of .tools/signing/reelguo-updater.key
+#            TAURI_SIGNING_PRIVATE_KEY_PASSWORD   only when that key has a password
 #            ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS   the APK signing key
 on:
   workflow_dispatch:
@@ -35,9 +37,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Server addresses are set
+      - name: Settings are in place
         shell: bash
-        run: test -n "$REELGUO_ORIGINS" || { echo "::error::Set the REELGUO_ORIGINS repository variable"; exit 1; }
+        env:
+          HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+        run: |
+          missing=0
+          need() { echo "::error::Missing $1 (Settings → Secrets and variables → Actions; docs/RUNBOOK.md §9)"; missing=1; }
+          [ -n "$REELGUO_ORIGINS" ] || need "variable REELGUO_ORIGINS"
+          [ "$HAS_UPDATER_KEY" = true ] || need "secret TAURI_SIGNING_PRIVATE_KEY"
+          exit $missing
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -79,8 +88,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Server addresses are set
-        run: test -n "$REELGUO_ORIGINS" || { echo "::error::Set the REELGUO_ORIGINS repository variable"; exit 1; }
+      - name: Settings are in place
+        env:
+          HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+          HAS_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD != '' }}
+          HAS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS != '' }}
+        run: |
+          missing=0
+          need() { echo "::error::Missing $1 (Settings → Secrets and variables → Actions; docs/RUNBOOK.md §9)"; missing=1; }
+          [ -n "$REELGUO_ORIGINS" ] || need "variable REELGUO_ORIGINS"
+          [ "$HAS_KEYSTORE" = true ] || need "secret ANDROID_KEYSTORE_BASE64"
+          [ "$HAS_PASSWORD" = true ] || need "secret ANDROID_KEYSTORE_PASSWORD"
+          [ "$HAS_ALIAS" = true ] || need "secret ANDROID_KEY_ALIAS"
+          exit $missing
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -90,7 +110,20 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      # A wrong keystore, password or alias would otherwise only show after the 15-minute build.
+      - name: Signing key opens
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/check.jks"
+          ok=0
+          keytool -list -keystore "$RUNNER_TEMP/check.jks" -storepass:env ANDROID_KEYSTORE_PASSWORD -alias "$ANDROID_KEY_ALIAS" > /dev/null || ok=1
+          rm "$RUNNER_TEMP/check.jks"
+          [ $ok = 0 ] || { echo "::error::The Android keystore doesn't open with ANDROID_KEYSTORE_PASSWORD, or has no key named ANDROID_KEY_ALIAS"; exit 1; }
+      # v4: v3 also installs the old "tools" package, which Google no longer serves ("Failed to find package 'tools'").
+      - uses: android-actions/setup-android@v4
       - name: Android NDK
         run: |
           sdkmanager --install "ndk;27.2.12479018"
