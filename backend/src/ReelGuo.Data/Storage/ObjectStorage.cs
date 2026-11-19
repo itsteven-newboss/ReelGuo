@@ -77,6 +77,12 @@ public static partial class StorageKeys
         ".vtt" => "text/vtt",
         ".json" => "application/json",
         ".csv" => "text/csv",
+        // App installers (App 版本). Android only offers to install a download served as an APK.
+        ".apk" => "application/vnd.android.package-archive",
+        ".exe" => "application/vnd.microsoft.portable-executable",
+        ".msi" => "application/x-msi",
+        ".dmg" => "application/x-apple-diskimage",
+        ".gz" => "application/gzip",
         _ => "application/octet-stream",
     };
 

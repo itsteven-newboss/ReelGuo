@@ -11,7 +11,9 @@ import pkg from "./package.json" with { type: "json" };
 // Node types aren't installed in this app; the config only reads one variable.
 declare const process: { env: Record<string, string | undefined> };
 const apiUrl = process.env.REELGUO_API_URL ?? "http://localhost:5080";
-const apiProxy = { "/api": apiUrl, "/media": apiUrl, "/health": apiUrl };
+// /app/download hands each device its own file (backend Apps/AppDownloadEndpoints.cs). It keeps the Host header, as
+// Caddy does: the iPhone profile points at the address the visitor used.
+const apiProxy = { "/api": apiUrl, "/media": apiUrl, "/health": apiUrl, "/app/download": { target: apiUrl, changeOrigin: false } };
 
 const previewHeaders = Object.fromEntries(Object.entries(securityHeaders).filter(([k]) => !k.startsWith("//")));
 
@@ -44,7 +46,8 @@ export default defineConfig({
       workbox: {
         // Cache the app shell only. API responses and video are never cached by the service worker.
         navigateFallback: "/index.html",
-        navigateFallbackDenylist: [/^\/api\//, /^\/media\//, /^\/health/],
+        // /app/download answers from the server (a file or a redirect), never from the cached app shell.
+        navigateFallbackDenylist: [/^\/api\//, /^\/media\//, /^\/health/, /^\/app\/download/],
       },
     }),
   ],

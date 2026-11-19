@@ -7169,6 +7169,46 @@
         }
       }
     },
+    "/api/admin/app-releases/files": {
+      "post": {
+        "tags": [
+          "Admin: app releases"
+        ],
+        "summary": "Uploads an installer as the raw request body (?platform=…&name=<file name>); returns its address and SHA-256 for the release.",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppFileDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/landing-images": {
       "get": {
         "tags": [
@@ -9788,6 +9828,30 @@
           },
           "monetization": {
             "type": "boolean"
+          }
+        }
+      },
+      "AppFileDto": {
+        "required": [
+          "url",
+          "name",
+          "size",
+          "sha256"
+        ],
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sha256": {
+            "type": "string"
           }
         }
       },

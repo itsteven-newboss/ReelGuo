@@ -472,6 +472,7 @@ about US$12 for a month.
 |---|---|
 | `REELGUO_APP_URL` | The staging address (`https://…`, no trailing slash). Used for canonical links, payment returns and the apps' address list. |
 | `REELGUO_STAGING_MODE` | `tunnel` (default) or `public-port`. |
+| `REELGUO_PROFILE_CERT`, `REELGUO_PROFILE_CERT_PASSWORD` | Optional. A `.pfx` certificate (with its private key) that signs the iPhone install profile, so iOS shows it as 已验证 (verified) instead of 未签名 (unsigned). See docs/RUNBOOK.md §9. Empty: the profile is unsigned and still installs. Run `ops.ps1 config` after changing. |
 | `REELGUO_ADMIN_HOST` | Public-port mode: the admin console's own address, for example `admin.yourdomain.com` (a proxied DNS record to this server). Empty: the console is only on the server (localhost:8081). Protect it with Cloudflare Access. |
 | `CLOUDFLARE_TUNNEL_TOKEN` | The tunnel connector's token (tunnel mode). After changing it, run `ops.ps1 config`. |
 | `REELGUO_WEB_PORT`, `REELGUO_ADMIN_PORT`, `REELGUO_API_PORT` | Local ports: the app (8080, or 80 in public-port mode), the admin console (8081), the API (5080). |

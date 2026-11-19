@@ -243,15 +243,44 @@ listed at the top of `.github/workflows/native.yml`. Bump `version` in `native/s
 `Cargo.toml` and `native/package.json` first.
 
 **Publishing:**
-1. Upload the files to the download host over https. Use a host outside the main domain, so a blocked domain doesn't
-   take the downloads with it.
-2. In **App 版本** (app versions), add one release per platform: version, download URL and SHA-256.
-   - **Windows / macOS / Linux:** also paste the `.sig` file's content into 更新签名 (update signature). macOS uses
-     the `.app.tar.gz`.
+1. In **App 版本** (app versions), add one release per platform. **上传安装包** (upload installer) stores the file on
+   the server (under `/media/p/app/`) and fills in the download address, the SHA-256 and, from the file name, the
+   version. The address is site-relative, so the file downloads from whichever of our domains the visitor uses.
+   Through Cloudflare one upload is at most 100 MB; for a bigger file open the admin console on the server itself, or
+   put the file on another download host and paste its https address instead.
+   - **Windows / macOS / Linux:** also fill in 更新签名 (update signature): **读取 .sig 签名文件** reads the `.sig`
+     file built next to the installer. Windows takes the `-setup.exe`; macOS the `.app.tar.gz` (the updater can't use
+     the `.dmg`); Linux the `.AppImage`.
    - **Android:** the signed APK.
-3. Tick 发布 (publish). Desktop apps update on their next start; Android apps show a download prompt; the 下载 App
-   page shows the new version.
-4. Use 强制更新 (mandatory) only when old versions must stop working: older apps then can't be used until they update.
+   - **iPhone:** nothing to build or upload. iPhones get a configuration profile that puts the site on the home screen
+     as a full-screen app (`/app/download/ios`; see below). If you buy an outside signing service for a real iPhone
+     app, add an **iPhone** release with its install link (`https://` or `itms-services://`) and iPhones get that
+     instead.
+2. Tick 发布 (publish). Desktop apps update on their next start; Android apps show a download prompt; the 下载 App
+   page and the download links offer the new version.
+3. Use 强制更新 (mandatory) only when old versions must stop working: older apps then can't be used until they update.
+
+Deleting a release deletes the installer uploaded for it. Uploads that were never saved in a release are deleted a day
+later.
+
+**Download links** (listed with copy buttons at the top of App 版本). They always lead to the newest published
+release, so they never need changing:
+
+| Link | Gives |
+|---|---|
+| `/app/download` | Reads the device: Android phones get the APK and Windows computers the installer straight away; iPhones land on the download page with the install steps open; Macs pick Apple or Intel chip (preselected when the browser tells); WeChat, QQ and other in-app browsers, which block downloads, get a prompt to open the page in the phone's browser. The download page's QR code points here. Use this link for promotion and sharing. |
+| `/app/download/android`, `/windows`, `/mac-arm`, `/mac-intel`, `/linux` | That platform's file, whatever the device. |
+| `/app/download/ios` | The home-screen profile (or the published iPhone install link). |
+
+A platform with nothing published lands on the download page with 即将上线 (coming soon).
+
+**The iPhone profile** is generated for the domain the visitor used, with the 黄月短剧 icon
+(`backend/src/ReelGuo.Api/Apps/webclip-icon.png`, written by `pnpm brand:icons`). Visitors install it from Safari:
+allow the download, then 设置 → 已下载描述文件 → 安装. Every profile has the same identifier, so installing it from a
+new domain replaces the old icon. Unsigned, iOS labels it 未签名 (unsigned) but installs it. To have it shown as
+已验证 (verified), set `App__ProfileCertificatePath` (and `App__ProfileCertificatePassword`) to a `.pfx` with its
+private key from a certificate authority iPhones trust (for example a certificate for the site's domain; on staging:
+`REELGUO_PROFILE_CERT` in `staging.env`). The file is read again when it changes, so renewing it needs no restart.
 
 **Mirrors.** `App__Mirrors__0`, `App__Mirrors__1`, … list the addresses the apps may use, preferred first. Apps keep
 the latest list, so add a new domain (with TLS and the same app) **before** the current one is blocked.

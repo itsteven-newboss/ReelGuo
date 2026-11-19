@@ -499,7 +499,12 @@ function Write-ReleaseConfig([string]$Dir) {
         # Every request comes from Caddy on this server; behind Cloudflare the visitor's IP and country are in its headers.
         Network           = @{ TrustedProxies = @('127.0.0.1/32', '::1/128'); ClientIpHeader = 'CF-Connecting-IP' }
         Geo               = @{ TrustCountryHeader = $true }
-        App               = @{ Mirrors = @($appUrl) }
+        # The iPhone install profile is signed when a certificate is set (iOS then shows it as verified).
+        App               = @{
+            Mirrors                    = @($appUrl)
+            ProfileCertificatePath     = (Get-Setting 'REELGUO_PROFILE_CERT')
+            ProfileCertificatePassword = (Get-Setting 'REELGUO_PROFILE_CERT_PASSWORD')
+        }
         Seo               = @{
             TemplatePath   = (Join-Path $CurrentLink 'web\client\index.html')
             AllowIndexing  = ((Get-Setting 'REELGUO_ALLOW_INDEXING' 'false') -eq 'true')

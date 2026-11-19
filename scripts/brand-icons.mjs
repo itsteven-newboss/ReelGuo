@@ -6,6 +6,7 @@
 //   web/apps/client/public/icons/icon-{192,512}.png               install icons (transparent)
 //   web/apps/client/public/icons/maskable-512.png                 Android install icon (on black, inside the safe zone)
 //   web/apps/client/public/icons/apple-touch-icon.png             iOS home screen (180 px, on black)
+//   backend/src/ReelGuo.Api/Apps/webclip-icon.png                 the same, in the iPhone install profile
 //   web/apps/admin/public/favicon.ico
 //   native/boot/icon.webp, native/app-icon.png + app-icon.json    desktop / Android app (then `tauri icon`)
 //
@@ -105,7 +106,10 @@ save("web/apps/client/public/icons/icon-512.png", await tile(512, 0.94));
 // Maskable: Android may cut the icon to a circle of 80% of the side, so the whole mark stays inside it.
 const safe = round ? 0.8 : 0.8 / Math.sqrt(1 + (aspect >= 1 ? 1 / aspect ** 2 : aspect ** 2));
 save("web/apps/client/public/icons/maskable-512.png", await tile(512, Math.min(0.9, safe * 0.96), black));
-save("web/apps/client/public/icons/apple-touch-icon.png", await tile(180, round ? 0.88 : 0.8, black));
+const appleTouch = await tile(180, round ? 0.88 : 0.8, black);
+save("web/apps/client/public/icons/apple-touch-icon.png", appleTouch);
+// The API serves the same icon in the iPhone install profile (/app/download/ios).
+save("backend/src/ReelGuo.Api/Apps/webclip-icon.png", appleTouch);
 
 // 3. The desktop / Android app: start page and the source for `tauri icon` (which writes native/src-tauri/icons).
 if (native) {

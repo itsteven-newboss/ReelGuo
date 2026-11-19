@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using ReelGuo.Api.Admin;
+using ReelGuo.Api.Apps;
 using ReelGuo.Api.Infrastructure;
 using ReelGuo.Data;
 using ReelGuo.Data.Entities;
@@ -19,6 +20,14 @@ public sealed class AppOptions
     /// mirror domains). The app caches this list, so a domain that gets blocked can be replaced without a new build.
     /// </summary>
     public List<string> Mirrors { get; set; } = [];
+
+    /// <summary>
+    /// Optional: a .pfx / .p12 certificate (with its private key and intermediates) that signs the iPhone install profile,
+    /// so iOS shows it as 已验证 instead of 未签名. Any certificate iPhones trust works, e.g. one issued for the site's
+    /// domain. Unset: the profile is served unsigned (it still installs).
+    /// </summary>
+    public string? ProfileCertificatePath { get; set; }
+    public string? ProfileCertificatePassword { get; set; }
 }
 
 public sealed record AppReleaseDto(string Platform, string Version, string Url, string? Sha256, string Notes, bool Mandatory, DateTimeOffset? PublishedAt);
@@ -35,9 +44,13 @@ public sealed record TauriUpdateDto(string Version, string Notes, DateTimeOffset
 /// <summary>Semantic versions as the apps report them ("0.6.0", "v1.2", "1.0.0-beta.1"; pre-release tags are ignored).</summary>
 public static class AppVersions
 {
-    public static readonly string[] Platforms = ["windows-x86_64", "darwin-aarch64", "darwin-x86_64", "linux-x86_64", "android"];
+    /// <summary>
+    /// <c>ios</c> is not a build of ours: it is an install link from an outside signing service, offered to iPhones in
+    /// place of the home-screen profile when published (Apps/AppDownloadEndpoints.cs).
+    /// </summary>
+    public static readonly string[] Platforms = ["windows-x86_64", "darwin-aarch64", "darwin-x86_64", "linux-x86_64", "android", "ios"];
 
-    public static bool IsDesktop(string platform) => platform != "android";
+    public static bool IsDesktop(string platform) => platform is not ("android" or "ios");
 
     public static Version? Parse(string? value)
     {
@@ -68,14 +81,14 @@ public static class AppEndpoints
 
     internal static AppReleaseDto ToDto(AppRelease r) => new(r.Platform, r.Version, r.Url, r.Sha256, r.Notes, r.Mandatory, r.PublishedAt);
 
-    private static async Task<List<AppRelease>> PublishedAsync(ReelGuoDbContext db, string platform, CancellationToken ct) =>
+    internal static async Task<List<AppRelease>> PublishedAsync(ReelGuoDbContext db, string platform, CancellationToken ct) =>
         (await db.AppReleases.AsNoTracking().Where(r => r.Platform == platform && r.Published).ToListAsync(ct))
             .Where(r => AppVersions.Parse(r.Version) is not null)
             .OrderByDescending(r => AppVersions.Parse(r.Version))
             .ToList();
 
     private static async Task<Results<Ok<AppBootstrapDto>, BadRequest<ApiErrorResponse>>> Bootstrap(
-        ReelGuoDbContext db, IOptions<AppOptions> options, [FromQuery] string? platform, [FromQuery] string? version, CancellationToken ct)
+        HttpContext http, ReelGuoDbContext db, IOptions<AppOptions> options, [FromQuery] string? platform, [FromQuery] string? version, CancellationToken ct)
     {
         var p = (platform ?? "").Trim().ToLowerInvariant();
         if (!AppVersions.Platforms.Contains(p)) return TypedResults.BadRequest(ApiErrorResponse.Of("invalid_platform", "未知的平台"));
@@ -85,7 +98,9 @@ public static class AppEndpoints
         var latest = releases.FirstOrDefault();
         var newer = current is null ? [] : releases.Where(r => AppVersions.Parse(r.Version) > current).ToList();
         var mirrors = options.Value.Mirrors.Select(m => m.Trim().TrimEnd('/')).Where(m => m.Length > 0).Distinct().ToList();
-        return TypedResults.Ok(new AppBootstrapDto(mirrors, latest is null ? null : ToDto(latest), newer.Count > 0, newer.Any(r => r.Mandatory)));
+        // The apps open the file outside the web view, so a file uploaded in admin (/media/...) gets this server's address.
+        var dto = latest is null ? null : ToDto(latest) with { Url = AppDownloadEndpoints.Absolute(latest.Url, http.Request) };
+        return TypedResults.Ok(new AppBootstrapDto(mirrors, dto, newer.Count > 0, newer.Any(r => r.Mandatory)));
     }
 
     private static async Task<Ok<List<AppReleaseDto>>> Latest(ReelGuoDbContext db, CancellationToken ct)
@@ -103,13 +118,14 @@ public static class AppEndpoints
     /// Tauri updater dynamic endpoint: 200 with the newest signed release for {target}-{arch} when it is newer than
     /// {current}, otherwise 204 (no update).
     /// </summary>
-    private static async Task<IResult> TauriUpdate(string target, string arch, string current, ReelGuoDbContext db, CancellationToken ct)
+    private static async Task<IResult> TauriUpdate(string target, string arch, string current, HttpContext http, ReelGuoDbContext db, CancellationToken ct)
     {
         var platform = $"{target}-{arch}".ToLowerInvariant();
         if (!AppVersions.Platforms.Contains(platform) || !AppVersions.IsDesktop(platform) || AppVersions.Parse(current) is not { } running)
             return Results.NoContent();
         var latest = (await PublishedAsync(db, platform, ct)).FirstOrDefault(r => !string.IsNullOrEmpty(r.Signature));
         if (latest is null || AppVersions.Parse(latest.Version) <= running) return Results.NoContent();
-        return TypedResults.Ok(new TauriUpdateDto(latest.Version, latest.Notes, latest.PublishedAt ?? latest.UpdatedAt, latest.Url, latest.Signature!));
+        return TypedResults.Ok(new TauriUpdateDto(latest.Version, latest.Notes, latest.PublishedAt ?? latest.UpdatedAt,
+            AppDownloadEndpoints.Absolute(latest.Url, http.Request), latest.Signature!));
     }
 }

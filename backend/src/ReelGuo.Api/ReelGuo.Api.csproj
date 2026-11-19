@@ -16,6 +16,7 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
     <PackageReference Include="Scalar.AspNetCore" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -25,6 +26,11 @@
   <!-- The legal pages' text (用户协议, 隐私政策, 内容政策, 充值协议), read as legal/<slug>.md. -->
   <ItemGroup>
     <EmbeddedResource Include="Legal\Texts\*.md" LogicalName="legal/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- The iPhone home-screen icon in the install profile (Apps/WebClipProfile.cs); scripts/brand-icons.mjs writes it. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Apps\webclip-icon.png" LogicalName="apps/webclip-icon.png" />
   </ItemGroup>
 
 </Project>

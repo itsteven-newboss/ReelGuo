@@ -2,7 +2,7 @@ import { unwrap, type Schemas } from "@reelguo/api-client";
 import { faApple } from "@fortawesome/free-brands-svg-icons";
 import { BrandMark, Img } from "@reelguo/ui";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDown, ChevronDown, Crown, Flame, Lightbulb, MonitorSmartphone, Play, Share, Smartphone, SquarePlus, X } from "lucide-react";
+import { ArrowDown, ChevronDown, Copy, Crown, Download, Flame, Lightbulb, MonitorSmartphone, Play, Settings, Share, ShieldCheck, Smartphone, SquarePlus, X } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { renderSVG } from "uqr";
 import { api, useCategories, useListingPage, useRanks, useSeriesList, useSite, type VideoCard } from "../api";
@@ -11,6 +11,7 @@ import { Link } from "../router";
 import { Wordmark } from "../portal/chrome";
 import { useUi } from "../state/ui";
 import { BRAND } from "../brand";
+import { installHint, macChip, thisDevice, type Device } from "./device";
 
 /*
  * App download landing page at /app/{section}, laid out like the reference product's download site (measured at
@@ -116,16 +117,6 @@ function ArtBackground({ url, shade, warm }: { url: string | null | undefined; s
       {shade && <div className="absolute inset-0" style={{ background: shade }} />}
     </div>
   );
-}
-
-type Platform = "android" | "ios" | "mac" | "windows" | "other";
-function detectPlatform(): Platform {
-  const ua = navigator.userAgent;
-  if (/android/i.test(ua)) return "android";
-  if (/iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1)) return "ios";
-  if (/mac os x|macintosh/i.test(ua)) return "mac";
-  if (/windows/i.test(ua)) return "windows";
-  return "other";
 }
 
 /** The Android build through another of our domains, for when the main one is blocked; the same file otherwise. */
@@ -247,6 +238,9 @@ export function AppLanding({ section }: { section: LandingSection }) {
   const [active, setActive] = useState<LandingSection>(section);
   const [macOpen, setMacOpen] = useState(false);
   const [iosHelp, setIosHelp] = useState(false);
+  const [inApp, setInApp] = useState(false);
+  const device = useMemo(thisDevice, []);
+  const [chip, setChip] = useState<"arm" | "x86" | null>(null);
   const refs = useRef<Partial<Record<LandingSection, HTMLElement | null>>>({});
   const spyLock = useRef(0);
   const headerH = wide ? u(104, 0) : u(0, 58) + u(0, 54);
@@ -259,16 +253,21 @@ export function AppLanding({ section }: { section: LandingSection }) {
 
   const release = (p: string) => releases.data?.find((r: Release) => r.platform === p);
   const open = (url: string) => { window.location.href = url; };
+  const SOON = "该版本即将上线，敬请期待";
+  // WeChat, QQ and the like block downloads: ask to open the page in a real browser first.
   const get = (p: string) => {
+    if (device.inApp) return setInApp(true);
     const r = release(p);
     if (r) open(r.url);
-    else toast(releases.isPending ? "正在获取下载地址，请稍候" : "该版本即将上线，敬请期待");
+    else toast(releases.isPending ? "正在获取下载地址，请稍候" : SOON);
   };
   const androidBackup = () => {
+    if (device.inApp) return setInApp(true);
     const r = release("android");
     if (r) open(backupUrl(r.url, site?.mirrors ?? []));
-    else toast("该版本即将上线，敬请期待");
+    else toast(SOON);
   };
+  const ios = () => (device.inApp ? setInApp(true) : setIosHelp(true));
 
   const scrollTo = (id: LandingSection, smooth = true) => {
     const el = refs.current[id];
@@ -282,15 +281,42 @@ export function AppLanding({ section }: { section: LandingSection }) {
     window.history.replaceState({}, "", `/app/${id}`);
     scrollTo(id);
   };
-  /** The visitor's own platform: download it, or show the iPhone steps / the Mac chip choice. */
-  const primary = () => {
-    const p = detectPlatform();
-    if (p === "android") get("android");
-    else if (p === "ios") setIosHelp(true);
-    else if (p === "windows") get("windows-x86_64");
-    else if (p === "mac") { scrollTo("home"); setMacOpen(true); }
-    else scrollTo("home");
+  /** Asks a Mac's browser for its chip, to download the right build at once or mark it in the chooser. */
+  const mac = async () => {
+    const c = chip ?? (await macChip());
+    setChip(c);
+    return c;
   };
+  const chooseMac = () => { scrollTo("home"); setMacOpen(true); };
+  /** The visitor's own device: download its file, or show the iPhone steps / the Mac chip choice. */
+  const primary = async () => {
+    if (device.inApp) return setInApp(true);
+    switch (device.os) {
+      case "android": return get("android");
+      case "ios": return setIosHelp(true);
+      case "windows": return get("windows-x86_64");
+      case "linux": return get("linux-x86_64");
+      case "harmony": return toast("鸿蒙 NEXT 暂不支持安装安卓 App，可直接用浏览器观看，或把本站添加到桌面");
+      case "mac": {
+        const c = await mac();
+        return c ? get(c === "arm" ? "darwin-aarch64" : "darwin-x86_64") : chooseMac();
+      }
+      default: return scrollTo("home");
+    }
+  };
+
+  // Sent here by /app/download (the QR code, a shared link) with ?install=… when there was no file to hand over.
+  useEffect(() => {
+    const hint = installHint(window.location.search);
+    if (!hint) return;
+    window.history.replaceState({}, "", window.location.pathname);
+    if (hint === "browser" || device.inApp) setInApp(true);
+    else if (hint === "ios" || device.os === "ios") setIosHelp(true);   // an iPad asking for the desktop site comes as "mac"
+    else if (hint === "mac") void mac().then(() => setMacOpen(true));
+    else if (hint === "auto") { if (device.os === "harmony") void primary(); }
+    else toast(SOON);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Open at the section in the URL, then keep the tab and the URL in step with the scroll position.
   useEffect(() => {
@@ -320,7 +346,7 @@ export function AppLanding({ section }: { section: LandingSection }) {
   }, [headerH]);
 
   const reg = (id: LandingSection) => (el: HTMLElement | null) => { refs.current[id] = el; };
-  const actions = { get, androidBackup, primary, macOpen, setMacOpen, setIosHelp };
+  const actions = { get, androidBackup, primary, ios, chip, macOpen, setMacOpen: (v: boolean) => { if (v) void mac(); setMacOpen(v); } };
 
   return (
     <div className="min-h-dvh bg-[#050505] text-white overflow-x-clip" style={{ fontFamily: '"PingFang SC","Microsoft YaHei",Arial,sans-serif' }}>
@@ -333,7 +359,8 @@ export function AppLanding({ section }: { section: LandingSection }) {
       <section ref={reg("creator")} id="creator" aria-label="创作者计划"><Creator covers={covers} contact={site?.telegram || (site?.email ? `mailto:${site.email}` : "/go-home")} /></section>
       <section ref={reg("about")} id="about" aria-label="关于我们"><About covers={covers} /></section>
       <LandingFooter onAbout={() => goTab("about")} />
-      {iosHelp && <IosHelp onClose={() => setIosHelp(false)} />}
+      {iosHelp && <IosHelp device={device} external={!!release("ios")} onClose={() => setIosHelp(false)} />}
+      {inApp && <InAppGuide device={device} onClose={() => setInApp(false)} />}
     </div>
   );
 }
@@ -384,7 +411,10 @@ function LandingHeader({ active, onTab, onClient }: { active: LandingSection; on
 
 /* ------------------------------------------------------------------ hero and downloads */
 
-type Actions = { get: (p: string) => void; androidBackup: () => void; primary: () => void; macOpen: boolean; setMacOpen: (v: boolean) => void; setIosHelp: (v: boolean) => void };
+type Actions = {
+  get: (p: string) => void; androidBackup: () => void; primary: () => void; ios: () => void;
+  chip: "arm" | "x86" | null; macOpen: boolean; setMacOpen: (v: boolean) => void;
+};
 
 /**
  * Default first-screen pictures: our own brand artwork, made by D:/reelguo-work/tools/hero-art/make.mjs (desktop
@@ -421,7 +451,7 @@ function Hero(a: Actions) {
           <DeskPlatformButton icon={<WindowsGlyph size={u(22, 0)} />} label="Windows 下载" onClick={() => a.get("windows-x86_64")} />
           <div className="relative">
             <DeskPlatformButton icon={<AppleLogo size={u(22, 0)} plain />} label="macOS 下载" caret onClick={() => a.setMacOpen(!a.macOpen)} />
-            {a.macOpen && <MacChooser onPick={(p) => { a.setMacOpen(false); a.get(p); }} onClose={() => a.setMacOpen(false)} style={{ position: "absolute", right: 0, top: u(78, 0), zIndex: 30 }} />}
+            {a.macOpen && <MacChooser chip={a.chip} onPick={(p) => { a.setMacOpen(false); a.get(p); }} onClose={() => a.setMacOpen(false)} style={{ position: "absolute", right: 0, top: u(78, 0), zIndex: 30 }} />}
           </div>
         </div>
       </div>
@@ -435,7 +465,7 @@ function Hero(a: Actions) {
       <div className="relative" style={{ paddingInline: u(0, 17.6), paddingBottom: u(0, 12) }}>
         <GroupTitle icon={<Smartphone size={u(0, 22)} strokeWidth={1.8} />} label="手机客户端下载" />
         <div className="grid grid-cols-2" style={{ gap: `${u(0, 8.8)}px ${u(0, 10)}px`, marginTop: u(0, 11) }}>
-          <PhoneButton icon={<AppleLogo size={u(0, 24.6)} />} title="苹果手机下载" sub="使用Safari浏览器下载" onClick={() => a.setIosHelp(true)} />
+          <PhoneButton icon={<AppleLogo size={u(0, 24.6)} />} title="苹果手机下载" sub="使用Safari浏览器下载" onClick={a.ios} />
           <PhoneButton icon={<AndroidRobot size={u(0, 24.6)} />} title="安卓手机下载" sub="使用手机浏览器下载" onClick={() => a.get("android")} />
           <PhoneButton icon={<AndroidRobot size={u(0, 24.6)} />} title="安卓备用下载" sub="无法下载时使用此渠道" onClick={a.androidBackup} />
         </div>
@@ -443,7 +473,7 @@ function Hero(a: Actions) {
         <div className="grid grid-cols-2 relative" style={{ gap: u(0, 10), marginTop: u(0, 10) }}>
           <PhonePlatformButton icon={<WindowsGlyph size={u(0, 16)} />} label="Windows 下载" onClick={() => a.get("windows-x86_64")} />
           <PhonePlatformButton icon={<AppleLogo size={u(0, 16)} plain />} label="macOS 下载" caret onClick={() => a.setMacOpen(!a.macOpen)} />
-          {a.macOpen && <MacChooser onPick={(p) => { a.setMacOpen(false); a.get(p); }} onClose={() => a.setMacOpen(false)} style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", top: u(0, 52), zIndex: 30 }} />}
+          {a.macOpen && <MacChooser chip={a.chip} onPick={(p) => { a.setMacOpen(false); a.get(p); }} onClose={() => a.setMacOpen(false)} style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", top: u(0, 52), zIndex: 30 }} />}
         </div>
       </div>
     </div>
@@ -496,16 +526,18 @@ function DeskPlatformButton({ icon, label, caret, onClick }: { icon: ReactNode; 
   );
 }
 
-/** "选择 Mac 芯片版本": Apple silicon or Intel. */
-function MacChooser({ onPick, onClose, style }: { onPick: (p: string) => void; onClose: () => void; style?: CSSProperties }) {
+/** "选择 Mac 芯片版本": Apple silicon or Intel; `chip` marks this Mac's when its browser told. */
+function MacChooser({ chip, onPick, onClose, style }: { chip: "arm" | "x86" | null; onPick: (p: string) => void; onClose: () => void; style?: CSSProperties }) {
   const { u } = useScale();
   const s = (d: number) => u(d, d);
-  const option = (badge: ReactNode, title: string, sub: string, p: string) => (
+  const option = (badge: ReactNode, title: string, sub: string, p: string, mine: boolean) => (
     <button type="button" onClick={() => onPick(p)} className="w-full flex items-center text-left rounded-[12px] border border-white/10 bg-white/[.04] hover:border-[#f2c56d]/60"
       style={{ height: s(64), paddingInline: s(14), gap: s(12) }}>
       <span className="rounded-[10px] bg-[#1d1d1f] border border-white/10 flex items-center justify-center font-bold text-[#d0cfcb] shrink-0" style={{ width: s(38), height: s(38), fontSize: s(14) }}>{badge}</span>
       <span className="min-w-0">
-        <span className="block font-bold text-[#fff8ed]" style={{ fontSize: s(14) }}>{title}</span>
+        <span className="flex items-center font-bold text-[#fff8ed]" style={{ fontSize: s(14), gap: s(6) }}>
+          {title}{mine && <span className="rounded-full bg-[#f2c56d] text-[#1b1206] font-bold" style={{ fontSize: s(10.5), padding: `${s(1)}px ${s(6)}px` }}>本机</span>}
+        </span>
         <span className="block text-[#c3bdb3] truncate" style={{ fontSize: s(12) }}>{sub}</span>
       </span>
     </button>
@@ -518,17 +550,20 @@ function MacChooser({ onPick, onClose, style }: { onPick: (p: string) => void; o
         <button type="button" onClick={onClose} aria-label="关闭" className="rounded-full flex items-center justify-center text-white/70 hover:text-white" style={{ width: s(32), height: s(32) }}><X size={s(18)} /></button>
       </div>
       <div className="flex flex-col" style={{ marginTop: s(10), gap: s(8) }}>
-        {option("M", "Apple 芯片（M 系列）", "适用于 M1 / M2 / M3 / M4 及更新的 Mac", "darwin-aarch64")}
-        {option(<span style={{ fontSize: s(10) }}>x86</span>, "Intel 芯片", "适用于搭载 Intel 处理器的 Mac", "darwin-x86_64")}
+        {option("M", "Apple 芯片（M 系列）", "适用于 M1 / M2 / M3 / M4 及更新的 Mac", "darwin-aarch64", chip === "arm")}
+        {option(<span style={{ fontSize: s(10) }}>x86</span>, "Intel 芯片", "适用于搭载 Intel 处理器的 Mac", "darwin-x86_64", chip === "x86")}
       </div>
     </div>
   );
 }
 
-/** "扫码下载": a QR code of this page, for opening it on a phone. */
+/**
+ * "扫码下载": a QR code of /app/download, which hands the phone that scans it its own file (the APK on Android, the
+ * install steps on an iPhone).
+ */
 function QrCard() {
   const { u } = useScale();
-  const svg = useMemo(() => renderSVG(`${window.location.origin}/app/home`, { border: 1 }), []);
+  const svg = useMemo(() => renderSVG(`${window.location.origin}/app/download`, { border: 1 }), []);
   return (
     <div className="absolute flex items-center" style={{ left: u(75, 0), top: u(400, 0), width: u(288, 0), height: u(150, 0), padding: u(12, 0), gap: u(16, 0), borderRadius: u(16, 0),
       border: "1px solid rgba(240,196,110,.6)", background: "linear-gradient(135deg,rgba(74,50,20,.9),rgba(22,15,6,.92))" }}>
@@ -975,23 +1010,52 @@ function LandingFooter({ onAbout }: { onAbout: () => void }) {
 /* ------------------------------------------------------------------ iPhone steps */
 
 /** iPhone has no store build: install the web app from Safari's share sheet. */
-function IosHelp({ onClose }: { onClose: () => void }) {
+/**
+ * 苹果手机安装. iPhones can't install app files from a website, so 立即下载 (/app/download/ios) gives a profile that puts
+ * the site on the home screen as a full-screen app, and the steps walk through installing it in Settings. When App 版本
+ * has a published iPhone install link (`external`, from an outside signing service), the same button leads there.
+ * Profiles install only from Safari; on a computer the sheet shows a QR code to scan with the iPhone instead.
+ */
+function IosHelp({ device, external, onClose }: { device: Device; external: boolean; onClose: () => void }) {
   const toast = useUi((s) => s.toast);
-  const url = window.location.origin;
-  const steps: [ReactNode, string][] = [
-    [<Smartphone key="a" size={18} />, "用 Safari 浏览器打开本站"],
-    [<Share key="b" size={18} />, "点击底部工具栏的「分享」按钮"],
-    [<SquarePlus key="c" size={18} />, "选择「添加到主屏幕」，再点「添加」"],
-    [<Play key="d" size={18} />, `回到桌面，点开「${BRAND}」即可观看`],
-  ];
+  const onIphone = device.os === "ios";
+  const page = `${window.location.origin}/app/home`;
+  const qr = useMemo(() => (onIphone ? "" : renderSVG(`${window.location.origin}/app/download`, { border: 1 })), [onIphone]);
+  const copy = () => navigator.clipboard?.writeText(page).then(() => toast("网址已复制，请在 Safari 中打开", "ok")).catch(() => toast(page));
+  const steps: [ReactNode, string][] = external
+    ? [
+        [<Download key="a" size={18} />, "点击「立即下载」，按页面提示完成安装"],
+        [<Settings key="b" size={18} />, "如提示「未受信任的开发者」：设置 → 通用 → VPN与设备管理，点开开发者并信任"],
+        [<Play key="c" size={18} />, `回到桌面，点开「${BRAND}」即可观看`],
+      ]
+    : [
+        [<Download key="a" size={18} />, "点击「立即下载」，在弹出的提示中选择「允许」"],
+        [<Settings key="b" size={18} />, "打开手机「设置」，点击顶部的「已下载描述文件」"],
+        [<ShieldCheck key="c" size={18} />, "点击右上角「安装」，输入锁屏密码后确认"],
+        [<Play key="d" size={18} />, `回到桌面，点开「${BRAND}」即可全屏观看`],
+      ];
+  const button = "h-11 rounded-full text-[14px] font-bold flex items-center justify-center gap-1.5";
   return (
     <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/70" role="dialog" aria-modal="true" aria-label="苹果手机安装说明" onClick={onClose}>
-      <div className="w-full sm:w-[400px] rounded-t-[20px] sm:rounded-[20px] border border-[#f2c56d]/40 bg-[#14110c] p-5 pb-7" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full sm:w-[420px] max-h-[92dvh] overflow-y-auto rounded-t-[20px] sm:rounded-[20px] border border-[#f2c56d]/40 bg-[#14110c] p-5 pb-7" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="text-[17px] font-bold" style={{ ...GOLD_TEXT, filter: "none" }}>苹果手机安装</h2>
           <button type="button" onClick={onClose} aria-label="关闭" className="w-8 h-8 rounded-full flex items-center justify-center text-white/70"><X size={18} /></button>
         </div>
-        <p className="mt-1 text-[12.5px] text-white/60">iPhone 无需下载安装包，添加到主屏幕后像 App 一样全屏使用。</p>
+        <p className="mt-1 text-[12.5px] leading-relaxed text-white/60">
+          {external ? "按提示安装苹果版 App。" : `iPhone 无需安装包：装好描述文件后，主屏幕会出现「${BRAND}」图标，点开就像 App 一样全屏观看。`}
+        </p>
+        {!onIphone && (
+          <div className="mt-4 flex items-center gap-4 rounded-[14px] border border-[#f2c56d]/30 bg-white/[.03] p-3">
+            <div className="w-[104px] h-[104px] shrink-0 rounded-[10px] bg-white p-1.5 [&_svg]:w-full [&_svg]:h-full" role="img" aria-label="苹果手机下载二维码" dangerouslySetInnerHTML={{ __html: qr }} />
+            <p className="text-[13px] leading-relaxed text-white/85">用 iPhone 的<b className="text-[#f2c56d]">相机</b>扫描二维码，在 Safari 中打开后按下面的步骤安装。</p>
+          </div>
+        )}
+        {onIphone && !device.safari && (
+          <p className="mt-3 rounded-[12px] border border-[#f2c56d]/40 bg-[#f2c56d]/10 px-3 py-2 text-[13px] leading-relaxed text-[#f6d48c]">
+            请先复制网址，用 <b>Safari 浏览器</b>打开本页再下载：其他浏览器无法安装。
+          </p>
+        )}
         <ol className="mt-4 space-y-3">
           {steps.map(([icon, text], i) => (
             <li key={i} className="flex items-center gap-3 text-[14px] text-white/90">
@@ -1000,11 +1064,49 @@ function IosHelp({ onClose }: { onClose: () => void }) {
             </li>
           ))}
         </ol>
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          <button type="button" onClick={() => navigator.clipboard?.writeText(url).then(() => toast("网址已复制，请在 Safari 中打开", "ok")).catch(() => toast(url))}
-            className="h-11 rounded-full border border-[#f2c56d]/70 text-[#f2c56d] text-[14px] font-bold">复制网址</button>
-          <button type="button" onClick={onClose} className="h-11 rounded-full text-[14px] font-bold text-[#1b1206]" style={{ background: GOLD_FILL }}>知道了</button>
-        </div>
+        {onIphone && (
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <button type="button" onClick={copy} className={`${button} border border-[#f2c56d]/70 text-[#f2c56d]`}><Copy size={16} />复制网址</button>
+            {device.safari
+              ? <a href="/app/download/ios" className={`${button} text-[#1b1206]`} style={{ background: GOLD_FILL }}><Download size={16} />立即下载</a>
+              : <button type="button" onClick={onClose} className={`${button} text-[#1b1206]`} style={{ background: GOLD_FILL }}>知道了</button>}
+          </div>
+        )}
+        {!external && (
+          <div className="mt-4 space-y-1.5 text-[11.5px] leading-relaxed text-white/45">
+            <p>描述文件只添加这一个主屏幕图标，不读取手机里的任何数据，可随时在 设置 → 通用 → VPN与设备管理 中删除。</p>
+            <p className="flex items-center gap-1 flex-wrap">也可以在 Safari 中点<Share size={12} className="inline" />分享 →<SquarePlus size={12} className="inline" />「添加到主屏幕」。</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * WeChat, QQ and other apps' built-in browsers block downloads, so this points at their ··· menu and its
+ * 在浏览器打开 (在 Safari 中打开 on iPhones). Tapping anywhere closes it.
+ */
+function InAppGuide({ device, onClose }: { device: Device; onClose: () => void }) {
+  const toast = useUi((s) => s.toast);
+  const link = `${window.location.origin}/app/download`;
+  const browser = device.os === "ios" ? "Safari" : "浏览器";
+  return (
+    <div className="fixed inset-0 z-[90] bg-black/90" role="dialog" aria-modal="true" aria-label={`请在${browser}中打开`} onClick={onClose}>
+      <svg className="absolute right-[14px] top-[4px]" width="110" height="128" viewBox="0 0 110 128" fill="none" stroke="#f2c56d" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M16 122C22 74 52 38 92 14" strokeDasharray="8 8" />
+        <path d="M74 9 94 13 88 33" />
+      </svg>
+      <div className="mx-auto mt-[150px] w-[min(86vw,360px)] text-center text-white">
+        <p className="text-[19px] font-bold leading-relaxed">
+          点击右上角 <span className="inline-flex items-center justify-center align-middle rounded-full border border-white/70 px-2 h-[24px] text-[16px] leading-none tracking-[2px]">···</span>
+        </p>
+        <p className="mt-2 text-[17px]">选择「<b className="text-[#f8ca06]">{device.os === "ios" ? "在 Safari 中打开" : "在浏览器打开"}</b>」</p>
+        <p className="mt-5 text-[13px] leading-relaxed text-white/65">{device.weChat ? "微信" : "当前应用"}内无法下载安装包，在{browser}中打开后，会自动为你的手机匹配对应的安装包。</p>
+        <button type="button" onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(link).then(() => toast(`链接已复制，请粘贴到${browser}打开`, "ok")).catch(() => toast(link)); }}
+          className="mt-6 h-11 px-6 rounded-full text-[14px] font-bold text-[#1b1206] inline-flex items-center gap-1.5" style={{ background: GOLD_FILL }}>
+          <Copy size={16} />复制下载链接
+        </button>
       </div>
     </div>
   );

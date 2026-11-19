@@ -62,7 +62,7 @@ public sealed class AppReleaseTests(PostgresFixture db) : IClassFixture<Postgres
         var required = await Get(client, "/api/v1/app/bootstrap?platform=android&version=0.6.0").OkJsonAsync();
         Assert.True(required.GetProperty("update_required").GetBoolean());
         Assert.Equal("0.6.1", required.GetProperty("latest").GetProperty("version").GetString());
-        Assert.Equal(HttpStatusCode.BadRequest, (await Get(client, "/api/v1/app/bootstrap?platform=ios&version=1.0.0")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Get(client, "/api/v1/app/bootstrap?platform=symbian&version=1.0.0")).StatusCode);
 
         // The Tauri updater: 200 with the signed bundle when newer, 204 otherwise.
         var update = await Get(client, "/api/v1/app/updates/windows/x86_64/0.5.0").OkJsonAsync();
@@ -99,7 +99,8 @@ public sealed class AppReleaseTests(PostgresFixture db) : IClassFixture<Postgres
         object Body(string platform = "android", string version = "1.0.0", string url = "https://d.example.com/a.apk", string? signature = null, bool published = true) =>
             new { platform, version, url, signature, sha256 = (string?)null, notes = "", mandatory = false, published };
 
-        Assert.Equal("invalid_release", await Rejected(Body(platform: "ios")));
+        Assert.Equal("invalid_release", await Rejected(Body(platform: "symbian")));
+        Assert.Equal("invalid_release", await Rejected(Body(url: "itms-services://?action=download-manifest")));   // only for iPhone install links
         Assert.Equal("invalid_release", await Rejected(Body(version: "latest")));
         Assert.Equal("invalid_release", await Rejected(Body(url: "http://d.example.com/a.apk")));
         Assert.Equal("invalid_release", await Rejected(Body(platform: "windows-x86_64")));   // published desktop build without a signature
