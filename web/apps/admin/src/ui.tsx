@@ -45,6 +45,17 @@ export function Field({ label, hint, children, className = "" }: { label: string
   );
 }
 
+/** Like Field, for a row of buttons: a <label> would give its whole text to the first button as that button's name. */
+export function FieldGroup({ label, hint, children, className = "" }: { label: string; hint?: string; children: ReactNode; className?: string }) {
+  return (
+    <div role="group" aria-label={label} className={`flex flex-col gap-1 text-[12px] text-mut ${className}`}>
+      <span>{label}</span>
+      {children}
+      {hint && <span className="text-[11px] text-dim">{hint}</span>}
+    </div>
+  );
+}
+
 export const inputClass = "h-9 px-3 rounded-(--r-sm) bg-s3 text-on text-[13px] outline-none focus:ring-2 ring-primary placeholder:text-dim";
 
 const STATUS: Record<string, [string, string]> = {

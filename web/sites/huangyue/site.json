@@ -1,0 +1,12 @@
+{
+  "key": "huangyue",
+  "name": "黄月短剧",
+  "short": "黄月",
+  "locale": "zh-CN",
+  "domain": "huangyueai.com",
+  "description": "黄月短剧 · AI 短剧与原创短剧在线观看",
+  "icon": "Assets/huangyueai-moon-icon.png",
+  "iconStyle": "mark",
+  "heroArt": { "desktop": "/landing/home-pc.webp", "phone": "/landing/home-mobile.webp" },
+  "nativeApps": true
+}

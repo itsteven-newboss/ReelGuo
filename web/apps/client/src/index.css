@@ -39,6 +39,23 @@ body { -webkit-tap-highlight-color: transparent; font-size: 14px; }
 .rg-logo__domain { left: 5.8em; top: 3.95em; }
 .rg-logo__domain > span { font: italic 700 1.06em/1 Arial, "Helvetica Neue", Helvetica, sans-serif; letter-spacing: .02em; }
 .rg-logo__domain b { font-weight: inherit; color: #f6ce1c; }
+/* A Latin name (sites with "wordmark" in their site.json): the app icon, then the name as on the icon, two colours in a
+ * heavy rounded italic (Nunito Black Italic, SIL OFL, src/brand/OFL-Nunito.txt; a lowercase subset from
+ * https://fonts.googleapis.com/css2?family=Nunito:ital,wght@1,900&text=abcdefghijklmnopqrstuvwxyz. ) with the
+ * domain ending small under its end. Same em scale as the Chinese lockup. */
+@font-face {
+  font-family: "RG Wordmark Latin";
+  font-weight: 900;
+  font-style: italic;
+  font-display: block;
+  src: url("./brand/wordmark-latin.woff2") format("woff2");
+}
+.rg-logo--latin { display: flex; align-items: center; gap: .55em; width: auto; }
+.rg-logo--latin > * { position: relative; }
+.rg-logo__tile { flex: none; border-radius: 22%; }
+.rg-logo__word { padding: 0 .05em .62em 0; font: italic 900 2.45em/1 "RG Wordmark Latin", "Arial Rounded MT Bold", Arial, sans-serif; letter-spacing: -.01em; }
+.rg-logo--latin .rg-logo__word > span { display: inline; }
+.rg-logo__word .rg-logo__tld { position: absolute; right: .1em; bottom: 0; font: italic 700 .36em/1 Arial, "Helvetica Neue", Helvetica, sans-serif; letter-spacing: .02em; color: #f3f3f3; }
 
 /* Content column: 13 px gutters on phones, 5 vw margins on small desktops, 96 px from 1280 px, at most 1440 px. */
 .rg-wrap { width: calc(100% - 26px); margin-inline: auto; }

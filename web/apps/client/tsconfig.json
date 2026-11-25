@@ -1,7 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["vite/client", "vite-plugin-pwa/client"]
+    "types": ["vite/client", "vite-plugin-pwa/client"],
+    // Type checks use 黄月短剧 and its Chinese dictionary; builds use REELGUO_SITE's (web/sites/plugin.mjs).
+    "paths": {
+      "@reelguo/site": ["../../sites/huangyue/index.ts"],
+      "@reelguo/locale": ["./src/i18n/zh-CN.ts"]
+    }
   },
   "include": ["src", "vite.config.ts"]
 }

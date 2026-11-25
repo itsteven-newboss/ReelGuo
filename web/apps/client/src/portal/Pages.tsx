@@ -3,27 +3,22 @@ import { Img, Spinner } from "@reelguo/ui";
 import { useQuery } from "@tanstack/react-query";
 import { BadgeCheck, Crown, Flame, Search as SearchIcon, Sparkles, Star, TrendingUp } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
+import { Trans } from "react-i18next";
 import { api, useCategories, useListingPage, useRanks, useSearch, useSeriesList, useSite, useTopic, useTopics, type ChannelSort, type RankKind } from "../api";
-import { fmtCount } from "../player/format";
+import { fmtCompact, fmtCount } from "../player/format";
 import { href, Link, navigate, useLocation } from "../router";
+import { t, tList, type Faq as FaqItem } from "../i18n";
 import { useUi } from "../state/ui";
 import { SearchPanel, useSearchSubmit, Wordmark } from "./chrome";
 import { TopicTile } from "./Home";
 import { Breadcrumb, Container, EmptyState, Faq, LoadMore, PageTitle, Pager, Panel, PillTabs, PosterGrid, PosterSkeleton, UnderlineTabs } from "./kit";
 import { BRAND, BRAND_SHORT } from "../brand";
 
-const SORTS = [["latest", "最近更新"], ["hot", "当前热播"], ["picks", "精选推荐"]] as const;
+const SORTS = [["latest", t("channel.sortLatest")], ["hot", t("channel.sortHot")], ["picks", t("channel.sortPicks")]] as const;
 type SortKey = (typeof SORTS)[number][0] | "original";
 const PAGE_SIZE = 42;
 
-function channelFaq(name: string) {
-  return [
-    { q: `什么是${name}？`, a: `${name}是${BRAND}按题材整理的成人向短剧频道，每部作品分集播放，单集几分钟，适合碎片时间观看。` },
-    { q: `${name}多久更新一次？`, a: "频道内容每天更新。「最近更新」按最新一集的上线时间排序，追更的作品会排在前面。" },
-    { q: `${name}可以免费看吗？`, a: "大部分剧集的前几集可以免费观看，后续剧集可用金币解锁或开通 VIP 观看全部剧集。" },
-    { q: "怎么找到想看的剧？", a: "可以切换「当前热播」「精选推荐」，也可以用页面顶部的搜索按剧名、标签查找，或到排行榜看最热门的作品。" },
-  ];
-}
+const channelFaq = (name: string) => tList<FaqItem>("channel.faq", { name, brand: BRAND });
 
 /* ---------------------------------------------------------------------------------------------
  * Channel: /c/:slug (/c/all = every channel, ?sort=original = 黄月原创): "【名称】 介绍", pill tabs, 7 × 6 grid,
@@ -39,7 +34,7 @@ export function ChannelPage({ slug }: { slug: string }) {
   const all = slug === "all";
   const channel = categories.data?.find((c) => c.slug === slug);
   const comingSoon = channel?.status === "coming_soon";
-  const name = sort === "original" ? `${BRAND_SHORT}原创` : all ? "全部短剧" : channel?.name ?? "";
+  const name = sort === "original" ? t("nav.original", { short: BRAND_SHORT }) : all ? t("nav.allDramas") : channel?.name ?? "";
   const list = useListingPage(slug, sort as ChannelSort, page, PAGE_SIZE, all || (!!channel && !comingSoon));
   const items = list.data?.items ?? [];
   const pg = list.data?.pagination;
@@ -52,19 +47,19 @@ export function ChannelPage({ slug }: { slug: string }) {
   };
 
   if (!all && categories.data && !channel) {
-    return <Container><Breadcrumb items={[{ label: "首页", to: "/" }, { label: "频道" }]} /><EmptyState title="频道不存在" /></Container>;
+    return <Container><Breadcrumb items={[{ label: t("nav.home"), to: "/" }, { label: t("channel.crumb") }]} /><EmptyState title={t("channel.missing")} /></Container>;
   }
   return (
     <Container>
-      <Breadcrumb items={[{ label: "首页", to: "/" }, { label: name }]} />
+      <Breadcrumb items={[{ label: t("nav.home"), to: "/" }, { label: name }]} />
       <h1 className="mt-3 lg:mt-[9px] text-[16px] lg:text-[20px] leading-[26px] lg:leading-[30px] text-white">
-        【{name}】<span className="text-white/65">{channel?.description || "精选热播短剧，汇集独家原创、精选推荐与最新更新内容。"}</span>
+        {t("common.bracketed", { text: name })}<span className="text-white/65">{channel?.description || t("channel.intro")}</span>
       </h1>
       {comingSoon ? (
         <Panel className="mt-6 p-10 text-center">
           <Sparkles size={28} className="mx-auto text-primary" />
-          <div className="mt-3 text-[18px] font-bold text-white">即将上线</div>
-          <p className="mt-2 text-[13px] text-white/60">该频道正在筹备中，敬请期待。</p>
+          <div className="mt-3 text-[18px] font-bold text-white">{t("common.comingSoon")}</div>
+          <p className="mt-2 text-[13px] text-white/60">{t("channel.comingSoonSub")}</p>
         </Panel>
       ) : (
         <>
@@ -74,7 +69,7 @@ export function ChannelPage({ slug }: { slug: string }) {
             </div>
           )}
           <div className="mt-4 lg:mt-[22px]">
-            {list.isPending ? <PosterSkeleton count={14} /> : items.length === 0 ? <EmptyState title="暂无内容" sub="内容上线后将在这里显示" /> : <PosterGrid items={items} />}
+            {list.isPending ? <PosterSkeleton count={14} /> : items.length === 0 ? <EmptyState title={t("common.empty")} sub={t("common.emptySub")} /> : <PosterGrid items={items} />}
           </div>
           {pg && <Pager page={pg.page} pages={pg.pages} onPage={(n) => { navigate(to(sort, n)); window.scrollTo(0, 0); }} />}
           <Faq items={channelFaq(name)} />
@@ -88,12 +83,7 @@ export function ChannelPage({ slug }: { slug: string }) {
  * 专题: "全部专题" with a 3-column tile grid, 相关推荐 and an FAQ; one topic as a card grid.
  * ------------------------------------------------------------------------------------------- */
 
-const TOPIC_FAQ = [
-  { q: "专题页里有哪些类型的短剧？", a: "专题按题材和看点整理合集，涵盖 AI 成人短剧、AI 漫剧、原创短剧等，方便按主题集中观看。" },
-  { q: "专题和频道有什么区别？", a: "频道是按内容类型长期固定的分类；专题是围绕特定主题挑选的合集，更聚焦、更新更快。" },
-  { q: "专题里的短剧可以免费看吗？", a: "专题内的剧集与频道中的相同：大部分剧集的前几集免费，后续剧集可用金币解锁或开通 VIP。" },
-  { q: "如何找到最新专题？", a: "专题页优先展示最新和最热门的合集，也可以在首页「专题推荐」进入。" },
-];
+const TOPIC_FAQ = tList<FaqItem>("topics.faq");
 
 export function TopicsPage() {
   const topics = useTopics(48);
@@ -101,19 +91,19 @@ export function TopicsPage() {
   const items = topics.data?.items ?? [];
   return (
     <Container>
-      <Breadcrumb items={[{ label: "首页", to: "/" }, { label: "专题" }]} />
-      <PageTitle right={topics.data ? `共 ${topics.data.pagination.total} 部` : undefined}
-        sub={`【专题】专题集中展示${BRAND}各类精品专题合集，按主题整理，方便你快速找到想看的短剧。专题内容持续更新。`}>
-        全部专题
+      <Breadcrumb items={[{ label: t("nav.home"), to: "/" }, { label: t("nav.topics") }]} />
+      <PageTitle right={topics.data ? t("common.countTitles", { count: topics.data.pagination.total }) : undefined}
+        sub={t("topics.intro", { brand: BRAND })}>
+        {t("topics.title")}
       </PageTitle>
       <div className="mt-[18px]">
         {topics.isPending ? <div className="flex justify-center py-12"><Spinner /></div>
-          : items.length === 0 ? <EmptyState title="暂无专题" sub="专题上线后将在这里显示" />
+          : items.length === 0 ? <EmptyState title={t("topics.empty")} sub={t("topics.emptySub")} />
           : <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-x-[18px] lg:gap-y-[19px]">{items.map((t) => <TopicTile key={t.id} t={t} />)}</div>}
       </div>
       {(related.data?.items.length ?? 0) > 0 && (
         <section className="pt-8 lg:pt-10">
-          <h2 className="mb-[14px] text-[16px] lg:text-[1.875rem] font-semibold text-white leading-[1.3]">相关推荐</h2>
+          <h2 className="mb-[14px] text-[16px] lg:text-[1.875rem] font-semibold text-white leading-[1.3]">{t("topics.related")}</h2>
           <PosterGrid items={related.data!.items.slice(0, 7)} />
         </section>
       )}
@@ -126,10 +116,10 @@ export function TopicPage({ id }: { id: number }) {
   const topic = useTopic(id);
   return (
     <Container>
-      <Breadcrumb items={[{ label: "首页", to: "/" }, { label: "专题", to: href.topics() }, { label: topic.data?.title ?? "专题" }]} />
-      {topic.isError ? <EmptyState title="专题不存在或已下线" /> : (
+      <Breadcrumb items={[{ label: t("nav.home"), to: "/" }, { label: t("nav.topics"), to: href.topics() }, { label: topic.data?.title ?? t("nav.topics") }]} />
+      {topic.isError ? <EmptyState title={t("topics.missing")} /> : (
         <>
-          <PageTitle sub={topic.data?.description} right={topic.data ? `共 ${topic.data.items.length} 部` : undefined}>{topic.data?.title ?? " "}</PageTitle>
+          <PageTitle sub={topic.data?.description} right={topic.data ? t("common.countTitles", { count: topic.data.items.length }) : undefined}>{topic.data?.title ?? " "}</PageTitle>
           <div className="mt-[18px]">{topic.isPending ? <PosterSkeleton /> : <PosterGrid items={topic.data!.items} />}</div>
         </>
       )}
@@ -142,20 +132,14 @@ export function TopicPage({ id }: { id: number }) {
  * ------------------------------------------------------------------------------------------- */
 
 const BOARDS: { kind: RankKind; name: string; sub: string; metric: string; icon: typeof Flame }[] = [
-  { kind: "hot", name: "热播榜", sub: "按站内播放热度排序 · 每 10 分钟更新 · TOP20", metric: "实时热度", icon: Flame },
-  { kind: "recommend", name: "推荐榜", sub: "编辑精选与完播率排序 · 每 10 分钟更新 · TOP20", metric: "推荐值", icon: Crown },
-  { kind: "potential", name: "飙升榜", sub: "近 14 天上线、播放增长最快 · 每 10 分钟更新 · TOP20", metric: "飙升指数", icon: TrendingUp },
+  { kind: "hot", name: t("ranks.hot"), sub: t("ranks.hotSub"), metric: t("ranks.hotMetric"), icon: Flame },
+  { kind: "recommend", name: t("ranks.recommend"), sub: t("ranks.recommendSub"), metric: t("ranks.recommendMetric"), icon: Crown },
+  { kind: "potential", name: t("ranks.potential"), sub: t("ranks.potentialSub"), metric: t("ranks.potentialMetric"), icon: TrendingUp },
 ];
 
-const RANK_FAQ = [
-  { q: "什么是热播榜？", a: "热播榜综合近 7 天的独立播放、点赞、收藏、评论和完播计算热度，展示全站最热门的 20 部短剧。" },
-  { q: "排行榜包含哪些榜单？", a: "排行榜包含热播榜、推荐榜和飙升榜：热播看热度，推荐看编辑精选与完播率，飙升看新剧的播放增长。" },
-  { q: "榜单多久更新一次？", a: "三个榜单每 10 分钟按站内最新数据重新计算一次。" },
-  { q: "排行榜里的作品可以直接播放吗？", a: "可以。点击任一榜单条目即可进入对应作品的播放页。" },
-  { q: "榜单排序会影响分类页吗？", a: "不会。排行榜是独立入口，分类页仍按各频道自己的排序显示。" },
-];
+const RANK_FAQ = tList<FaqItem>("ranks.faq");
 
-const fmtHeat = (n: number) => (n >= 10_000 ? `${(n / 10_000).toFixed(1).replace(/\.0$/, "")}W` : String(Math.round(n)));
+const fmtHeat = fmtCompact;
 
 function RankBadge({ n }: { n: number }) {
   return (
@@ -174,7 +158,7 @@ export function RanksPage({ kind }: { kind: RankKind }) {
   const Icon = board.icon;
   return (
     <Container>
-      <Breadcrumb items={[{ label: "首页", to: "/" }, { label: "排行榜", to: href.ranks() }, { label: board.name }]} />
+      <Breadcrumb items={[{ label: t("nav.home"), to: "/" }, { label: t("nav.ranks"), to: href.ranks() }, { label: board.name }]} />
       <div className="mt-3 lg:mt-[14px] flex flex-wrap items-center gap-x-[9px] gap-y-1">
         <span className="w-[30px] h-[30px] rounded-[10.5px] bg-[#ffd21c]/[.12] border border-[#ffd21c]/25 text-[#ffd21c] flex items-center justify-center"><Icon size={15} /></span>
         <h1 className="text-[20px] lg:text-[1.875rem] font-semibold leading-[39px] text-white">{board.name}</h1>
@@ -185,14 +169,14 @@ export function RanksPage({ kind }: { kind: RankKind }) {
       </div>
       <div className="mt-[15px] flex flex-col gap-[11px]">
         {ranks.isPending ? <div className="flex justify-center py-12"><Spinner /></div>
-          : items.length === 0 ? <EmptyState title="榜单暂时为空" sub="稍后再来看看" />
+          : items.length === 0 ? <EmptyState title={t("ranks.empty")} sub={t("common.checkLater")} />
           : items.map((r, i) => (
             <div key={r.video_id} className="flex gap-3 lg:gap-4 p-[10px] lg:p-[13px] rounded-[12px] bg-white/5 border border-white/10">
               <Link to={href.video(r.video_id)} className="relative w-[90px] h-[120px] lg:w-[123px] lg:h-[165px] rounded-[12px] lg:rounded-[0.9rem] overflow-hidden bg-[#242424] shrink-0">
                 <Img src={r.cover} />
                 <RankBadge n={i + 1} />
                 <span className="absolute right-[6px] bottom-[6px] h-6 lg:h-7 px-[5px] rounded-[4.8px] bg-black/80 text-[11px] lg:text-[14px] text-white flex items-center">
-                  {r.is_finished ? `全${r.episode_count}集` : `更新至${r.episode_count}集`}
+                  {r.is_finished ? t("series.progressAll", { count: r.episode_count }) : t("series.progressUpTo", { count: r.episode_count })}
                 </span>
               </Link>
               <div className="flex-1 min-w-0 pt-0.5">
@@ -200,7 +184,7 @@ export function RanksPage({ kind }: { kind: RankKind }) {
                 <div className="mt-[7px] lg:mt-[9px] flex items-center flex-wrap gap-x-[14px] gap-y-1 text-[12px] lg:text-[14px] font-medium leading-4 text-white/80">
                   <span>{r.cate_name.replace(/^AI成人/, "")}</span>
                   {r.tags.slice(0, 3).map((t) => <Link key={t} to={href.search(t)} className="hover:text-white">{t}</Link>)}
-                  {r.score > 0 && <span className="flex items-center gap-0.5 font-semibold text-[#ffd21c]">{r.score.toFixed(1)}分<Star size={8} className="fill-current" /></span>}
+                  {r.score > 0 && <span className="flex items-center gap-0.5 font-semibold text-[#ffd21c]">{t("common.score", { score: r.score.toFixed(1) })}<Star size={8} className="fill-current" /></span>}
                 </div>
                 {r.description && <p className="mt-[7px] text-[12px] lg:text-[14px] leading-[18px] lg:leading-[21px] text-white/90 lg:text-white clamp-2 lg:clamp-3 max-w-[944px]">{r.description}</p>}
               </div>
@@ -223,11 +207,7 @@ export function RanksPage({ kind }: { kind: RankKind }) {
  * 博客 (热点吃瓜): title and line, a split tab bar, horizontal article cards, numbered pages, FAQ.
  * ------------------------------------------------------------------------------------------- */
 
-const BLOG_FAQ = [
-  { q: "博客频道主要更新什么内容？", a: "博客更新圈内热点、短剧剧评和幕后内容，部分文章会关联对应的短剧，可以直接观看正片。" },
-  { q: "文章内容多久更新一次？", a: "编辑每天更新，最新的文章排在最前面。" },
-  { q: "怎么找到自己感兴趣的内容？", a: "可以切换「热门文章」查看阅读量最高的内容，也可以用页面顶部的搜索查找。" },
-];
+const BLOG_FAQ = tList<FaqItem>("blog.faq");
 
 export function PostsPage() {
   const { query } = useLocation();
@@ -246,30 +226,30 @@ export function PostsPage() {
 
   return (
     <Container>
-      <Breadcrumb items={[{ label: "首页", to: "/" }, { label: "博客" }]} />
-      <h1 className="mt-3 lg:mt-[7px] text-[20px] lg:text-[26px] font-semibold leading-[39px] text-white">博客</h1>
-      <p className="mt-2 lg:mt-[16px] text-[12px] lg:text-[14px] leading-[18px] text-white/65">浏览最新博客文章，发现圈内热点与短剧剧评。</p>
+      <Breadcrumb items={[{ label: t("nav.home"), to: "/" }, { label: t("nav.blog") }]} />
+      <h1 className="mt-3 lg:mt-[7px] text-[20px] lg:text-[26px] font-semibold leading-[39px] text-white">{t("nav.blog")}</h1>
+      <p className="mt-2 lg:mt-[16px] text-[12px] lg:text-[14px] leading-[18px] text-white/65">{t("blog.intro")}</p>
       <nav className="mt-[17px] h-[46px] grid grid-cols-2 rounded-[10px] bg-[#141416] border border-[#242428]">
-        {([["all", "全部文章"], ["hot", "热门文章"]] as const).map(([k, label]) => (
+        {([["all", t("blog.all")], ["hot", t("blog.hot")]] as const).map(([k, label]) => (
           <button key={k} onClick={() => go(1, k)} aria-current={tab === k ? "page" : undefined}
             className={`text-[14px] font-medium ${tab === k ? "text-[#ffd21c]" : "text-[#909096] hover:text-white"}`}>{label}</button>
         ))}
       </nav>
       <div className="mt-6 flex flex-col gap-4 lg:gap-[20px]">
         {posts.isPending ? <div className="flex justify-center py-12"><Spinner /></div>
-          : items.length === 0 ? <EmptyState title="暂无文章" sub="稍后再来看看" />
+          : items.length === 0 ? <EmptyState title={t("blog.empty")} sub={t("common.checkLater")} />
           : items.map((p) => (
             <Link key={p.id} to={href.post(p.id)} className="group flex flex-col lg:flex-row gap-3 lg:gap-[15px] p-3 lg:p-4 rounded-[12px] bg-[#171719] border border-white/10 hover:border-white/20">
               <span className="relative w-full lg:w-[348px] aspect-video rounded-[9px] overflow-hidden bg-[#1a1918] shrink-0"><Img src={p.cover} /></span>
               <span className="flex-1 min-w-0 lg:pt-[10px]">
                 <span className="flex items-center gap-2 text-[12px] lg:text-[14px] leading-[19px] text-[#a9aebc]">
                   <span className="w-[23px] h-[23px] rounded-full bg-[#ffd21c] text-black text-[13px] font-bold flex items-center justify-center">R</span>
-                  {BRAND_SHORT}吃瓜<span>·</span>{p.published_at ? new Date(p.published_at).toLocaleDateString("sv-SE") : ""}{p.tags[0] && <><span>·</span>{p.tags[0]}</>}
+                  {t("nav.gossip", { short: BRAND_SHORT })}<span>·</span>{p.published_at ? new Date(p.published_at).toLocaleDateString("sv-SE") : ""}{p.tags[0] && <><span>·</span>{p.tags[0]}</>}
                 </span>
                 <span className="block mt-[14px] text-[16px] lg:text-[21px] font-semibold leading-[24px] lg:leading-[30px] text-[#f1f2f5] clamp-2 group-hover:text-primary">{p.title}</span>
                 {p.summary && <span className="block mt-[9px] text-[13px] lg:text-[14px] leading-5 text-[#a9aebc] clamp-2">{p.summary}</span>}
                 <span className="mt-[9px] flex gap-5 text-[13px] lg:text-[14px] leading-[25px] text-[#a9aebc]">
-                  <span>{fmtCount(p.hot)}阅读</span>
+                  <span>{t("blog.reads", { count: fmtCount(p.hot) })}</span>
                 </span>
               </span>
             </Link>
@@ -317,74 +297,74 @@ export function WayHomePage() {
   const bare = (u: string) => u.replace(/^https?:\/\//, "").replace(/\/$/, "");
   const lines = Array.from(new Set([origin, ...(s?.mirrors ?? [])]));
   const pageUrl = `${origin}${href.wayHome()}`;
-  const copy = (text: string, done = "已复制") => navigator.clipboard?.writeText(text).then(() => toast(done, "ok")).catch(() => toast(text));
+  const copy = (text: string, done = t("way.copied")) => navigator.clipboard?.writeText(text).then(() => toast(done, "ok")).catch(() => toast(text));
   const domains: [string, string][] = [];
-  if (s?.permanent_domain) domains.push(["官方网站", bare(s.permanent_domain)]);
-  domains.push(["地址发布页", bare(pageUrl)]);
-  lines.slice(1, 3).forEach((m, i) => domains.push([i === 0 ? "最新地址" : "备用入口", bare(m)]));
+  if (s?.permanent_domain) domains.push([t("way.officialSite"), bare(s.permanent_domain)]);
+  domains.push([t("way.addressPage"), bare(pageUrl)]);
+  lines.slice(1, 3).forEach((m, i) => domains.push([i === 0 ? t("way.latest") : t("way.backup"), bare(m)]));
 
   const contacts: { title: string; text: string; action: ReactNode }[] = [];
-  if (s?.email) contacts.push({ title: "邮箱自动回复", text: "发送任意邮件到下方地址，自动回复当前所有可用入口的最新汇总。", action: <button onClick={() => copy(s.email!)} className={`${outlineBtn} w-full`}>{s.email}</button> });
-  if (s?.telegram) contacts.push({ title: "TG 官方交流群", text: "获取域名变更通知的首选渠道，实时播报、用户互助。", action: <a href={s.telegram} target="_blank" rel="noreferrer" className={`${outlineBtn} w-full`}>立即订阅最新动态</a> });
-  contacts.push({ title: "收藏本页", text: "把回家的路加入浏览器收藏夹，地址变更时打开本页即可找到最新入口。", action: <button onClick={() => copy(pageUrl, "已复制，请添加到收藏夹")} className={`${outlineBtn} w-full`}>复制本页地址</button> });
-  contacts.push({ title: "下载 App", text: "App 会自动切换可用线路，不受域名变更影响。", action: <Link to={href.download()} className={`${outlineBtn} w-full`}>前往下载</Link> });
+  if (s?.email) contacts.push({ title: t("way.emailTitle"), text: t("way.emailText"), action: <button onClick={() => copy(s.email!)} className={`${outlineBtn} w-full`}>{s.email}</button> });
+  if (s?.telegram) contacts.push({ title: t("way.tgTitle"), text: t("way.tgText"), action: <a href={s.telegram} target="_blank" rel="noreferrer" className={`${outlineBtn} w-full`}>{t("way.tgAction")}</a> });
+  contacts.push({ title: t("way.bookmarkTitle"), text: t("way.bookmarkText"), action: <button onClick={() => copy(pageUrl, t("way.bookmarkCopied"))} className={`${outlineBtn} w-full`}>{t("way.bookmarkAction")}</button> });
+  contacts.push({ title: t("way.appTitle"), text: t("way.appText"), action: <Link to={href.download()} className={`${outlineBtn} w-full`}>{t("way.appAction")}</Link> });
 
   return (
     <>
-      <Container className={WAY_GUTTER}><Breadcrumb items={[{ label: "首页", to: "/" }, { label: "回家的路" }]} /></Container>
+      <Container className={WAY_GUTTER}><Breadcrumb items={[{ label: t("nav.home"), to: "/" }, { label: t("nav.wayHome") }]} /></Container>
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(45% 60% at 50% 45%, rgba(255,210,28,.12), transparent 70%)" }} />
         {/* Measured on the reference at 440 px (phone) and 1440 px: badge pill, the logo lockup (mark + name + domain),
             title, a narrow paragraph on phones, then the three actions. */}
         <div className={`rg-wrap ${WAY_GUTTER} relative pt-[24px] lg:pt-[42px] pb-[32px] lg:pb-[43px] text-center`}>
           <span className="inline-flex h-[40px] lg:h-[36px] px-[20px] lg:px-[12px] gap-[8px] rounded-[8px] lg:rounded-[12px] bg-[#111] border border-[#ffd21c]/50 text-[#ffd21c] text-[16px] lg:text-[14px] font-medium items-center">
-            <BadgeCheck size={15} strokeWidth={2.2} className="shrink-0" />官方权威发布 · 永久有效入口
+            <BadgeCheck size={15} strokeWidth={2.2} className="shrink-0" />{t("way.badge")}
           </span>
           <div className="mt-[32px] lg:mt-[45px] flex justify-center">
             <span className="lg:hidden"><Wordmark scale={15} /></span>
             <span className="hidden lg:block"><Wordmark scale={11.25} /></span>
           </div>
-          <h1 className="mt-[24px] lg:mt-[30px] text-[18px] lg:text-[2.25rem] font-semibold leading-[24.3px] lg:leading-[34px] text-white">{BRAND} · 官方最新地址发布页</h1>
-          <p className="mt-[12px] lg:mt-[15px] mx-auto max-w-[320px] lg:max-w-[665px] text-[13px] lg:text-[1.25rem] lg:font-medium leading-[20px] lg:leading-[21px] text-[#888] lg:text-white/50">本页面由{BRAND}官方维护，实时同步最新可用线路与备用入口，方便在不同网络环境下快速返回。</p>
+          <h1 className="mt-[24px] lg:mt-[30px] text-[18px] lg:text-[2.25rem] font-semibold leading-[24.3px] lg:leading-[34px] text-white">{t("way.title", { brand: BRAND })}</h1>
+          <p className="mt-[12px] lg:mt-[15px] mx-auto max-w-[320px] lg:max-w-[665px] text-[13px] lg:text-[1.25rem] lg:font-medium leading-[20px] lg:leading-[21px] text-[#888] lg:text-white/50">{t("way.intro", { brand: BRAND })}</p>
           <div className="mt-[28px] lg:mt-[75px] grid grid-cols-3 gap-[10px] lg:flex lg:items-center lg:justify-center lg:gap-[37.5px]">
-            <Link to="/" className={`${wayBtn} border-transparent text-black`} style={{ background: GOLD }}>立即进入主站</Link>
-            <button onClick={() => copy(pageUrl, "分享链接已复制")} className={`${wayBtn} border-[#ffd21c] text-[#ffd21c]`}>复制分享链接</button>
-            <button onClick={() => copy(pageUrl, "已复制，请添加到收藏夹或保存到备忘录")} className={`${wayBtn} border-transparent text-black`} style={{ background: GOLD }}>保存回家的路</button>
+            <Link to="/" className={`${wayBtn} border-transparent text-black`} style={{ background: GOLD }}>{t("way.enter")}</Link>
+            <button onClick={() => copy(pageUrl, t("way.shareCopied"))} className={`${wayBtn} border-[#ffd21c] text-[#ffd21c]`}>{t("way.share")}</button>
+            <button onClick={() => copy(pageUrl, t("way.saveCopied"))} className={`${wayBtn} border-transparent text-black`} style={{ background: GOLD }}>{t("way.save")}</button>
           </div>
         </div>
       </section>
       <Container className={`flex flex-col gap-[22px] ${WAY_GUTTER}`}>
-        <WayPanel title="最新可用地址" note="（直连无需代理）" sub="以下线路均经过可用性检查，任一地址无法打开时换下一个。">
+        <WayPanel title={t("way.linesTitle")} note={t("way.linesNote")} sub={t("way.linesSub")}>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-[27px]">
             {lines.map((a, i) => (
               <article key={a} className={`${card} p-4 lg:px-[19px] lg:py-4`}>
                 <div className="flex items-center text-[14px] lg:text-[1.25rem] font-medium leading-[21px] text-white/50">
-                  备用地址 {String(i + 1).padStart(2, "0")}
-                  <span className={`ml-auto text-[13px] lg:text-[14px] ${a === origin ? "text-[#ffd21c]" : "text-[#2ecc71]"}`}>{a === origin ? "当前" : "可用"}</span>
+                  {t("way.line", { n: String(i + 1).padStart(2, "0") })}
+                  <span className={`ml-auto text-[13px] lg:text-[14px] ${a === origin ? "text-[#ffd21c]" : "text-[#2ecc71]"}`}>{a === origin ? t("way.current") : t("way.available")}</span>
                 </div>
                 <p className="mt-4 lg:mt-[21px] text-[18px] lg:text-[1.625rem] font-semibold leading-[27px] text-[#eee] truncate">{bare(a)}</p>
                 <div className="mt-[18px] lg:mt-[25px] flex gap-[15px]">
-                  <a href={a} className="w-[150px] h-9 rounded-full text-[12px] font-semibold text-black flex items-center justify-center" style={{ background: GOLD }}>立即进入</a>
-                  <button onClick={() => copy(a)} className={`${outlineBtn} w-[150px]`}>复制地址</button>
+                  <a href={a} className="w-[150px] h-9 rounded-full text-[12px] font-semibold text-black flex items-center justify-center" style={{ background: GOLD }}>{t("way.go")}</a>
+                  <button onClick={() => copy(a)} className={`${outlineBtn} w-[150px]`}>{t("way.copyAddress")}</button>
                 </div>
               </article>
             ))}
           </div>
         </WayPanel>
 
-        <WayPanel title="官方域名与地址" note="建议收藏" sub="同时保存永久入口和备用入口，主域名变更时仍可返回。">
+        <WayPanel title={t("way.domainsTitle")} note={t("way.domainsNote")} sub={t("way.domainsSub")}>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-x-[27px] lg:gap-y-[28px]">
             {domains.map(([label, value]) => (
               <article key={label} className={`${card} min-h-[68px] px-[19px] py-3 flex items-center gap-[7px]`}>
                 <span className="text-[13px] lg:text-[14px] font-medium text-white/50 shrink-0">{label}</span>
                 <span className="text-[13px] lg:text-[14px] font-semibold text-[#eee] truncate">{value}</span>
-                <button onClick={() => copy(value)} className={`${outlineBtn} ml-auto w-[120px] lg:w-[150px] shrink-0`}>复制并保存</button>
+                <button onClick={() => copy(value)} className={`${outlineBtn} ml-auto w-[120px] lg:w-[150px] shrink-0`}>{t("way.copySave")}</button>
               </article>
             ))}
           </div>
         </WayPanel>
 
-        <WayPanel title="防失联方式" note="建议至少保存 2 种" sub="通过以下方式获取最新地址或接收线路变更提醒。">
+        <WayPanel title={t("way.contactTitle")} note={t("way.contactNote")} sub={t("way.contactSub")}>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-[18px]">
             {contacts.map((c) => (
               <article key={c.title} className={`${card} p-[19px] flex flex-col`}>
@@ -396,9 +376,9 @@ export function WayHomePage() {
           </div>
         </WayPanel>
 
-        <WayPanel title="访问异常排查" note="安全提示" sub="遇到打不开、跳转慢或入口失效时，按顺序完成排查。">
+        <WayPanel title={t("way.troubleTitle")} note={t("way.troubleNote")} sub={t("way.troubleSub")}>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-[27px]">
-            {[["01", "打不开页面", "先切换网络，再尝试本页列出的其他地址。"], ["02", "地址跳转异常", "确认地址拼写完整，不要从陌生弹窗或链接进入。"], ["03", "入口失效", "回到本页查看最新可用地址，或从收藏夹重新进入。"]].map(([n, h, p]) => (
+            {tList<{ title: string; text: string }>("way.trouble").map(({ title: h, text: p }, i) => ({ n: String(i + 1).padStart(2, "0"), h, p })).map(({ n, h, p }) => (
               <article key={n} className={`${card} px-[19px] py-[22px]`}>
                 <h3 className="flex gap-[9px] text-[18px] lg:text-[1.625rem] font-semibold leading-[27px]"><span className="text-[#ffd21c]">{n}</span><span className="text-[#eee]">{h}</span></h3>
                 <p className="mt-[19px] text-[13px] lg:text-[14px] font-medium leading-5 text-[#888]">{p}</p>
@@ -407,11 +387,9 @@ export function WayHomePage() {
           </div>
         </WayPanel>
 
-        <WayPanel title="设备使用与兼容性建议" sub="建议使用主流浏览器（Chrome、Safari 等）访问，以获得更好的页面兼容性与加载速度；遇到加载缓慢时，可切换线路或刷新页面。">
+        <WayPanel title={t("way.devicesTitle")} sub={t("way.devicesSub")}>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {[["iPhone 用户", "建议使用 Safari 浏览器，并可添加到主屏幕当作 App 使用", "避免在微信 / QQ 等 App 内部打开，以防页面加载失败"],
-              ["Android 用户", `推荐使用 Chrome 浏览器，或直接下载${BRAND} App`, "部分手机自带浏览器兼容性较差，可能出现无法播放"],
-              ["电脑 / 桌面端", "首选 Chrome / Edge 浏览器，或使用桌面版 App", "若无法加载，请尝试清除浏览器缓存后重试"]].map(([h = "", ok = "", warn = ""]) => (
+            {tList<{ title: string; ok: string; warn: string }>("way.devices", { brand: BRAND }).map(({ title: h, ok, warn }) => (
               <div key={h} className="lg:pl-[19px]">
                 <h3 className="text-[16px] lg:text-[1.375rem] font-semibold text-[#eee]">{h}</h3>
                 <p className="mt-6 text-[13px] lg:text-[1.0625rem] leading-[1.6] text-[#888]">{ok.split(/(Safari|Chrome \/ Edge|Chrome)/).map((x, i) => (i % 2 ? <span key={i} className="text-[#2ecc71]">{x}</span> : x))}</p>
@@ -422,12 +400,12 @@ export function WayHomePage() {
         </WayPanel>
 
         <section className="rounded-[6px] bg-white/[.04] border border-white/10 p-4 lg:px-[13px] lg:py-6 text-[12px] leading-[1.8] text-white/85">
-          <h2 className="text-[14px] lg:text-[1.0625rem] font-semibold text-white">{BRAND}官方入口</h2>
-          <p className="mt-4">{BRAND}官方网站为 <span className="text-[#ffd21c]">{s?.permanent_domain ? bare(s.permanent_domain) : window.location.host}</span>，可在此查看已上线作品，或核对官方域名与账号。</p>
-          <h3 className="mt-5 text-[13px] font-semibold text-white">关于{BRAND}</h3>
-          <p className="mt-3">{BRAND}提供 AI 短剧、原创短剧与 AI 漫剧在线观看，每日更新，支持手机与电脑在线观看。仅限年满 18 周岁的用户访问。</p>
-          <h3 className="mt-5 text-[13px] font-semibold text-white">支持平台</h3>
-          <p className="mt-3">网页版：手机 / 电脑浏览器直接观看；App：可在 <Link to={href.download()} className="text-[#ffd21c]">下载页</Link> 获取桌面版与安卓版。</p>
+          <h2 className="text-[14px] lg:text-[1.0625rem] font-semibold text-white">{t("way.entryTitle", { brand: BRAND })}</h2>
+          <p className="mt-4"><Trans i18nKey="way.entryText" values={{ brand: BRAND, host: s?.permanent_domain ? bare(s.permanent_domain) : window.location.host }} components={{ host: <span className="text-[#ffd21c]" /> }} /></p>
+          <h3 className="mt-5 text-[13px] font-semibold text-white">{t("way.aboutTitle", { brand: BRAND })}</h3>
+          <p className="mt-3">{t("way.aboutText", { brand: BRAND })}</p>
+          <h3 className="mt-5 text-[13px] font-semibold text-white">{t("way.platformsTitle")}</h3>
+          <p className="mt-3"><Trans i18nKey="way.platformsText" components={{ link: <Link to={href.download()} className="text-[#ffd21c]" /> }} /></p>
         </section>
       </Container>
     </>
@@ -449,23 +427,23 @@ export function SearchPage() {
   const total = search.data?.pages[0]?.pagination.total ?? 0;
   return (
     <Container>
-      <Breadcrumb items={[{ label: "首页", to: "/" }, { label: "搜索" }]} />
+      <Breadcrumb items={[{ label: t("nav.home"), to: "/" }, { label: t("search.title") }]} />
       <form role="search" className="relative mt-4 max-w-[640px]" onSubmit={(e) => { e.preventDefault(); submit(value); }}>
         <input value={value} onChange={(e) => setValue(e.target.value)} maxLength={50} autoFocus={!q}
-          placeholder="搜索剧名、作者或题材" aria-label="搜索"
+          placeholder={t("search.pagePlaceholder")} aria-label={t("search.title")}
           className="w-full h-12 pl-5 pr-28 rounded-full bg-[#161616] border border-white/[.08] focus:border-primary text-[15px] text-on placeholder:text-dim outline-none" />
         <button type="submit" className="absolute right-1.5 top-1.5 h-9 px-5 rounded-full bg-[#ffd321] text-[#14130e] text-[14px] font-semibold flex items-center gap-1.5">
-          <SearchIcon size={15} />搜索
+          <SearchIcon size={15} />{t("search.title")}
         </button>
       </form>
       {q ? (
         <>
-          <PageTitle sub={search.isPending ? "搜索中…" : `共 ${total} 条结果`}>
-            搜索 “<span className="text-primary">{q}</span>”
+          <PageTitle sub={search.isPending ? t("search.searching") : t("search.results", { count: total })}>
+            {t("search.resultsBefore")}<span className="text-primary">{q}</span>{t("search.resultsAfter")}
           </PageTitle>
           <div className="mt-7">
             {search.isPending ? <PosterSkeleton /> : items.length === 0
-              ? <EmptyState title="没有找到相关内容" sub="换个关键词试试，比如「都市」「逆袭」" />
+              ? <EmptyState title={t("search.noResults")} sub={t("search.noResultsSub")} />
               : <PosterGrid items={items} />}
           </div>
           {items.length > 0 && <LoadMore hasMore={!!search.hasNextPage} loading={search.isFetchingNextPage} onMore={() => void search.fetchNextPage()} />}

@@ -10,5 +10,4 @@
 #>
 . (Join-Path $PSScriptRoot 'common.ps1')
 Test-SettingsReady
-$file = Invoke-Backup
-Write-Host "$(Get-Date -Format u) backup ok: $(Join-Path $BackupDir $file)"
+foreach ($file in @(Invoke-BackupAll)) { Write-Host "$(Get-Date -Format u) backup ok: $(Join-Path $BackupDir $file)" }

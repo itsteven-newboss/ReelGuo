@@ -1,0 +1,12 @@
+{
+  "key": "vpinedrama",
+  "name": "VpineDrama",
+  "short": "VpineDrama",
+  "locale": "vi",
+  "domain": "vpinedrama.com",
+  "wordmark": ["vpine", "drama"],
+  "description": "VpineDrama · Phim ngắn AI và phim ngắn độc quyền, xem trực tuyến",
+  "icon": "Assets/sites/vpinedrama.jpg",
+  "iconStyle": "tile",
+  "nativeApps": false
+}

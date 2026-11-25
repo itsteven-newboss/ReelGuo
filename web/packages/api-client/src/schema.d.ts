@@ -1006,6 +1006,200 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/{id}/story": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An interactive series' scenes, options and endings, with the signed-in viewer's saved place. 404 when the series isn't interactive or isn't available. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StoryDto"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+                /** @description Unavailable For Legal Reasons */
+                451: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/story/next": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The scene after the one that ended (the option taken, or the scene it continues to). Counts the choice and, signed in, saves the viewer's place. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["StoryNextRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StoryNextDto"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+                /** @description Unavailable For Legal Reasons */
+                451: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{id}/story/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Saves where the viewer is: after going back to an earlier choice, starting over, or signing in with progress made as a guest. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["StoryProgressRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StoryProgressDto"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+                /** @description Unavailable For Legal Reasons */
+                451: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/register": {
         parameters: {
             query?: never;
@@ -4794,6 +4988,115 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/series/{id}/story": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An interactive series' scenes with what happens when each ends, the problems found, and per-option statistics. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminStoryDto"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+            };
+        };
+        /** Saves the start scene and the scenes' settings at once. A published series' story must stay playable: a save with errors is refused with the problems listed. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AdminStoryInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminStoryDto"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/episodes/{id}": {
         parameters: {
             query?: never;
@@ -4887,6 +5190,15 @@ export interface paths {
                 };
                 /** @description Not Found */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponse"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -8462,6 +8774,14 @@ export interface components {
             username: string;
             password: string;
         };
+        AdminMapPoint: {
+            /** Format: int64 */
+            episode_id: number;
+            /** Format: int32 */
+            x: number;
+            /** Format: int32 */
+            y: number;
+        };
         AdminMemberDto: {
             /** Format: int64 */
             id: number;
@@ -8661,6 +8981,55 @@ export interface components {
             /** Format: int32 */
             total: number;
         };
+        AdminSceneDto: {
+            /** Format: int64 */
+            episode_id: number;
+            /** Format: int32 */
+            ep_num: number;
+            title: string;
+            status: components["schemas"]["EpisodeStatus"];
+            /** Format: double */
+            duration: number;
+            poster_url: null | string;
+            is_free: boolean;
+            /** Format: int32 */
+            price: number;
+            outcome: components["schemas"]["SceneOutcome"];
+            prompt: null | string;
+            /** Format: int32 */
+            lead_seconds: number;
+            /** Format: int32 */
+            countdown: null | number;
+            /** Format: int64 */
+            next_episode_id: null | number;
+            ending_title: null | string;
+            options: components["schemas"]["AdminStoryOptionDto"][];
+            /** Format: int32 */
+            viewers_here: number;
+            /** Format: int32 */
+            ending_reached: number;
+            /** Format: int32 */
+            unlocks: number;
+            /** Format: int32 */
+            custom_price?: null | number;
+        };
+        AdminSceneInput: {
+            /** Format: int64 */
+            episode_id: number;
+            outcome: components["schemas"]["SceneOutcome"];
+            prompt: null | string;
+            /** Format: int32 */
+            lead_seconds: number;
+            /** Format: int32 */
+            countdown: null | number;
+            /** Format: int64 */
+            next_episode_id: null | number;
+            ending_title: null | string;
+            options: null | components["schemas"]["AdminStoryOptionInput"][];
+            is_free?: null | boolean;
+            /** Format: int32 */
+            custom_price?: null | number;
+        };
         AdminSeriesDto: {
             /** Format: int64 */
             id: number;
@@ -8703,6 +9072,7 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+            kind?: components["schemas"]["SeriesKind"];
         };
         AdminSeriesListItem: {
             /** Format: int64 */
@@ -8724,6 +9094,7 @@ export interface components {
             updated_at: string;
             is_original: boolean;
             card_badge: components["schemas"]["CardBadge"];
+            kind?: components["schemas"]["SeriesKind"];
         };
         AdminSeriesPage: {
             items: components["schemas"]["AdminSeriesListItem"][];
@@ -8740,6 +9111,54 @@ export interface components {
             username: string;
             nickname: string;
             actor: string;
+        };
+        AdminStoryDto: {
+            /** Format: int64 */
+            series_id: number;
+            title: string;
+            kind: components["schemas"]["SeriesKind"];
+            status: components["schemas"]["SeriesStatus"];
+            /** Format: int64 */
+            start_episode_id: null | number;
+            /** Format: int64 */
+            effective_start_episode_id: null | number;
+            scenes: components["schemas"]["AdminSceneDto"][];
+            problems: components["schemas"]["StoryProblem"][];
+            variables: components["schemas"]["StoryVariable"][];
+            layout: components["schemas"]["AdminMapPoint"][];
+        };
+        AdminStoryInput: {
+            /** Format: int64 */
+            start_episode_id: null | number;
+            scenes: components["schemas"]["AdminSceneInput"][];
+            variables?: null | components["schemas"]["StoryVariable"][];
+            layout?: null | components["schemas"]["AdminMapPoint"][];
+        };
+        AdminStoryOptionDto: {
+            /** Format: int64 */
+            id: number;
+            label: string;
+            description: null | string;
+            /** Format: int64 */
+            target_episode_id: number;
+            is_default: boolean;
+            /** Format: int64 */
+            chosen: number;
+            /** Format: int64 */
+            timed_out: number;
+            effects: components["schemas"]["StoryEffect"][];
+            conditions: components["schemas"]["StoryCondition"][];
+        };
+        AdminStoryOptionInput: {
+            /** Format: int64 */
+            id: null | number;
+            label: null | string;
+            description: null | string;
+            /** Format: int64 */
+            target_episode_id: number;
+            is_default: boolean;
+            effects?: null | components["schemas"]["StoryEffect"][];
+            conditions?: null | components["schemas"]["StoryCondition"][];
         };
         AdminTopicDto: {
             /** Format: int32 */
@@ -9696,6 +10115,8 @@ export interface components {
             /** Format: int32 */
             buyers: number;
         };
+        /** @enum {unknown} */
+        SceneOutcome: "unset" | "choice" | "continue" | "ending";
         SearchResultDto: {
             items: components["schemas"]["VideoCardDto"][];
             pagination: components["schemas"]["PaginationDto"];
@@ -9750,6 +10171,7 @@ export interface components {
             /** Format: date-time */
             last_episode_at: null | string;
             rating: components["schemas"]["RatingDto"];
+            kind?: components["schemas"]["SeriesKind"];
         };
         SeriesInput: {
             category_slug: string;
@@ -9790,7 +10212,13 @@ export interface components {
              */
             free_episodes: number;
             card_badge?: null | components["schemas"]["CardBadge"];
+            kind?: null | components["schemas"]["SeriesKind"];
         };
+        /**
+         * @default standard
+         * @enum {unknown}
+         */
+        SeriesKind: "standard" | "interactive";
         /** @enum {unknown} */
         SeriesStatus: "draft" | "published" | "hidden" | "removed";
         SetAdminStatusRequest: {
@@ -9851,6 +10279,110 @@ export interface components {
             payment_method: string;
             billing_descriptor: null | string;
             sandbox: boolean;
+        };
+        StoryCondition: {
+            variable: string;
+            op: string;
+            /** Format: int32 */
+            value: number;
+        };
+        StoryDto: {
+            /** Format: int64 */
+            series_id: number;
+            /** Format: int32 */
+            start: number;
+            /** Format: int32 */
+            ending_count: number;
+            scenes: components["schemas"]["StorySceneDto"][];
+            progress: null | components["schemas"]["StoryProgressDto"];
+            variables: components["schemas"]["StoryVariable"][];
+        };
+        StoryEffect: {
+            variable: string;
+            /** Format: int32 */
+            add: number;
+        };
+        StoryNextDto: {
+            /** Format: int32 */
+            scene: number;
+            /** Format: int32 */
+            ending: null | number;
+            ending_title: null | string;
+            /** Format: int32 */
+            share: null | number;
+        };
+        StoryNextRequest: {
+            /** Format: int32 */
+            from: number;
+            /** Format: int64 */
+            option: null | number;
+            /** @default false */
+            timed_out: boolean;
+        };
+        StoryOptionDto: {
+            /** Format: int64 */
+            id: number;
+            label: string;
+            description: null | string;
+            /** Format: int32 */
+            target: number;
+            is_default: boolean;
+            effects: components["schemas"]["StoryEffect"][];
+            conditions: components["schemas"]["StoryCondition"][];
+        };
+        StoryProblem: {
+            level: components["schemas"]["StoryProblemLevel"];
+            /** Format: int64 */
+            episode_id: null | number;
+            message: string;
+        };
+        /** @enum {unknown} */
+        StoryProblemLevel: "error" | "warning";
+        StoryProgressDto: {
+            /** Format: int32 */
+            scene: number;
+            path: components["schemas"]["StoryStepDto"][];
+            endings: number[];
+        };
+        StoryProgressRequest: {
+            /** Format: int32 */
+            scene: number;
+            path: null | components["schemas"]["StoryStepDto"][];
+            endings: null | number[];
+        };
+        StorySceneDto: {
+            /** Format: int32 */
+            ep_num: number;
+            title: string;
+            /** Format: double */
+            duration: number;
+            is_free: boolean;
+            /** Format: int32 */
+            price: number;
+            outcome: components["schemas"]["SceneOutcome"];
+            prompt: null | string;
+            /** Format: int32 */
+            lead_seconds: number;
+            /** Format: int32 */
+            countdown: null | number;
+            /** Format: int32 */
+            next: null | number;
+            /** Format: int32 */
+            ending: null | number;
+            ending_title: null | string;
+            options: components["schemas"]["StoryOptionDto"][];
+        };
+        StoryStepDto: {
+            /** Format: int32 */
+            scene: number;
+            /** Format: int64 */
+            option: number;
+        };
+        StoryVariable: {
+            key: string;
+            name: string;
+            /** Format: int32 */
+            initial: number;
         };
         SystemStatusDto: {
             api_version: string;
@@ -10059,6 +10591,7 @@ export interface components {
             category_slug?: null | string;
             category_name?: null | string;
             card_badge?: components["schemas"]["CardBadge"];
+            kind?: components["schemas"]["SeriesKind"];
         };
         VideoCardPage: {
             items: components["schemas"]["VideoCardDto"][];

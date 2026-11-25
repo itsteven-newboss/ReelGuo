@@ -26,6 +26,7 @@ import { RanksAdminPage } from "./pages/Ranks";
 import { ReportsPage } from "./pages/Reports";
 import { SeriesEditor } from "./pages/SeriesEditor";
 import { SeriesListPage } from "./pages/SeriesList";
+import { StoryEditor } from "./pages/StoryEditor";
 import { TopicsPage } from "./pages/Topics";
 import { api, setSession, signOut, useSession, type AdminSession } from "./session";
 
@@ -79,14 +80,18 @@ function Layout({ session }: { session: AdminSession }) {
   };
   // "new" opens an empty editor; a number opens that series.
   const [editing, setEditing] = useState<number | "new" | null>(null);
+  // The story editor (剧情编辑) of an interactive series, opened from its editor.
+  const [story, setStory] = useState<number | null>(null);
 
   const open = (key: Section) => {
     setSection(key);
     setEditing(null);
+    setStory(null);
   };
 
   let page: ReactNode;
-  if (section === "series" && editing !== null) page = <SeriesEditor id={editing} onBack={() => setEditing(null)} onCreated={(id) => setEditing(id)} />;
+  if (section === "series" && story !== null) page = <StoryEditor id={story} onBack={() => setStory(null)} />;
+  else if (section === "series" && editing !== null) page = <SeriesEditor id={editing} onBack={() => setEditing(null)} onCreated={(id) => setEditing(id)} onStory={setStory} />;
   else if (section === "series") page = <SeriesListPage onOpen={setEditing} />;
   else if (section === "status") page = <SystemStatusPage />;
   else if (section === "tracing") page = <TracingPage />;

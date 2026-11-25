@@ -6,6 +6,7 @@ using ReelGuo.Api.Billing;
 using ReelGuo.Api.Geo;
 using ReelGuo.Api.Infrastructure;
 using ReelGuo.Api.Social;
+using ReelGuo.Api.Story;
 using ReelGuo.Api.Users;
 using ReelGuo.Data;
 using ReelGuo.Data.Catalog;
@@ -25,12 +26,13 @@ public sealed record CategoryDto(string Slug, string Name, string? Description, 
 
 public sealed record AuthorDto(long Id, string Name, string? Avatar);
 
-/// <summary>Card shape used by the feed and every list (matches the reference client's VideoCard), plus its channel.</summary>
+/// <summary>Card shape used by the feed and every list (matches the reference client's VideoCard), plus its channel.
+/// <c>kind</c> = interactive marks a 互动剧 (its episodes are scenes; see /story).</summary>
 public sealed record VideoCardDto(
     long Id, string Title, string? Cover, string Description, List<string> Tags, double Score,
     int EpisodeCount, int TotalEpisodes, long Hot, long LikeCount, long CollectCount, long CommentCount,
     bool IsFinished, bool IsOriginal, AuthorDto? Author, DateTimeOffset? PublishedAt, DateTimeOffset? LastEpisodeAt,
-    string? CategorySlug = null, string? CategoryName = null, CardBadge CardBadge = CardBadge.Auto);
+    string? CategorySlug = null, string? CategoryName = null, CardBadge CardBadge = CardBadge.Auto, SeriesKind Kind = SeriesKind.Standard);
 
 public sealed record PaginationDto(int Page, int Pages, int Size, int Total);
 
@@ -44,11 +46,13 @@ public sealed record CountsDto(long Collect, long Comment, long Hot, long Like);
 /// <summary>Viewer ratings (点我评分): average of 1-10 scores, null until someone rates.</summary>
 public sealed record RatingDto(double? Average, int Count);
 
+/// <summary>For an interactive series (<c>kind</c> = interactive) the episodes are its scenes, with endings' titles left
+/// empty; the story itself comes from /series/{id}/story.</summary>
 public sealed record SeriesDetailDto(
     long Id, string Title, string Description, string? Cover, List<string> Tags, double Score,
     int EpisodeCount, int TotalEpisodes, List<EpisodeDto> Episodes, CountsDto Counts, AuthorDto? Author,
     bool IsFinished, bool IsOriginal, string CategorySlug, string CategoryName, DateTimeOffset? PublishedAt,
-    DateTimeOffset? LastEpisodeAt, RatingDto Rating);
+    DateTimeOffset? LastEpisodeAt, RatingDto Rating, SeriesKind Kind = SeriesKind.Standard);
 
 /// <param name="Kind">"hls" (packaged adaptive stream) or "mp4" (one file played as uploaded, from Tencent COS).</param>
 public sealed record PlayInfoDto(
@@ -90,6 +94,7 @@ public static class PublicEndpoints
         v1.MapBilling();
         v1.MapAppReleases();
         v1.MapPortal();
+        v1.MapStory();
 
         return v1;
     }
@@ -173,7 +178,7 @@ public static class PublicEndpoints
     internal static VideoCardDto ToCard(Series s, MediaUrlSigner signer) => new(
         s.Id, s.Title, signer.PublicUrlOrNull(s.CoverKey), s.Description, s.Tags, s.Score,
         s.EpisodeCount, Math.Max(s.TotalEpisodes, s.EpisodeCount), s.PlayCount, s.LikeCount, s.CollectCount, s.CommentCount,
-        s.IsFinished, s.IsOriginal, ToAuthor(s.Author), s.PublishedAt, s.LastEpisodeAt, s.Category?.Slug, s.Category?.Name, s.CardBadge);
+        s.IsFinished, s.IsOriginal, ToAuthor(s.Author), s.PublishedAt, s.LastEpisodeAt, s.Category?.Slug, s.Category?.Name, s.CardBadge, s.Kind);
 
     private static async Task<Results<Ok<SeriesDetailDto>, NotFound<ApiErrorResponse>>> GetSeries(
         long id, HttpContext http, ReelGuoDbContext db, ICountryResolver resolver, MediaUrlSigner signer, IOptions<BillingOptions> billing,
@@ -190,12 +195,14 @@ public static class PublicEndpoints
             s.EpisodeCount, Math.Max(s.TotalEpisodes, s.EpisodeCount),
             s.Episodes.Select(e =>
             {
-                var price = Pricing.EpisodePrice(billing.Value.Enabled, s.EpisodePrice, s.FreeEpisodes, e.EpisodeNumber, e.IsFree);
-                return new EpisodeDto(e.EpisodeNumber, e.Title, e.DurationSeconds, price == 0, price);
+                var price = Pricing.EpisodePrice(billing.Value.Enabled, s.EpisodePrice, s.FreeEpisodes, e.EpisodeNumber, e.IsFree, e.CustomPrice);
+                // An interactive series' ending names stay hidden until the viewer reaches them (see /story).
+                var title = s.Kind == SeriesKind.Interactive && e.Outcome == SceneOutcome.Ending ? "" : e.Title;
+                return new EpisodeDto(e.EpisodeNumber, title, e.DurationSeconds, price == 0, price);
             }).ToList(),
             new CountsDto(s.CollectCount, s.CommentCount, s.PlayCount, s.LikeCount), ToAuthor(s.Author),
             s.IsFinished, s.IsOriginal, s.Category.Slug, s.Category.Name, s.PublishedAt, s.LastEpisodeAt,
-            await PortalEndpoints.RatingAsync(db, s.Id, ct)));
+            await PortalEndpoints.RatingAsync(db, s.Id, ct), s.Kind));
     }
 
     private static async Task<Results<Ok<PlayInfoDto>, NotFound<ApiErrorResponse>, JsonHttpResult<ApiErrorResponse>>> Play(
@@ -212,7 +219,7 @@ public static class PublicEndpoints
 
         // Paid episodes: only for viewers who bought them or have VIP. This is the only place that hands out media
         // links, and the links are per episode, so this check covers the media too.
-        if (Pricing.EpisodePrice(billing.Value.Enabled, row.EpisodePrice, row.FreeEpisodes, ep, episode.IsFree) > 0
+        if (Pricing.EpisodePrice(billing.Value.Enabled, row.EpisodePrice, row.FreeEpisodes, ep, episode.IsFree, episode.CustomPrice) > 0
             && (await UserAuth.OptionalUserIdAsync(http) is not { } uid || !await wallets.CanWatchAsync(uid, id, ep, ct)))
         {
             http.Response.Headers.CacheControl = "no-store";

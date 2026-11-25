@@ -18,7 +18,7 @@ public sealed class LegalTests(PostgresFixture db) : IClassFixture<PostgresFixtu
         foreach (var page in LegalPages.All)
         {
             var dto = await Get(viewer, $"/api/legal/{page.Slug}").OkJsonAsync();
-            Assert.Equal((page.Path, page.Title), (dto.GetProperty("path").GetString(), dto.GetProperty("title").GetString()));
+            Assert.Equal((page.Path, page.Title(SiteBrand.Default)), (dto.GetProperty("path").GetString(), dto.GetProperty("title").GetString()));
             Assert.True(dto.GetProperty("under_review").GetBoolean());
             var html = dto.GetProperty("html").GetString()!;
             Assert.Contains("<h2>", html);

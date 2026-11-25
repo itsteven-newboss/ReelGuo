@@ -17,8 +17,9 @@ namespace ReelGuo.Api.Seo;
 /// <summary>HTML and JSON escaping for server-rendered pages.</summary>
 public static class Html
 {
-    public static string Text(string? s) => WebUtility.HtmlEncode(s ?? "");
-    public static string Attr(string? s) => WebUtility.HtmlEncode(s ?? "");
+    /// <summary>Escapes the five HTML-special characters; everything else stays as written (the pages are UTF-8, so é, « and © need no entities).</summary>
+    public static string Text(string? s) => string.IsNullOrEmpty(s) ? "" : s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;").Replace("'", "&#39;");
+    public static string Attr(string? s) => Text(s);
     public static string Url(string s) => Uri.EscapeDataString(s);
 
     /// <summary>JSON for a &lt;script type="application/ld+json"&gt; block; "&lt;/" is escaped so it cannot close the tag.</summary>
@@ -46,10 +47,10 @@ public static class SeoEndpoints
     private const int PostPageSize = 12;
     private const int SitemapSeriesPerFile = 400;
 
-    private static readonly (string Kind, RankKind Rank, string Name)[] Boards =
-        [("hot", RankKind.Hot, "热播榜"), ("recommend", RankKind.Recommend, "推荐榜"), ("potential", RankKind.Potential, "飙升榜")];
+    private static readonly (string Kind, RankKind Rank, string TextKey)[] Boards =
+        [("hot", RankKind.Hot, "ranks.hot"), ("recommend", RankKind.Recommend, "ranks.recommend"), ("potential", RankKind.Potential, "ranks.potential")];
 
-    private static readonly Dictionary<string, string> LegalPages = ReelGuo.Api.Legal.LegalPages.All.ToDictionary(p => p.Path, p => p.Title);
+    private static readonly IReadOnlyList<ReelGuo.Api.Legal.LegalPages.Page> LegalPages = ReelGuo.Api.Legal.LegalPages.All;
 
     private static readonly string[] PrivatePages = ["/search", "/me", "/me/wallet", "/store", "/pay/result", "/settings"];
 
@@ -83,8 +84,8 @@ public static class SeoEndpoints
         pages.MapMethods("/app", methods, (HttpContext h, Ctx c, CancellationToken ct) => Serve(h, c, ct, (_, ct2) => Download(c, ct2)));
         pages.MapMethods("/app/{section}", methods, (string section, HttpContext h, Ctx c, CancellationToken ct) =>
             Serve(h, c, ct, (_, ct2) => AppSections.Contains(section) ? Download(c, ct2) : NotFound(c, ct2)));
-        foreach (var (path, title) in LegalPages)
-            pages.MapMethods(path, methods, (HttpContext h, Ctx c, CancellationToken ct) => Serve(h, c, ct, (_, ct2) => Legal(c, path, title, ct2), legal: true));
+        foreach (var legal in LegalPages)
+            pages.MapMethods(legal.Path, methods, (HttpContext h, Ctx c, CancellationToken ct) => Serve(h, c, ct, (_, ct2) => Legal(c, legal, ct2), legal: true));
         foreach (var path in PrivatePages)
             pages.MapMethods(path, methods, (HttpContext h, Ctx c, CancellationToken ct) => Serve(h, c, ct, (_, ct2) => Private(c, ct2)));
 
@@ -103,7 +104,7 @@ public static class SeoEndpoints
     /// <summary>Everything a page renderer needs, injected once.</summary>
     public sealed class Ctx(ReelGuoDbContext db, MediaUrlSigner signer, PageTemplate template, IOptions<SeoOptions> seo, IOptions<SiteOptions> site,
         IOptions<AppOptions> app, ICountryResolver countries, IBlockedCountryStore blocked, IAgeRuleStore ages, IMemoryCache cache, TimeProvider time,
-        PostRenderer renderer)
+        PostRenderer renderer, SiteBrand brand)
     {
         public ReelGuoDbContext Db { get; } = db;
         public MediaUrlSigner Signer { get; } = signer;
@@ -117,6 +118,11 @@ public static class SeoEndpoints
         public IMemoryCache Cache { get; } = cache;
         public TimeProvider Time { get; } = time;
         public PostRenderer Renderer { get; } = renderer;
+        public SiteBrand Brand { get; } = brand;
+        /// <summary>The page text in the site's language, {brand} and {short} filled in.</summary>
+        public string T(string key, params (string Name, object? Value)[] values) => Brand.T(key, values);
+        /// <summary>The configured tagline, else the language's default.</summary>
+        public string Tagline => string.IsNullOrWhiteSpace(Site.Tagline) ? T("site.tagline") : Site.Tagline;
         public DateOnly Today => PublicEndpoints.Today(Time);
         public IQueryable<Series> Visible(string country) => Db.Series.AsNoTracking().VisibleTo(country, Today);
     }
@@ -137,9 +143,9 @@ public static class SeoEndpoints
         if (legal)
             page = await build(country, ct);   // small, and an admin's 法务审核 switch should show at once
         else if ((await c.Blocked.GetAsync(ct)).Contains(country))
-            page = new SeoPage(StatusCodes.Status451UnavailableForLegalReasons, SiteName, "当前地区暂不提供服务", null, false, "");
+            page = new SeoPage(StatusCodes.Status451UnavailableForLegalReasons, c.Brand.Name, c.T("site.region"), null, false, "");
         else if (await c.Ages.ModeForAsync(country, ct) == AgeCheckMode.Strict)
-            page = new SeoPage(StatusCodes.Status200OK, SiteName, "当前地区需完成年龄验证后才能观看", null, false, "");
+            page = new SeoPage(StatusCodes.Status200OK, c.Brand.Name, c.T("site.ageRequired"), null, false, "");
         else
         {
             var key = $"seo|{country}|{http.Request.Path}{http.Request.QueryString}";
@@ -150,7 +156,7 @@ public static class SeoEndpoints
             }))!;
         }
 
-        var html = PageTemplate.Render(template, page, baseUrl, c.Seo.AllowIndexing);
+        var html = PageTemplate.Render(template, page, baseUrl, c.Seo.AllowIndexing, c.Brand.Name);
         http.Response.Headers.CacheControl = "no-cache";
         http.Response.Headers.Vary = "Accept-Encoding";
         if (!c.Seo.AllowIndexing) http.Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
@@ -172,16 +178,17 @@ public static class SeoEndpoints
     {
         var channels = await ChannelsAsync(c, ct);
         var b = new StringBuilder();
-        b.Append($"<header><a href=\"/\"><strong>{SiteName}</strong></a> <nav aria-label=\"主导航\"><a href=\"/\">首页</a>");
-        b.Append($" <a href=\"/c/all?sort=original\">{Brand.Short}原创</a>");
+        b.Append($"<header><a href=\"/\"><strong>{Html.Text(c.Brand.Name)}</strong></a> <nav aria-label=\"{Html.Attr(c.T("nav.label"))}\"><a href=\"/\">{Html.Text(c.T("nav.home"))}</a>");
+        b.Append($" <a href=\"/c/all?sort=original\">{Html.Text(c.T("nav.original"))}</a>");
         foreach (var ch in channels.Where(x => x.Status == CategoryStatus.Active))
             b.Append(" <a href=\"/c/").Append(Html.Url(ch.Slug)).Append("\">").Append(Html.Text(ch.Name)).Append("</a>");
-        b.Append($" <a href=\"/topics\">专题</a> <a href=\"/ranks\">排行榜</a> <a href=\"/posts\">博客</a> <a href=\"/go-home\">回家的路</a> <a href=\"/app/home\">{Brand.Short}APP</a></nav></header>\n");
-        b.Append("<noscript><p><strong>本站含有成人内容，仅限年满 18 周岁的成年人访问。</strong></p></noscript>\n");
+        b.Append($" <a href=\"/topics\">{Html.Text(c.T("nav.topics"))}</a> <a href=\"/ranks\">{Html.Text(c.T("nav.ranks"))}</a> <a href=\"/posts\">{Html.Text(c.T("nav.blog"))}</a>");
+        b.Append($" <a href=\"/go-home\">{Html.Text(c.T("nav.wayHome"))}</a> <a href=\"/app/home\">{Html.Text(c.T("nav.app"))}</a></nav></header>\n");
+        b.Append($"<noscript><p><strong>{Html.Text(c.T("nav.noscript"))}</strong></p></noscript>\n");
         var list = crumbs.ToList();
         if (list.Count > 1)
         {
-            b.Append("<nav aria-label=\"位置\" class=\"crumbs\">");
+            b.Append($"<nav aria-label=\"{Html.Attr(c.T("nav.crumbs"))}\" class=\"crumbs\">");
             for (var i = 0; i < list.Count; i++)
             {
                 if (i > 0) b.Append(" / ");
@@ -191,25 +198,29 @@ public static class SeoEndpoints
             b.Append("</nav>\n");
         }
         b.Append("<main>").Append(main).Append("</main>\n");
-        b.Append("<footer><nav aria-label=\"页脚\"><a href=\"/go-home\">回家的路</a> <a href=\"/app/home\">下载 App</a> <a href=\"/c/all\">最近上新</a> <a href=\"/ranks\">热门推荐</a> <a href=\"/topics\">专题合集</a>");
-        foreach (var (path, title) in LegalPages) b.Append(" <a href=\"").Append(path).Append("\">").Append(title).Append("</a>");
-        b.Append($"</nav><p>© {SiteName} · 本站内容仅面向年满 18 周岁的成年人</p></footer>");
+        b.Append($"<footer><nav aria-label=\"{Html.Attr(c.T("footer.label"))}\"><a href=\"/go-home\">{Html.Text(c.T("nav.wayHome"))}</a> <a href=\"/app/home\">{Html.Text(c.T("footer.download"))}</a>");
+        b.Append($" <a href=\"/c/all\">{Html.Text(c.T("footer.latest"))}</a> <a href=\"/ranks\">{Html.Text(c.T("footer.hot"))}</a> <a href=\"/topics\">{Html.Text(c.T("footer.topics"))}</a>");
+        foreach (var legal in LegalPages) b.Append(" <a href=\"").Append(legal.Path).Append("\">").Append(Html.Text(legal.Title(c.Brand))).Append("</a>");
+        b.Append($"</nav><p>{Html.Text(c.T("footer.rights"))}</p></footer>");
         return b.ToString();
     }
 
     private static string SeriesPath(long id, int? ep = null) => ep is > 1 ? $"/video/{id}/ep-{ep}" : $"/video/{id}";
 
-    private static string ProgressLabel(Series s) => s.IsFinished ? $"全{Math.Max(s.EpisodeCount, s.TotalEpisodes)}集" : $"更新至{s.EpisodeCount}集";
+    private static string ProgressLabel(Ctx c, Series s) =>
+        s.IsFinished ? c.T("progress.all", ("count", Math.Max(s.EpisodeCount, s.TotalEpisodes))) : c.T("progress.upTo", ("count", s.EpisodeCount));
+
+    private static string EpisodeName(Ctx c, int n) => c.T("series.ep", ("n", n));
 
     /// <summary>A list of series: title link, channel, progress, tags, synopsis.</summary>
-    private static string SeriesList(IEnumerable<Series> items, bool ordered = false)
+    private static string SeriesList(Ctx c, IEnumerable<Series> items, bool ordered = false)
     {
         var b = new StringBuilder(ordered ? "<ol class=\"cards\">" : "<ul class=\"cards\">");
         foreach (var s in items)
         {
             b.Append("<li><a href=\"").Append(SeriesPath(s.Id)).Append("\">").Append(Html.Text(s.Title)).Append("</a>");
-            b.Append(" <small>").Append(Html.Text(s.Category?.Name ?? "")).Append(" · ").Append(ProgressLabel(s));
-            if (s.Score > 0) b.Append(" · ").Append(s.Score.ToString("0.0")).Append("分");
+            b.Append(" <small>").Append(Html.Text(s.Category?.Name ?? "")).Append(" · ").Append(Html.Text(ProgressLabel(c, s)));
+            if (s.Score > 0) b.Append(" · ").Append(Html.Text(c.T("score", ("score", s.Score.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)))));
             if (s.Tags.Count > 0) b.Append(" · ").Append(Html.Text(string.Join(" / ", s.Tags.Take(4))));
             b.Append("</small>");
             if (!string.IsNullOrWhiteSpace(s.Description)) b.Append("<p>").Append(Html.Text(Html.Clip(s.Description, 120))).Append("</p>");
@@ -228,8 +239,6 @@ public static class SeoEndpoints
         }).ToList(),
     };
 
-    private const string SiteName = Brand.Name;
-
     // ---------------------------------------------------------------------------------------------
     // Pages
     // ---------------------------------------------------------------------------------------------
@@ -243,28 +252,27 @@ public static class SeoEndpoints
         var topics = await c.Db.Topics.AsNoTracking().Where(t => t.Published).OrderBy(t => t.SortOrder).ThenByDescending(t => t.Id).Take(6).ToListAsync(ct);
 
         var m = new StringBuilder();
-        m.Append($"<h1>{SiteName} · ").Append(Html.Text(c.Site.Tagline)).Append("</h1>");
-        m.Append($"<p>{SiteName}每日更新 AI 短剧、原创短剧与 AI 漫剧，支持手机与电脑在线观看。仅限年满 18 周岁的成年人访问。</p>");
-        m.Append("<section><h2>精选推荐</h2>").Append(SeriesList(picks)).Append("</section>");
-        m.Append("<section><h2>最近上新</h2>").Append(SeriesList(latest)).Append("<p><a href=\"/c/all\">全部上新</a></p></section>");
-        m.Append("<section><h2>热播短剧</h2>").Append(SeriesList(hot)).Append("<p><a href=\"/ranks/hot\">更多热播</a></p></section>");
+        m.Append($"<h1>{Html.Text(c.Brand.Name)} · ").Append(Html.Text(c.Tagline)).Append("</h1>");
+        m.Append($"<p>{Html.Text(c.T("home.intro"))}</p>");
+        m.Append($"<section><h2>{Html.Text(c.T("home.picks"))}</h2>").Append(SeriesList(c, picks)).Append("</section>");
+        m.Append($"<section><h2>{Html.Text(c.T("home.latest"))}</h2>").Append(SeriesList(c, latest)).Append($"<p><a href=\"/c/all\">{Html.Text(c.T("home.allLatest"))}</a></p></section>");
+        m.Append($"<section><h2>{Html.Text(c.T("home.hot"))}</h2>").Append(SeriesList(c, hot)).Append($"<p><a href=\"/ranks/hot\">{Html.Text(c.T("home.moreHot"))}</a></p></section>");
         if (topics.Count > 0)
         {
-            m.Append("<section><h2>专题推荐</h2><ul>");
+            m.Append($"<section><h2>{Html.Text(c.T("home.topics"))}</h2><ul>");
             foreach (var t in topics) m.Append("<li><a href=\"/topics/").Append(t.Id).Append("\">").Append(Html.Text(t.Title)).Append("</a> <small>").Append(Html.Text(Html.Clip(t.Description, 80))).Append("</small></li>");
             m.Append("</ul></section>");
         }
         var body = await FrameAsync(c, [], m.ToString(), ct);
         var site = new Dictionary<string, object>
         {
-            ["@context"] = "https://schema.org", ["@type"] = "WebSite", ["name"] = SiteName, ["url"] = BaseFor(c) + "/",
+            ["@context"] = "https://schema.org", ["@type"] = "WebSite", ["name"] = c.Brand.Name, ["url"] = BaseFor(c) + "/", ["inLanguage"] = c.Brand.Locale,
             ["potentialAction"] = new Dictionary<string, object>
             {
                 ["@type"] = "SearchAction", ["target"] = BaseFor(c) + "/search?q={search_term_string}", ["query-input"] = "required name=search_term_string",
             },
         };
-        return new SeoPage(200, $"{SiteName} · {c.Site.Tagline}",
-            $"{SiteName}：{c.Site.Tagline}。每日更新 AI 短剧、原创短剧与 AI 漫剧，支持手机与电脑在线观看，仅限 18 岁以上成年人访问。", "/", true, body,
+        return new SeoPage(200, c.T("home.title", ("tagline", c.Tagline)), c.T("home.description", ("tagline", c.Tagline)), "/", true, body,
             picks.FirstOrDefault()?.CoverKey is { } k ? c.Signer.PublicUrlOrNull(k) : null, JsonLd: [site]);
     }
 
@@ -280,15 +288,15 @@ public static class SeoEndpoints
             channel = await c.Db.Categories.AsNoTracking().FirstOrDefaultAsync(x => x.Slug == slug && x.Status != CategoryStatus.Hidden, ct);
             if (channel is null) return await NotFound(c, ct);
         }
-        var name = original ? Brand.Short + "原创" : all ? "全部短剧" : channel!.Name;
-        var intro = channel?.Description is { Length: > 0 } d ? d : "精选热播短剧，汇集独家原创、精选推荐与最新更新内容。";
+        var name = original ? c.T("nav.original") : all ? c.T("channel.all") : channel!.Name;
+        var intro = channel?.Description is { Length: > 0 } d ? d : c.T("channel.intro");
         var canonical = $"/c/{Html.Url(slug)}" + (original ? "?sort=original" : "") + (page > 1 ? (original ? "&" : "?") + $"page={page}" : "");
-        var crumbs = new List<(string, string?)> { ("首页", "/"), (name, canonical) };
+        var crumbs = new List<(string, string?)> { (c.T("nav.home"), "/"), (name, canonical) };
 
         if (channel?.Status == CategoryStatus.ComingSoon)
         {
-            var soon = await FrameAsync(c, crumbs, $"<h1>{Html.Text(name)}</h1><p>该频道即将上线，敬请期待。</p>", ct);
-            return new SeoPage(200, $"{name} - {SiteName}", intro, canonical, false, soon);
+            var soon = await FrameAsync(c, crumbs, $"<h1>{Html.Text(name)}</h1><p>{Html.Text(c.T("channel.soon"))}</p>", ct);
+            return new SeoPage(200, c.T("channel.soonTitle", ("name", name)), intro, canonical, false, soon);
         }
 
         var q = c.Visible(country).Include(s => s.Category).AsQueryable();
@@ -301,18 +309,25 @@ public static class SeoEndpoints
             .Skip((page - 1) * ChannelPageSize).Take(ChannelPageSize).ToListAsync(ct);
 
         var m = new StringBuilder();
-        m.Append("<h1>").Append(Html.Text(name)).Append("在线观看</h1><p>【").Append(Html.Text(name)).Append("】").Append(Html.Text(intro)).Append($" 共 {total} 部。</p>");
-        m.Append(SeriesList(items));
+        m.Append("<h1>").Append(Html.Text(c.T("channel.heading", ("name", name)))).Append("</h1><p>")
+            .Append(Html.Text(c.T("channel.lead", ("name", name), ("intro", intro), ("total", total)))).Append("</p>");
+        m.Append(SeriesList(c, items));
         var basePath = $"/c/{Html.Url(slug)}" + (original ? "?sort=original" : "");
         var join = original ? "&" : "?";
-        m.Append("<nav aria-label=\"分页\">");
-        if (page > 1) m.Append("<a rel=\"prev\" href=\"").Append(page == 2 ? basePath : $"{basePath}{join}page={page - 1}").Append("\">上一页</a> ");
-        m.Append($"第 {page} / {pages} 页");
-        if (page < pages) m.Append(" <a rel=\"next\" href=\"").Append($"{basePath}{join}page={page + 1}").Append("\">下一页</a>");
-        m.Append("</nav>");
+        m.Append(Pager(c, page, pages, n => n == 1 ? basePath : $"{basePath}{join}page={n}"));
         var body = await FrameAsync(c, crumbs, m.ToString(), ct);
-        var title = $"{name}在线观看{(page > 1 ? $" - 第{page}页" : "")} - {SiteName}";
-        return new SeoPage(200, title, $"【{name}】{intro}", canonical, true, body, JsonLd: [Breadcrumbs(BaseFor(c), crumbs)]);
+        var title = page > 1 ? c.T("channel.titlePaged", ("name", name), ("page", page)) : c.T("channel.title", ("name", name));
+        return new SeoPage(200, title, c.T("channel.description", ("name", name), ("intro", intro)), canonical, true, body, JsonLd: [Breadcrumbs(BaseFor(c), crumbs)]);
+    }
+
+    /// <summary>"Previous · page n of m · next" under a paged list.</summary>
+    private static string Pager(Ctx c, int page, int pages, Func<int, string> href)
+    {
+        var m = new StringBuilder($"<nav aria-label=\"{Html.Attr(c.T("pager.label"))}\">");
+        if (page > 1) m.Append("<a rel=\"prev\" href=\"").Append(href(page - 1)).Append("\">").Append(Html.Text(c.T("pager.prev"))).Append("</a> ");
+        m.Append(Html.Text(c.T("pager.page", ("page", page), ("pages", pages))));
+        if (page < pages) m.Append(" <a rel=\"next\" href=\"").Append(href(page + 1)).Append("\">").Append(Html.Text(c.T("pager.next"))).Append("</a>");
+        return m.Append("</nav>").ToString();
     }
 
     private static async Task<SeoPage> Series(Ctx c, long id, int? ep, string country, CancellationToken ct)
@@ -332,38 +347,40 @@ public static class SeoEndpoints
             .OrderByDescending(x => x.HotScore).Take(12).ToListAsync(ct);
         var rating = await PortalEndpoints.RatingAsync(c.Db, s.Id, ct);
 
-        var episodeTitle = current is null || current.EpisodeNumber == 1 && ep is null ? null : $"第{current.EpisodeNumber}集";
+        var episodeTitle = current is null || current.EpisodeNumber == 1 && ep is null ? null : EpisodeName(c, current.EpisodeNumber);
         var canonical = SeriesPath(s.Id, current?.EpisodeNumber);
-        var crumbs = new List<(string, string?)> { ("首页", "/"), (s.Category.Name, $"/c/{Html.Url(s.Category.Slug)}"), (s.Title, SeriesPath(s.Id)) };
+        var crumbs = new List<(string, string?)> { (c.T("nav.home"), "/"), (s.Category.Name, $"/c/{Html.Url(s.Category.Slug)}"), (s.Title, SeriesPath(s.Id)) };
         if (episodeTitle is not null) crumbs.Add((episodeTitle, canonical));
 
         var m = new StringBuilder();
         m.Append("<article><h1>").Append(Html.Text(s.Title)).Append(episodeTitle is null ? "" : $" {episodeTitle}").Append("</h1>");
-        if (current is not null && !string.IsNullOrWhiteSpace(current.Title) && current.Title != episodeTitle)
+        // An interactive series' ending names stay hidden, as in the app.
+        var spoiler = s.Kind == SeriesKind.Interactive && current?.Outcome == SceneOutcome.Ending;
+        if (current is not null && !spoiler && !string.IsNullOrWhiteSpace(current.Title) && current.Title != episodeTitle)
             m.Append("<h2>").Append(Html.Text(current.Title)).Append("</h2>");
-        m.Append("<p>").Append(Html.Text(string.IsNullOrWhiteSpace(s.Description) ? "暂无简介" : s.Description)).Append("</p>");
-        m.Append("<dl><dt>频道</dt><dd><a href=\"/c/").Append(Html.Url(s.Category.Slug)).Append("\">").Append(Html.Text(s.Category.Name)).Append("</a></dd>");
-        m.Append("<dt>更新状态</dt><dd>").Append(ProgressLabel(s)).Append("</dd>");
-        if (s.PublishedAt is { } at) m.Append("<dt>上线日期</dt><dd>").Append(at.ToString("yyyy-MM-dd")).Append("</dd>");
-        if (s.Score > 0) m.Append("<dt>评分</dt><dd>").Append(s.Score.ToString("0.0")).Append("分</dd>");
-        if (s.Author is not null) m.Append("<dt>出品</dt><dd>").Append(Html.Text(s.Author.Nickname)).Append("</dd>");
+        m.Append("<p>").Append(Html.Text(string.IsNullOrWhiteSpace(s.Description) ? c.T("series.noSynopsis") : s.Description)).Append("</p>");
+        m.Append($"<dl><dt>{Html.Text(c.T("series.channel"))}</dt><dd><a href=\"/c/").Append(Html.Url(s.Category.Slug)).Append("\">").Append(Html.Text(s.Category.Name)).Append("</a></dd>");
+        m.Append($"<dt>{Html.Text(c.T("series.progress"))}</dt><dd>").Append(Html.Text(ProgressLabel(c, s))).Append("</dd>");
+        if (s.PublishedAt is { } at) m.Append($"<dt>{Html.Text(c.T("series.published"))}</dt><dd>").Append(at.ToString("yyyy-MM-dd")).Append("</dd>");
+        if (s.Score > 0) m.Append($"<dt>{Html.Text(c.T("series.score"))}</dt><dd>").Append(Html.Text(c.T("score", ("score", s.Score.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture))))).Append("</dd>");
+        if (s.Author is not null) m.Append($"<dt>{Html.Text(c.T("series.producer"))}</dt><dd>").Append(Html.Text(s.Author.Nickname)).Append("</dd>");
         if (s.Tags.Count > 0)
         {
-            m.Append("<dt>标签</dt><dd>");
+            m.Append($"<dt>{Html.Text(c.T("series.tags"))}</dt><dd>");
             foreach (var t in s.Tags) m.Append("<a href=\"/search?q=").Append(Html.Url(t)).Append("\">").Append(Html.Text(t)).Append("</a> ");
             m.Append("</dd>");
         }
         m.Append("</dl>");
         if (episodes.Count > 0)
         {
-            m.Append("<section><h2>选集</h2><ol class=\"episodes\">");
+            m.Append($"<section><h2>{Html.Text(c.T("series.episodes"))}</h2><ol class=\"episodes\">");
             foreach (var e in episodes)
-                m.Append("<li><a href=\"").Append(e.EpisodeNumber == 1 ? SeriesPath(s.Id) : SeriesPath(s.Id, e.EpisodeNumber)).Append("\">第")
-                    .Append(e.EpisodeNumber).Append("集</a></li>");
+                m.Append("<li><a href=\"").Append(e.EpisodeNumber == 1 ? SeriesPath(s.Id) : SeriesPath(s.Id, e.EpisodeNumber)).Append("\">")
+                    .Append(Html.Text(EpisodeName(c, e.EpisodeNumber))).Append("</a></li>");
             m.Append("</ol></section>");
         }
         m.Append("</article>");
-        if (related.Count > 0) m.Append("<section><h2>猜你喜欢</h2>").Append(SeriesList(related)).Append("</section>");
+        if (related.Count > 0) m.Append($"<section><h2>{Html.Text(c.T("series.related"))}</h2>").Append(SeriesList(c, related)).Append("</section>");
         var body = await FrameAsync(c, crumbs, m.ToString(), ct);
 
         var baseUrl = BaseFor(c);
@@ -372,11 +389,11 @@ public static class SeoEndpoints
         {
             ["@context"] = "https://schema.org", ["@type"] = "TVSeries", ["name"] = s.Title, ["url"] = baseUrl + SeriesPath(s.Id),
             ["description"] = Html.Clip(s.Description, 300), ["genre"] = new[] { s.Category.Name }.Concat(s.Tags).ToList(),
-            ["numberOfEpisodes"] = Math.Max(s.TotalEpisodes, s.EpisodeCount), ["inLanguage"] = "zh-CN", ["isFamilyFriendly"] = false,
+            ["numberOfEpisodes"] = Math.Max(s.TotalEpisodes, s.EpisodeCount), ["inLanguage"] = c.Brand.Locale, ["isFamilyFriendly"] = false,
             ["contentRating"] = "18+",
             ["episode"] = episodes.Take(100).Select(e => new Dictionary<string, object>
             {
-                ["@type"] = "TVEpisode", ["episodeNumber"] = e.EpisodeNumber, ["name"] = $"第{e.EpisodeNumber}集",
+                ["@type"] = "TVEpisode", ["episodeNumber"] = e.EpisodeNumber, ["name"] = EpisodeName(c, e.EpisodeNumber),
                 ["url"] = baseUrl + (e.EpisodeNumber == 1 ? SeriesPath(s.Id) : SeriesPath(s.Id, e.EpisodeNumber)),
             }).ToList(),
         };
@@ -386,9 +403,9 @@ public static class SeoEndpoints
             show["aggregateRating"] = new Dictionary<string, object> { ["@type"] = "AggregateRating", ["ratingValue"] = Math.Round(avg, 1), ["bestRating"] = 10, ["worstRating"] = 1, ["ratingCount"] = rating.Count };
 
         var title = episodeTitle is null
-            ? $"{s.Title}全集在线观看 - {s.Category.Name} - {SiteName}"
-            : $"{s.Title} {episodeTitle}在线观看 - {s.Category.Name} - {SiteName}";
-        var description = $"{Html.Clip(s.Description, 130)} {ProgressLabel(s)}，{s.Category.Name}在线观看。".Trim();
+            ? c.T("series.title", ("title", s.Title), ("channel", s.Category.Name))
+            : c.T("series.titleEp", ("title", s.Title), ("ep", episodeTitle), ("channel", s.Category.Name));
+        var description = c.T("series.description", ("synopsis", Html.Clip(s.Description, 130)), ("progress", ProgressLabel(c, s)), ("channel", s.Category.Name)).Trim();
         return new SeoPage(200, title, description, canonical, true, body, cover, episodeTitle is null ? "video.tv_show" : "video.episode",
             [show, Breadcrumbs(baseUrl, crumbs)]);
     }
@@ -403,26 +420,27 @@ public static class SeoEndpoints
             .OrderBy(r => r.Position).Take(20).Select(r => r.SeriesId).ToListAsync(ct);
         var found = await visible.Include(s => s.Category).Where(s => order.Contains(s.Id)).ToListAsync(ct);
         var rows = found.OrderBy(s => order.IndexOf(s.Id)).ToList();
-        var crumbs = new List<(string, string?)> { ("首页", "/"), ("排行榜", "/ranks"), (board.Name, $"/ranks/{board.Kind}") };
-        var m = new StringBuilder($"<h1>{board.Name}</h1><p>{SiteName}榜单 · TOP20 · 每 10 分钟更新。</p>");
+        var boardName = c.T(board.TextKey);
+        var crumbs = new List<(string, string?)> { (c.T("nav.home"), "/"), (c.T("nav.ranks"), "/ranks"), (boardName, $"/ranks/{board.Kind}") };
+        var m = new StringBuilder($"<h1>{Html.Text(boardName)}</h1><p>{Html.Text(c.T("ranks.lead"))}</p>");
         m.Append("<nav>");
-        foreach (var b in Boards) m.Append($"<a href=\"/ranks/{b.Kind}\">{b.Name}</a> ");
-        m.Append("</nav>").Append(SeriesList(rows, ordered: true));
+        foreach (var b in Boards) m.Append($"<a href=\"/ranks/{b.Kind}\">{Html.Text(c.T(b.TextKey))}</a> ");
+        m.Append("</nav>").Append(SeriesList(c, rows, ordered: true));
         var body = await FrameAsync(c, crumbs, m.ToString(), ct);
-        return new SeoPage(200, $"{board.Name} TOP20 - {SiteName}排行榜", $"{SiteName}{board.Name}：全站最受欢迎的 20 部短剧，每 10 分钟更新。",
+        return new SeoPage(200, c.T("ranks.title", ("board", boardName)), c.T("ranks.description", ("board", boardName)),
             $"/ranks/{board.Kind}", true, body, JsonLd: [Breadcrumbs(BaseFor(c), crumbs)]);
     }
 
     private static async Task<SeoPage> Topics(Ctx c, string country, CancellationToken ct)
     {
         var topics = await c.Db.Topics.AsNoTracking().Where(t => t.Published).OrderBy(t => t.SortOrder).ThenByDescending(t => t.Id).Take(200).ToListAsync(ct);
-        var crumbs = new List<(string, string?)> { ("首页", "/"), ("专题", "/topics") };
-        var m = new StringBuilder($"<h1>全部专题</h1><p>专题集中展示{SiteName}各类精品专题合集，按主题整理，方便快速找到想看的短剧。</p><ul>");
+        var crumbs = new List<(string, string?)> { (c.T("nav.home"), "/"), (c.T("nav.topics"), "/topics") };
+        var m = new StringBuilder($"<h1>{Html.Text(c.T("topics.heading"))}</h1><p>{Html.Text(c.T("topics.lead"))}</p><ul>");
         foreach (var t in topics)
             m.Append("<li><a href=\"/topics/").Append(t.Id).Append("\">").Append(Html.Text(t.Title)).Append("</a> <small>").Append(Html.Text(Html.Clip(t.Description, 100))).Append("</small></li>");
         m.Append("</ul>");
         var body = await FrameAsync(c, crumbs, m.ToString(), ct);
-        return new SeoPage(200, $"全部专题 - {SiteName}", $"{SiteName}专题合集：按题材与看点整理的短剧合集，持续更新。", "/topics", true, body);
+        return new SeoPage(200, c.T("topics.title"), c.T("topics.description"), "/topics", true, body);
     }
 
     private static async Task<SeoPage> Topic(Ctx c, int id, string country, CancellationToken ct)
@@ -432,10 +450,11 @@ public static class SeoEndpoints
         var order = await c.Db.TopicSeries.AsNoTracking().Where(x => x.TopicId == id).OrderBy(x => x.Position).Select(x => x.SeriesId).ToListAsync(ct);
         var series = await c.Visible(country).Include(s => s.Category).Where(s => order.Contains(s.Id)).ToListAsync(ct);
         var items = series.OrderBy(s => order.IndexOf(s.Id)).ToList();
-        var crumbs = new List<(string, string?)> { ("首页", "/"), ("专题", "/topics"), (topic.Title, $"/topics/{id}") };
-        var m = $"<h1>{Html.Text(topic.Title)}</h1><p>{Html.Text(topic.Description)} 共 {items.Count} 部。</p>{SeriesList(items)}";
+        var crumbs = new List<(string, string?)> { (c.T("nav.home"), "/"), (c.T("nav.topics"), "/topics"), (topic.Title, $"/topics/{id}") };
+        var m = $"<h1>{Html.Text(topic.Title)}</h1><p>{Html.Text(c.T("topic.lead", ("description", topic.Description), ("count", items.Count)).Trim())}</p>{SeriesList(c, items)}";
         var body = await FrameAsync(c, crumbs, m, ct);
-        return new SeoPage(200, $"{topic.Title} - {SiteName}专题", string.IsNullOrWhiteSpace(topic.Description) ? $"{topic.Title}：{SiteName}专题合集。" : Html.Clip(topic.Description, 150),
+        return new SeoPage(200, c.T("topic.title", ("topic", topic.Title)),
+            string.IsNullOrWhiteSpace(topic.Description) ? c.T("topic.description", ("topic", topic.Title)) : Html.Clip(topic.Description, 150),
             $"/topics/{id}", true, body, items.FirstOrDefault()?.CoverKey is { } k ? c.Signer.PublicUrlOrNull(k) : null, JsonLd: [Breadcrumbs(BaseFor(c), crumbs)]);
     }
 
@@ -453,8 +472,8 @@ public static class SeoEndpoints
         var pages = Math.Max(1, (int)Math.Ceiling(total / (double)PostPageSize));
         if (page > pages) return await NotFound(c, ct);
         var posts = await q.OrderByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id).Skip((page - 1) * PostPageSize).Take(PostPageSize).ToListAsync(ct);
-        var crumbs = new List<(string, string?)> { ("首页", "/"), ("博客", "/posts") };
-        var m = new StringBuilder("<h1>博客</h1><p>浏览最新博客文章，发现圈内热点与短剧剧评。</p><ul>");
+        var crumbs = new List<(string, string?)> { (c.T("nav.home"), "/"), (c.T("nav.blog"), "/posts") };
+        var m = new StringBuilder($"<h1>{Html.Text(c.T("nav.blog"))}</h1><p>{Html.Text(c.T("posts.lead"))}</p><ul>");
         foreach (var x in posts)
         {
             m.Append("<li><a href=\"/post/").Append(x.Id).Append("\">").Append(Html.Text(x.Title)).Append("</a>");
@@ -462,13 +481,9 @@ public static class SeoEndpoints
             if (!string.IsNullOrWhiteSpace(x.Summary)) m.Append("<p>").Append(Html.Text(Html.Clip(x.Summary, 120))).Append("</p>");
             m.Append("</li>");
         }
-        m.Append("</ul><nav aria-label=\"分页\">");
-        if (page > 1) m.Append("<a rel=\"prev\" href=\"").Append(page == 2 ? "/posts" : $"/posts?page={page - 1}").Append("\">上一页</a> ");
-        m.Append($"第 {page} / {pages} 页");
-        if (page < pages) m.Append($" <a rel=\"next\" href=\"/posts?page={page + 1}\">下一页</a>");
-        m.Append("</nav>");
+        m.Append("</ul>").Append(Pager(c, page, pages, n => n == 1 ? "/posts" : $"/posts?page={n}"));
         var body = await FrameAsync(c, crumbs, m.ToString(), ct);
-        return new SeoPage(200, $"博客{(page > 1 ? $" - 第{page}页" : "")} - {SiteName}", $"{SiteName}博客：圈内热点、短剧剧评与幕后内容，每天更新。",
+        return new SeoPage(200, page > 1 ? c.T("posts.titlePaged", ("page", page)) : c.T("posts.title"), c.T("posts.description"),
             page > 1 ? $"/posts?page={page}" : "/posts", true, body);
     }
 
@@ -477,13 +492,13 @@ public static class SeoEndpoints
         var post = await PublishedPosts(c).FirstOrDefaultAsync(x => x.Id == id, ct);
         if (post is null) return await NotFound(c, ct);
         Series? linked = post.SeriesId is { } sid ? await c.Visible(country).FirstOrDefaultAsync(s => s.Id == sid, ct) : null;
-        var crumbs = new List<(string, string?)> { ("首页", "/"), ("博客", "/posts"), (post.Title, $"/post/{id}") };
+        var crumbs = new List<(string, string?)> { (c.T("nav.home"), "/"), (c.T("nav.blog"), "/posts"), (post.Title, $"/post/{id}") };
         var m = new StringBuilder("<article><h1>").Append(Html.Text(post.Title)).Append("</h1>");
         if (post.PublishedAt is { } at) m.Append("<p><time datetime=\"").Append(at.ToString("yyyy-MM-dd")).Append("\">").Append(at.ToString("yyyy-MM-dd")).Append("</time></p>");
         if (post.Tags.Count > 0) m.Append("<p>").Append(Html.Text(string.Join(" ", post.Tags.Select(t => "#" + t)))).Append("</p>");
         // ContentHtml is produced and sanitised by the server when the post is saved (see docs/ARCHITECTURE.md §9.6).
         m.Append("<div class=\"article\">").Append(post.ContentHtml).Append("</div>");
-        if (linked is not null) m.Append("<p>观看正片：<a href=\"").Append(SeriesPath(linked.Id)).Append("\">").Append(Html.Text(linked.Title)).Append("</a></p>");
+        if (linked is not null) m.Append("<p>").Append(Html.Text(c.T("post.watch"))).Append("<a href=\"").Append(SeriesPath(linked.Id)).Append("\">").Append(Html.Text(linked.Title)).Append("</a></p>");
         m.Append("</article>");
         var body = await FrameAsync(c, crumbs, m.ToString(), ct);
         var baseUrl = BaseFor(c);
@@ -491,56 +506,57 @@ public static class SeoEndpoints
         var article = new Dictionary<string, object>
         {
             ["@context"] = "https://schema.org", ["@type"] = "Article", ["headline"] = Html.Clip(post.Title, 110), ["url"] = baseUrl + $"/post/{id}",
-            ["dateModified"] = post.UpdatedAt.ToString("O"), ["publisher"] = new Dictionary<string, object> { ["@type"] = "Organization", ["name"] = SiteName },
+            ["dateModified"] = post.UpdatedAt.ToString("O"), ["publisher"] = new Dictionary<string, object> { ["@type"] = "Organization", ["name"] = c.Brand.Name },
         };
         if (post.PublishedAt is { } published) article["datePublished"] = published.ToString("O");
         if (cover is not null) article["image"] = PageTemplate.Absolute(cover, baseUrl);
-        return new SeoPage(200, $"{post.Title} - {SiteName}博客", Html.Clip(string.IsNullOrWhiteSpace(post.Summary) ? post.Title : post.Summary, 150),
+        return new SeoPage(200, c.T("post.title", ("title", post.Title)), Html.Clip(string.IsNullOrWhiteSpace(post.Summary) ? post.Title : post.Summary, 150),
             $"/post/{id}", true, body, cover, "article", [article, Breadcrumbs(baseUrl, crumbs)]);
     }
 
     private static async Task<SeoPage> WayHome(Ctx c, CancellationToken ct)
     {
-        var crumbs = new List<(string, string?)> { ("首页", "/"), ("回家的路", "/go-home") };
-        var m = new StringBuilder($"<h1>{SiteName} · 官方最新地址发布页</h1><p>本页面由{SiteName}官方维护，实时同步最新可用线路与备用入口，方便在不同网络环境下快速返回。</p><h2>最新可用地址</h2><ul>");
+        var crumbs = new List<(string, string?)> { (c.T("nav.home"), "/"), (c.T("nav.wayHome"), "/go-home") };
+        var m = new StringBuilder($"<h1>{Html.Text(c.T("way.heading"))}</h1><p>{Html.Text(c.T("way.lead"))}</p><h2>{Html.Text(c.T("way.lines"))}</h2><ul>");
         foreach (var mirror in c.App.Mirrors.Select(x => x.Trim().TrimEnd('/')).Where(x => x.Length > 0).Distinct())
             m.Append("<li><a href=\"").Append(Html.Attr(mirror)).Append("\">").Append(Html.Text(mirror)).Append("</a></li>");
         m.Append("</ul>");
-        if (!string.IsNullOrWhiteSpace(c.Site.PermanentDomain)) m.Append("<p>官方永久域名：").Append(Html.Text(c.Site.PermanentDomain)).Append("</p>");
-        if (!string.IsNullOrWhiteSpace(c.Site.Telegram)) m.Append("<p>官方交流群：<a href=\"").Append(Html.Attr(c.Site.Telegram)).Append("\">").Append(Html.Text(c.Site.Telegram)).Append("</a></p>");
-        if (!string.IsNullOrWhiteSpace(c.Site.Email)) m.Append("<p>官方邮箱：").Append(Html.Text(c.Site.Email)).Append("</p>");
+        if (!string.IsNullOrWhiteSpace(c.Site.PermanentDomain)) m.Append("<p>").Append(Html.Text(c.T("way.permanent"))).Append(Html.Text(c.Site.PermanentDomain)).Append("</p>");
+        if (!string.IsNullOrWhiteSpace(c.Site.Telegram)) m.Append("<p>").Append(Html.Text(c.T("way.group"))).Append("<a href=\"").Append(Html.Attr(c.Site.Telegram)).Append("\">").Append(Html.Text(c.Site.Telegram)).Append("</a></p>");
+        if (!string.IsNullOrWhiteSpace(c.Site.Email)) m.Append("<p>").Append(Html.Text(c.T("way.email"))).Append(Html.Text(c.Site.Email)).Append("</p>");
         var body = await FrameAsync(c, crumbs, m.ToString(), ct);
-        return new SeoPage(200, $"回家的路 · {SiteName}官方最新地址发布页", $"{SiteName}官方最新地址发布页：最新可用线路、备用入口与官方联系方式。", "/go-home", true, body);
+        return new SeoPage(200, c.T("way.title"), c.T("way.description"), "/go-home", true, body);
     }
 
     private static async Task<SeoPage> Download(Ctx c, CancellationToken ct)
     {
         var releases = await c.Db.AppReleases.AsNoTracking().Where(r => r.Published).OrderByDescending(r => r.PublishedAt).Take(20).ToListAsync(ct);
-        var crumbs = new List<(string, string?)> { ("首页", "/"), ("下载 App", "/app/home") };
-        var m = new StringBuilder($"<h1>下载{SiteName} App</h1><p>桌面版与安卓版 App，自动切换可用线路。iPhone 可将网页添加到主屏幕使用。</p><ul>");
+        var crumbs = new List<(string, string?)> { (c.T("nav.home"), "/"), (c.T("footer.download"), "/app/home") };
+        var m = new StringBuilder($"<h1>{Html.Text(c.T("download.heading"))}</h1><p>{Html.Text(c.T("download.lead"))}</p><ul>");
         foreach (var r in releases.GroupBy(r => r.Platform).Select(g => g.First()))
             m.Append("<li>").Append(Html.Text(r.Platform)).Append(" · ").Append(Html.Text(r.Version)).Append("</li>");
         m.Append("</ul>");
         var body = await FrameAsync(c, crumbs, m.ToString(), ct);
-        return new SeoPage(200, $"下载 App - {SiteName}", $"下载{SiteName}桌面版与安卓版 App。", "/app/home", true, body);
+        return new SeoPage(200, c.T("download.title"), c.T("download.description"), "/app/home", true, body);
     }
 
-    private static async Task<SeoPage> Legal(Ctx c, string path, string title, CancellationToken ct)
+    private static async Task<SeoPage> Legal(Ctx c, ReelGuo.Api.Legal.LegalPages.Page page, CancellationToken ct)
     {
-        var page = ReelGuo.Api.Legal.LegalPages.ByPath(path)!;
+        var title = page.Title(c.Brand);
         var notice = await ReelGuo.Api.Legal.LegalPages.UnderReviewAsync(c.Db, page.Slug, ct)
-            ? $"<p class=\"legal-review\">{Html.Text(ReelGuo.Api.Legal.LegalPages.ReviewNotice)}</p>" : "";
-        var text = ReelGuo.Api.Legal.LegalPages.Html(page, c.Renderer);
-        var body = await FrameAsync(c, [("首页", "/"), (title, path)], $"<h1>{title}</h1>{notice}<article>{text}</article>", ct);
-        return new SeoPage(200, $"{title} - {SiteName}", $"{SiteName}{title}。", path, true, body);
+            ? $"<p class=\"legal-review\">{Html.Text(ReelGuo.Api.Legal.LegalPages.ReviewNotice(c.Brand))}</p>" : "";
+        var text = ReelGuo.Api.Legal.LegalPages.Html(page, c.Renderer, c.Brand);
+        var body = await FrameAsync(c, [(c.T("nav.home"), "/"), (title, page.Path)], $"<h1>{Html.Text(title)}</h1>{notice}<article>{text}</article>", ct);
+        return new SeoPage(200, c.T("legal.title", ("page", title)), c.T("legal.description", ("page", title)), page.Path, true, body);
     }
 
     private static async Task<SeoPage> Private(Ctx c, CancellationToken ct) =>
-        new(200, SiteName, $"{SiteName} · {c.Site.Tagline}", null, false, await FrameAsync(c, [], "", ct));
+        new(200, c.Brand.Name, c.T("private.description", ("tagline", c.Tagline)), null, false, await FrameAsync(c, [], "", ct));
 
+    // notFound.body is our own text with a link in it (Sites/Texts), not visitor input.
     private static async Task<SeoPage> NotFound(Ctx c, CancellationToken ct) =>
-        new(404, $"页面不存在 - {SiteName}", "页面不存在或已下架。", null, false,
-            await FrameAsync(c, [], "<h1>页面不存在</h1><p>链接可能已失效，<a href=\"/\">回到首页</a>看看吧。</p>", ct));
+        new(404, c.T("notFound.title"), c.T("notFound.description"), null, false,
+            await FrameAsync(c, [], $"<h1>{Html.Text(c.T("notFound.heading"))}</h1><p>{c.T("notFound.body")}</p>", ct));
 
     /// <summary>Absolute URLs inside JSON-LD use the configured origin; without one they stay root-relative (resolved against the page).</summary>
     private static string BaseFor(Ctx c) => c.Seo.PublicBaseUrl.TrimEnd('/');
@@ -592,7 +608,7 @@ public static class SeoEndpoints
             urls.Add(("/posts", null));
             urls.Add(("/go-home", null));
             urls.Add(("/app/home", null));
-            foreach (var path in LegalPages.Keys) urls.Add((path, null));
+            foreach (var legal in LegalPages) urls.Add((legal.Path, null));
         }
         else if (name == "posts.xml")
         {

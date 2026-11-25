@@ -18,7 +18,7 @@
 #>
 param(
     [string]$To,
-    [string]$RestoreBackup,
+    [string[]]$RestoreBackup,
     [switch]$List,
     [switch]$Yes
 )
@@ -51,21 +51,27 @@ if ($To) {
 Write-Note "running: $current"
 Write-Note "going back to: $target"
 
-if ($RestoreBackup) {
-    $file = Split-Path $RestoreBackup -Leaf
-    Write-Warn "The database will be replaced by the backup $file. Everything saved after it is lost."
+# Each backup restores the database of the site it was taken from (its file name starts with the database name).
+$restores = @()
+foreach ($item in @($RestoreBackup | Where-Object { $_ } | ForEach-Object { $_ -split ',' } | Where-Object { $_.Trim() })) {
+    $file = Split-Path $item.Trim() -Leaf
+    $restores += [pscustomobject]@{ File = $file; Site = (Get-BackupSite $file) }
+}
+foreach ($r in $restores) {
+    $label = Use-Site $r.Site { Get-SiteLabel }
+    Write-Warn "The $label's database will be replaced by the backup $($r.File). Everything saved after it is lost."
     if (-not $Yes) {
         $answer = Read-Host 'Type the backup file name to confirm'
-        if ($answer.Trim() -ne $file) { Stop-WithError 'Not confirmed; nothing was changed.' }
+        if ($answer.Trim() -ne $r.File) { Stop-WithError 'Not confirmed; nothing was changed.' }
     }
 }
 
 Write-Step 'Stopping ReelGuo'
 Stop-ReelGuo
-if ($RestoreBackup) {
-    Write-Step 'Restoring the database'
-    Invoke-Restore $file
-    Write-Ok "database restored from $file"
+foreach ($r in $restores) {
+    Write-Step "Restoring the database ($(Use-Site $r.Site { Get-SiteLabel }))"
+    Use-Site $r.Site { Invoke-Restore $r.File }
+    Write-Ok "database restored from $($r.File)"
 }
 Set-CurrentRelease $target
 Write-Step 'Starting'
@@ -77,7 +83,7 @@ if (-not (Wait-Healthy 300)) {
     Stop-WithError 'The site did not become ready after the rollback.'
 }
 $siteOk = Test-Site
-Add-DeployRecord 'rollback' ($(if ($RestoreBackup) { "from $current, database from $file" } else { "from $current" }))
+Add-DeployRecord 'rollback' ($(if ($restores.Count) { "from $current, databases from $(($restores | ForEach-Object { $_.File }) -join ', ')" } else { "from $current" }))
 Write-Step "Rolled back to $target"
 Write-Host '  The code folder was not changed. Before the next update, check out the version you want.'
 if (-not $siteOk) { exit 2 }

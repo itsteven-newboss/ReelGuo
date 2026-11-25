@@ -1,9 +1,10 @@
 import { unwrap, type Schemas } from "@reelguo/api-client";
 import { faApple } from "@fortawesome/free-brands-svg-icons";
-import { BrandMark, Img } from "@reelguo/ui";
+import { BrandMark, Img, SITE } from "@reelguo/ui";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ChevronDown, Copy, Crown, Download, Flame, Lightbulb, MonitorSmartphone, Play, Settings, Share, ShieldCheck, Smartphone, SquarePlus, X } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { Trans } from "react-i18next";
 import { renderSVG } from "uqr";
 import { api, useCategories, useListingPage, useRanks, useSeriesList, useSite, type VideoCard } from "../api";
 import { fmtCount } from "../player/format";
@@ -11,6 +12,7 @@ import { Link } from "../router";
 import { Wordmark } from "../portal/chrome";
 import { useUi } from "../state/ui";
 import { BRAND } from "../brand";
+import { t } from "../i18n";
 import { installHint, macChip, thisDevice, type Device } from "./device";
 
 /*
@@ -27,12 +29,12 @@ type Release = Schemas["AppReleaseDto"];
 export const LANDING_SECTIONS = ["home", "highlights", "genres", "experience", "wishlist", "creator", "about"] as const;
 export type LandingSection = (typeof LANDING_SECTIONS)[number];
 const TABS: { id: LandingSection; label: string }[] = [
-  { id: "home", label: "首页" },
-  { id: "highlights", label: "内容亮点" },
-  { id: "genres", label: "剧场类型" },
-  { id: "wishlist", label: "心愿榜" },
-  { id: "creator", label: "创作者" },
-  { id: "about", label: "关于我们" },
+  { id: "home", label: t("landing.tabs.home") },
+  { id: "highlights", label: t("landing.tabs.highlights") },
+  { id: "genres", label: t("landing.tabs.genres") },
+  { id: "wishlist", label: t("landing.tabs.wishlist") },
+  { id: "creator", label: t("landing.tabs.creator") },
+  { id: "about", label: t("landing.tabs.about") },
 ];
 
 /* ------------------------------------------------------------------ sizing and style tokens */
@@ -51,6 +53,8 @@ function useScale() {
 }
 
 const SERIF = '"Noto Serif SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif';
+/** A site in a language with longer words than Chinese: some rows use smaller type to keep their measured layout. */
+const LATIN = !SITE.locale.startsWith("zh");
 const GOLD_TEXT: CSSProperties = {
   backgroundImage: "linear-gradient(180deg,#fff7da 0%,#f9d98a 35%,#e2a944 68%,#a86f1c 100%)",
   WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
@@ -247,19 +251,19 @@ export function AppLanding({ section }: { section: LandingSection }) {
 
   useEffect(() => {
     const prev = document.title;
-    document.title = `下载 App - ${BRAND}`;
+    document.title = t("landing.pageTitle", { brand: BRAND });
     return () => { document.title = prev; };
   }, []);
 
   const release = (p: string) => releases.data?.find((r: Release) => r.platform === p);
   const open = (url: string) => { window.location.href = url; };
-  const SOON = "该版本即将上线，敬请期待";
+  const SOON = t("landing.soon");
   // WeChat, QQ and the like block downloads: ask to open the page in a real browser first.
   const get = (p: string) => {
     if (device.inApp) return setInApp(true);
     const r = release(p);
     if (r) open(r.url);
-    else toast(releases.isPending ? "正在获取下载地址，请稍候" : SOON);
+    else toast(releases.isPending ? t("landing.fetching") : SOON);
   };
   const androidBackup = () => {
     if (device.inApp) return setInApp(true);
@@ -296,7 +300,7 @@ export function AppLanding({ section }: { section: LandingSection }) {
       case "ios": return setIosHelp(true);
       case "windows": return get("windows-x86_64");
       case "linux": return get("linux-x86_64");
-      case "harmony": return toast("鸿蒙 NEXT 暂不支持安装安卓 App，可直接用浏览器观看，或把本站添加到桌面");
+      case "harmony": return toast(t("landing.harmony"));
       case "mac": {
         const c = await mac();
         return c ? get(c === "arm" ? "darwin-aarch64" : "darwin-x86_64") : chooseMac();
@@ -351,13 +355,13 @@ export function AppLanding({ section }: { section: LandingSection }) {
   return (
     <div className="min-h-dvh bg-[#050505] text-white overflow-x-clip" style={{ fontFamily: '"PingFang SC","Microsoft YaHei",Arial,sans-serif' }}>
       <LandingHeader active={active} onTab={goTab} onClient={primary} />
-      <section ref={reg("home")} id="home" aria-label="首页"><Hero {...actions} /></section>
-      <section ref={reg("highlights")} id="highlights" aria-label="内容亮点"><Highlights /></section>
-      <section ref={reg("genres")} id="genres" aria-label="剧场类型"><Genres covers={covers} /></section>
-      <section ref={reg("experience")} id="experience" aria-label="沉浸式体验"><Experience covers={covers} /></section>
-      <section ref={reg("wishlist")} id="wishlist" aria-label="心愿榜"><Wishlist covers={covers} onWish={primary} /></section>
-      <section ref={reg("creator")} id="creator" aria-label="创作者计划"><Creator covers={covers} contact={site?.telegram || (site?.email ? `mailto:${site.email}` : "/go-home")} /></section>
-      <section ref={reg("about")} id="about" aria-label="关于我们"><About covers={covers} /></section>
+      <section ref={reg("home")} id="home" aria-label={t("landing.tabs.home")}><Hero {...actions} /></section>
+      <section ref={reg("highlights")} id="highlights" aria-label={t("landing.tabs.highlights")}><Highlights /></section>
+      <section ref={reg("genres")} id="genres" aria-label={t("landing.tabs.genres")}><Genres covers={covers} /></section>
+      <section ref={reg("experience")} id="experience" aria-label={t("landing.experience.title")}><Experience covers={covers} /></section>
+      <section ref={reg("wishlist")} id="wishlist" aria-label={t("landing.tabs.wishlist")}><Wishlist covers={covers} onWish={primary} /></section>
+      <section ref={reg("creator")} id="creator" aria-label={t("landing.creator.title")}><Creator covers={covers} contact={site?.telegram || (site?.email ? `mailto:${site.email}` : "/go-home")} /></section>
+      <section ref={reg("about")} id="about" aria-label={t("landing.tabs.about")}><About covers={covers} /></section>
       <LandingFooter onAbout={() => goTab("about")} />
       {iosHelp && <IosHelp device={device} external={!!release("ios")} onClose={() => setIosHelp(false)} />}
       {inApp && <InAppGuide device={device} onClose={() => setInApp(false)} />}
@@ -370,7 +374,7 @@ export function AppLanding({ section }: { section: LandingSection }) {
 function LandingHeader({ active, onTab, onClient }: { active: LandingSection; onTab: (id: LandingSection) => void; onClient: () => void }) {
   const { wide, u } = useScale();
   const logo = (
-    <a href="/app/home" onClick={(e) => { e.preventDefault(); onTab("home"); }} aria-label={`${BRAND} 下载`} className="shrink-0 flex items-center">
+    <a href="/app/home" onClick={(e) => { e.preventDefault(); onTab("home"); }} aria-label={t("landing.logoLabel", { brand: BRAND })} className="shrink-0 flex items-center">
       <Wordmark scale={u(12.27, 7.15)} />
     </a>
   );
@@ -378,18 +382,18 @@ function LandingHeader({ active, onTab, onClient }: { active: LandingSection; on
     <button type="button" onClick={onClient} className="ml-auto shrink-0 flex items-center justify-center font-bold text-[#050505] hover:brightness-105"
       style={{ width: u(225, 113), height: u(66, 36), borderRadius: u(12, 8), fontSize: u(26, 15), gap: u(14, 7), background: GOLD_FILL }}>
       <span className="rounded-full bg-[#0b0b0b] text-[#f2b544] flex items-center justify-center" style={{ width: u(40, 22), height: u(40, 22) }}><ArrowDown size={u(24, 14)} strokeWidth={2.6} /></span>
-      客户端
+      {t("landing.client")}
     </button>
   );
   const tabs = (
-    <nav aria-label="页面导航" className={wide ? "flex items-stretch h-full" : "flex items-stretch overflow-x-auto no-bar"}
-      style={wide ? { marginLeft: u(64, 0), gap: u(48, 0) } : { height: u(0, 54), gap: u(0, 26), paddingInline: u(0, 13) }}>
+    <nav aria-label={t("landing.pageNav")} className={wide ? "flex items-stretch h-full" : "flex items-stretch overflow-x-auto no-bar"}
+      style={wide ? { marginLeft: u(64, 0), gap: u(LATIN ? 28 : 48, 0) } : { height: u(0, 54), gap: u(0, LATIN ? 20 : 26), paddingInline: u(0, 13) }}>
       {TABS.map((t) => {
         const on = t.id === active;
         return (
           <a key={t.id} href={`/app/${t.id}`} onClick={(e) => { e.preventDefault(); onTab(t.id); }} aria-current={on ? "true" : undefined}
             className={`relative shrink-0 flex items-center whitespace-nowrap ${on ? "font-bold text-[#f8ca06]" : "text-white hover:text-[#f8ca06]"}`}
-            style={{ fontSize: u(26, 16) }}>
+            style={{ fontSize: u(LATIN ? 19 : 26, LATIN ? 15 : 16) }}>
             {t.label}
             {on && <span className="absolute left-1/2 -translate-x-1/2 rounded-full bg-[#f8ca06]" style={{ bottom: u(14, 6), width: u(52, 26), height: u(5, 3) }} />}
           </a>
@@ -417,10 +421,11 @@ type Actions = {
 };
 
 /**
- * Default first-screen pictures: our own brand artwork, made by D:/reelguo-work/tools/hero-art/make.mjs (desktop
- * 1440 × 608, phone 440 × 620, at 2×). Admin → 下载页图片 → 首页主视觉 replaces them.
+ * Default first-screen pictures: the site's own artwork ("heroArt" in web/sites/<key>/site.json; 黄月短剧's were made by
+ * D:/reelguo-work/tools/hero-art/make.mjs, desktop 1440 × 608, phone 440 × 620, at 2×). Admin → 下载页图片 → 首页主视觉
+ * replaces them. A site without any shows its icon, name and slogan instead.
  */
-const HERO_DEFAULT = { desktop: "/landing/home-pc.webp", phone: "/landing/home-mobile.webp" };
+const HERO_DEFAULT = SITE.heroArt ?? null;
 
 /**
  * The first screen, as on the reference: one picture (title and slogan are part of it), with the QR code and the
@@ -429,10 +434,16 @@ const HERO_DEFAULT = { desktop: "/landing/home-pc.webp", phone: "/landing/home-m
 function Hero(a: Actions) {
   const { wide, u } = useScale();
   const uploaded = useArt().bg("home");
-  const src = uploaded ?? (wide ? HERO_DEFAULT.desktop : HERO_DEFAULT.phone);
+  const src = uploaded ?? (HERO_DEFAULT && (wide ? HERO_DEFAULT.desktop : HERO_DEFAULT.phone));
   const picture = (h: number) => (
     <div className="absolute inset-x-0 top-0 overflow-hidden" style={{ height: h }}>
-      <img src={src} alt={`${BRAND} App`} className="w-full h-full object-cover" draggable={false} />
+      {src ? <img src={src} alt={t("landing.heroAlt", { brand: BRAND })} className="w-full h-full object-cover" draggable={false} /> : (
+        <div className={`w-full h-full flex flex-col items-center ${wide ? "" : "justify-center"}`} style={{ ...sectionBg(0.22), paddingTop: u(86, 0), paddingBottom: u(0, 120), gap: u(22, 16) }}>
+          <BrandMark fit={u(200, 168)} className="rounded-[22%] shadow-[0_0_60px_rgba(255,170,60,.35)]" />
+          <div className="font-black leading-none text-center" style={{ ...GOLD_TEXT, fontFamily: SERIF, fontSize: u(64, 40) }}>{BRAND}</div>
+          <div className="text-white/80 text-center" style={{ fontSize: u(22, 15), paddingInline: 16 }}>{t("landing.footer.slogan")}</div>
+        </div>
+      )}
       <div className="absolute inset-x-0 bottom-0 pointer-events-none" style={{ height: h * 0.16, background: "linear-gradient(180deg,transparent,#050505)" }} />
     </div>
   );
@@ -443,14 +454,14 @@ function Hero(a: Actions) {
         {picture(u(608, 0))}
         <QrCard />
         <div className="absolute grid grid-cols-2" style={{ left: u(743, 0), top: u(485, 0), columnGap: u(42, 0), rowGap: u(20, 0) }}>
-          <GoldButton icon={<ArrowDown size={u(20, 0)} strokeWidth={2.6} />} label="立即下载" onClick={a.primary} w={u(237, 0)} h={u(67, 0)} font={u(20, 0)} />
+          <GoldButton icon={<ArrowDown size={u(20, 0)} strokeWidth={2.6} />} label={t("landing.downloadNow")} onClick={a.primary} w={u(237, 0)} h={u(67, 0)} font={u(20, 0)} />
           <Link to="/" className="flex items-center justify-center font-bold text-[#f2c56d] hover:bg-[#f2c56d]/10"
             style={{ width: u(239, 0), height: u(67, 0), fontSize: u(20, 0), gap: u(10, 0), borderRadius: u(12, 0), border: "1px solid rgba(242,197,109,.55)", background: "linear-gradient(180deg,rgba(60,42,16,.85),rgba(20,14,6,.85))" }}>
-            <span className="rounded-full border border-[#f2c56d] flex items-center justify-center" style={{ width: u(34, 0), height: u(34, 0) }}><Play size={u(15, 0)} className="fill-current ml-[1px]" /></span>探索更多
+            <span className="rounded-full border border-[#f2c56d] flex items-center justify-center" style={{ width: u(34, 0), height: u(34, 0) }}><Play size={u(15, 0)} className="fill-current ml-[1px]" /></span>{t("landing.exploreMore")}
           </Link>
-          <DeskPlatformButton icon={<WindowsGlyph size={u(22, 0)} />} label="Windows 下载" onClick={() => a.get("windows-x86_64")} />
+          <DeskPlatformButton icon={<WindowsGlyph size={u(22, 0)} />} label={t("landing.windows")} onClick={() => a.get("windows-x86_64")} />
           <div className="relative">
-            <DeskPlatformButton icon={<AppleLogo size={u(22, 0)} plain />} label="macOS 下载" caret onClick={() => a.setMacOpen(!a.macOpen)} />
+            <DeskPlatformButton icon={<AppleLogo size={u(22, 0)} plain />} label={t("landing.macos")} caret onClick={() => a.setMacOpen(!a.macOpen)} />
             {a.macOpen && <MacChooser chip={a.chip} onPick={(p) => { a.setMacOpen(false); a.get(p); }} onClose={() => a.setMacOpen(false)} style={{ position: "absolute", right: 0, top: u(78, 0), zIndex: 30 }} />}
           </div>
         </div>
@@ -463,16 +474,16 @@ function Hero(a: Actions) {
       {picture(u(0, 620))}
       <div style={{ height: u(0, 556) }} />
       <div className="relative" style={{ paddingInline: u(0, 17.6), paddingBottom: u(0, 12) }}>
-        <GroupTitle icon={<Smartphone size={u(0, 22)} strokeWidth={1.8} />} label="手机客户端下载" />
+        <GroupTitle icon={<Smartphone size={u(0, 22)} strokeWidth={1.8} />} label={t("landing.phoneGroup")} />
         <div className="grid grid-cols-2" style={{ gap: `${u(0, 8.8)}px ${u(0, 10)}px`, marginTop: u(0, 11) }}>
-          <PhoneButton icon={<AppleLogo size={u(0, 24.6)} />} title="苹果手机下载" sub="使用Safari浏览器下载" onClick={a.ios} />
-          <PhoneButton icon={<AndroidRobot size={u(0, 24.6)} />} title="安卓手机下载" sub="使用手机浏览器下载" onClick={() => a.get("android")} />
-          <PhoneButton icon={<AndroidRobot size={u(0, 24.6)} />} title="安卓备用下载" sub="无法下载时使用此渠道" onClick={a.androidBackup} />
+          <PhoneButton icon={<AppleLogo size={u(0, 24.6)} />} title={t("landing.iphone")} sub={t("landing.iphoneSub")} onClick={a.ios} />
+          <PhoneButton icon={<AndroidRobot size={u(0, 24.6)} />} title={t("landing.android")} sub={t("landing.androidSub")} onClick={() => a.get("android")} />
+          <PhoneButton icon={<AndroidRobot size={u(0, 24.6)} />} title={t("landing.androidBackup")} sub={t("landing.androidBackupSub")} onClick={a.androidBackup} />
         </div>
-        <div style={{ marginTop: u(0, 10) }}><GroupTitle icon={<MonitorSmartphone size={u(0, 22)} strokeWidth={1.8} />} label="电脑客户端下载" /></div>
+        <div style={{ marginTop: u(0, 10) }}><GroupTitle icon={<MonitorSmartphone size={u(0, 22)} strokeWidth={1.8} />} label={t("landing.desktopGroup")} /></div>
         <div className="grid grid-cols-2 relative" style={{ gap: u(0, 10), marginTop: u(0, 10) }}>
-          <PhonePlatformButton icon={<WindowsGlyph size={u(0, 16)} />} label="Windows 下载" onClick={() => a.get("windows-x86_64")} />
-          <PhonePlatformButton icon={<AppleLogo size={u(0, 16)} plain />} label="macOS 下载" caret onClick={() => a.setMacOpen(!a.macOpen)} />
+          <PhonePlatformButton icon={<WindowsGlyph size={u(0, 16)} />} label={t("landing.windows")} onClick={() => a.get("windows-x86_64")} />
+          <PhonePlatformButton icon={<AppleLogo size={u(0, 16)} plain />} label={t("landing.macos")} caret onClick={() => a.setMacOpen(!a.macOpen)} />
           {a.macOpen && <MacChooser chip={a.chip} onPick={(p) => { a.setMacOpen(false); a.get(p); }} onClose={() => a.setMacOpen(false)} style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", top: u(0, 52), zIndex: 30 }} />}
         </div>
       </div>
@@ -536,22 +547,22 @@ function MacChooser({ chip, onPick, onClose, style }: { chip: "arm" | "x86" | nu
       <span className="rounded-[10px] bg-[#1d1d1f] border border-white/10 flex items-center justify-center font-bold text-[#d0cfcb] shrink-0" style={{ width: s(38), height: s(38), fontSize: s(14) }}>{badge}</span>
       <span className="min-w-0">
         <span className="flex items-center font-bold text-[#fff8ed]" style={{ fontSize: s(14), gap: s(6) }}>
-          {title}{mine && <span className="rounded-full bg-[#f2c56d] text-[#1b1206] font-bold" style={{ fontSize: s(10.5), padding: `${s(1)}px ${s(6)}px` }}>本机</span>}
+          {title}{mine && <span className="rounded-full bg-[#f2c56d] text-[#1b1206] font-bold" style={{ fontSize: s(10.5), padding: `${s(1)}px ${s(6)}px` }}>{t("landing.mac.thisMac")}</span>}
         </span>
         <span className="block text-[#c3bdb3] truncate" style={{ fontSize: s(12) }}>{sub}</span>
       </span>
     </button>
   );
   return (
-    <div role="dialog" aria-label="选择 Mac 芯片版本" className="rounded-[16px] border border-[#f2c56d]/40 bg-[#14110c] shadow-[0_20px_60px_rgba(0,0,0,.6)]"
+    <div role="dialog" aria-label={t("landing.mac.title")} className="rounded-[16px] border border-[#f2c56d]/40 bg-[#14110c] shadow-[0_20px_60px_rgba(0,0,0,.6)]"
       style={{ width: s(366), padding: s(16), ...style }}>
       <div className="flex items-center justify-between">
-        <h2 className="font-bold text-[#fff8ed]" style={{ fontSize: s(16) }}>选择 Mac 芯片版本</h2>
-        <button type="button" onClick={onClose} aria-label="关闭" className="rounded-full flex items-center justify-center text-white/70 hover:text-white" style={{ width: s(32), height: s(32) }}><X size={s(18)} /></button>
+        <h2 className="font-bold text-[#fff8ed]" style={{ fontSize: s(16) }}>{t("landing.mac.title")}</h2>
+        <button type="button" onClick={onClose} aria-label={t("common.close")} className="rounded-full flex items-center justify-center text-white/70 hover:text-white" style={{ width: s(32), height: s(32) }}><X size={s(18)} /></button>
       </div>
       <div className="flex flex-col" style={{ marginTop: s(10), gap: s(8) }}>
-        {option("M", "Apple 芯片（M 系列）", "适用于 M1 / M2 / M3 / M4 及更新的 Mac", "darwin-aarch64", chip === "arm")}
-        {option(<span style={{ fontSize: s(10) }}>x86</span>, "Intel 芯片", "适用于搭载 Intel 处理器的 Mac", "darwin-x86_64", chip === "x86")}
+        {option("M", t("landing.mac.arm"), t("landing.mac.armSub"), "darwin-aarch64", chip === "arm")}
+        {option(<span style={{ fontSize: s(10) }}>x86</span>, t("landing.mac.intel"), t("landing.mac.intelSub"), "darwin-x86_64", chip === "x86")}
       </div>
     </div>
   );
@@ -568,10 +579,10 @@ function QrCard() {
     <div className="absolute flex items-center" style={{ left: u(75, 0), top: u(400, 0), width: u(288, 0), height: u(150, 0), padding: u(12, 0), gap: u(16, 0), borderRadius: u(16, 0),
       border: "1px solid rgba(240,196,110,.6)", background: "linear-gradient(135deg,rgba(74,50,20,.9),rgba(22,15,6,.92))" }}>
       <div className="bg-white shrink-0 [&_svg]:w-full [&_svg]:h-full" style={{ width: u(112, 0), height: u(112, 0), borderRadius: u(10, 0), padding: u(6, 0) }}
-        role="img" aria-label="下载页二维码" dangerouslySetInnerHTML={{ __html: svg }} />
+        role="img" aria-label={t("landing.qr.label")} dangerouslySetInnerHTML={{ __html: svg }} />
       <div>
-        <div className="font-bold text-[#fffb79]" style={{ fontSize: u(22, 0) }}>扫码下载</div>
-        <div className="text-white" style={{ marginTop: u(6, 0), fontSize: u(13, 0), lineHeight: 1.6 }}>手机扫码<br />立即开启精彩App</div>
+        <div className="font-bold text-[#fffb79]" style={{ fontSize: u(LATIN ? 18 : 22, 0) }}>{t("landing.qr.title")}</div>
+        <div className="text-white" style={{ marginTop: u(6, 0), fontSize: u(13, 0), lineHeight: 1.6 }}><Trans i18nKey="landing.qr.sub" /></div>
       </div>
     </div>
   );
@@ -580,9 +591,9 @@ function QrCard() {
 /* ------------------------------------------------------------------ 内容亮点 */
 
 const HIGHLIGHTS: { kind: EmblemKind; title: string; sub: string }[] = [
-  { kind: "clapper", title: "高能剧情", sub: "秒速反转，上头不停" },
-  { kind: "flame", title: "持续上新", sub: "热门内容，天天有新" },
-  { kind: "heart", title: "个性推荐", sub: "越看越懂你，刷剧更爽" },
+  { kind: "clapper", title: t("landing.highlights.drama"), sub: t("landing.highlights.dramaSub") },
+  { kind: "flame", title: t("landing.highlights.fresh"), sub: t("landing.highlights.freshSub") },
+  { kind: "heart", title: t("landing.highlights.personal"), sub: t("landing.highlights.personalSub") },
 ];
 
 type EmblemKind = "clapper" | "flame" | "heart" | "tap" | "reel";
@@ -729,9 +740,9 @@ function Genres({ covers }: { covers: VideoCard[] }) {
   return (
     <div className="relative isolate text-center" style={{ ...sectionBg(), height: u(864, 676), paddingTop: u(70, 26) }}>
       <ArtBackground url={art.bg("genres_bg")} shade={art.bg("genres_bg") ? "rgba(0,0,0,.25)" : undefined} />
-      <OrnateTitle size={u(72, 40)} lineW={u(110, 48)}>剧场类型</OrnateTitle>
-      <div className="font-bold" style={{ ...GOLD_TEXT, filter: "none", fontFamily: SERIF, fontSize: u(30, 16), marginTop: u(22, 10) }}>多种题材，一站看全</div>
-      <p className="text-white/70" style={{ fontSize: u(17, 12), marginTop: u(16, 8) }}>总有一部，正合你的口味</p>
+      <OrnateTitle size={u(72, 40)} lineW={u(110, 48)}>{t("landing.genres.title")}</OrnateTitle>
+      <div className="font-bold" style={{ ...GOLD_TEXT, filter: "none", fontFamily: SERIF, fontSize: u(30, 16), marginTop: u(22, 10) }}>{t("landing.genres.sub")}</div>
+      <p className="text-white/70" style={{ fontSize: u(17, 12), marginTop: u(16, 8) }}>{t("landing.genres.line")}</p>
       {/* Up to four channels, centred (four in a row on desktop, two per row on phones). */}
       <div className="mx-auto flex flex-wrap justify-center" style={{ width: u(1076, 404), columnGap: u(32, 10), rowGap: u(0, 12), marginTop: u(64, 22) }}>
         {list.map((c, i) => (
@@ -757,7 +768,7 @@ function GenreCard({ slug, name, description, art, fallback }: {
       <div className="absolute inset-x-0" style={{ top: u(150, 112), height: u(90, 70), background: "linear-gradient(180deg,transparent,#0f0a05)" }} />
       <div className="relative font-black" style={{ ...GOLD_TEXT, fontFamily: SERIF, fontSize: u(26, 18), marginTop: -u(30, 22) }}>{name}</div>
       <p className="text-white/80 line-clamp-2 mx-auto" style={{ fontSize: u(14, 11.5), lineHeight: 1.6, marginTop: u(10, 6), paddingInline: u(18, 10) }}>
-        {description || `精选${name}，更新不停`}
+        {description || t("landing.genres.cardFallback", { name })}
       </p>
     </Link>
   );
@@ -766,9 +777,9 @@ function GenreCard({ slug, name, description, art, fallback }: {
 /* ------------------------------------------------------------------ 沉浸式体验 */
 
 const EXPERIENCE: { kind: EmblemKind; title: string; sub: string }[] = [
-  { kind: "tap", title: "一滑即播", sub: "上下滑动切换剧情，丝滑流畅" },
-  { kind: "heart", title: "猜你喜欢", sub: "根据喜好智能推荐，越看越合口味" },
-  { kind: "reel", title: "多元题材", sub: "都市、古风、悬疑、穿越、逆袭……多种题材任你探索" },
+  { kind: "tap", title: t("landing.experience.swipe"), sub: t("landing.experience.swipeSub") },
+  { kind: "heart", title: t("landing.experience.forYou"), sub: t("landing.experience.forYouSub") },
+  { kind: "reel", title: t("landing.experience.genres"), sub: t("landing.experience.genresSub") },
 ];
 
 /**
@@ -783,13 +794,13 @@ function Experience({ covers }: { covers: VideoCard[] }) {
   const text = (
     <>
       <div className="absolute flex items-center" style={{ left: u(185, 18), top: u(72, 6), gap: u(18, 9) }}>
-        <GoldTitle size={u(72, 30)} className="italic">沉浸式体验</GoldTitle>
+        <GoldTitle size={u(72, LATIN ? 24 : 30)} className="italic whitespace-nowrap">{t("landing.experience.title")}</GoldTitle>
         <span className="rounded-full shrink-0" style={{ width: u(16, 10), height: u(16, 10), border: `${u(2.5, 2)}px solid #e9b85a` }} />
         <span className="h-px" style={{ marginLeft: -u(18, 9), width: u(120, 90), background: "linear-gradient(90deg,#e9b85a,transparent)" }} />
       </div>
-      <div className="absolute whitespace-nowrap text-[#e9b85d]" style={{ left: u(181, 16), top: u(184, 54), fontSize: u(32, 13), lineHeight: 1.3 }}>上下滑动，沉浸刷剧</div>
-      <p className="absolute whitespace-nowrap font-bold text-[#dcdcdc]" style={{ left: u(181, 16), top: u(244, 80), fontSize: u(21, 13.5), lineHeight: 1.65, letterSpacing: wide ? "0.2em" : "0.06em" }}>
-        {wide ? <>轻松滑动切换，拒绝等待<br />精彩剧情，一刷就停不下来</> : "轻松滑动切换，拒绝等待精彩剧情，一刷就停不下来"}
+      <div className="absolute whitespace-nowrap text-[#e9b85d]" style={{ left: u(181, 16), top: u(184, 54), fontSize: u(32, 13), lineHeight: 1.3 }}>{t("landing.experience.sub")}</div>
+      <p className={`absolute font-bold text-[#dcdcdc] ${LATIN && !wide ? "" : "whitespace-nowrap"}`} style={{ left: u(181, 16), right: LATIN && !wide ? u(0, 16) : undefined, top: u(244, 80), fontSize: u(21, 13.5), lineHeight: 1.65, letterSpacing: wide ? (SITE.wordmark ? "0.04em" : "0.2em") : "0.06em" }}>
+        {wide ? <Trans i18nKey="landing.experience.body" /> : t("landing.experience.bodyOneLine")}
       </p>
       {EXPERIENCE.map((f, i) => {
         // Medal rings 60 / 50 px across (the ring fills 54/64 of the medal), centred where the reference's are.
@@ -800,7 +811,7 @@ function Experience({ covers }: { covers: VideoCard[] }) {
             <div className="absolute" style={{ left: u(272, 80), top: cy - u(26, 23) }}>
               <div className="font-bold whitespace-nowrap" style={{ ...lightGold, fontSize: u(19, 17), lineHeight: 1.3 }}>{f.title}</div>
               <div className="text-[#c9c6c0] whitespace-nowrap" style={{ fontSize: u(15, 12), lineHeight: 1.45, marginTop: u(8, 5) }}>
-                {wide && f.kind === "reel" ? <>都市、古风、悬疑、穿越、逆<br />袭……多种题材任你探索</> : f.sub}
+                {wide && f.kind === "reel" ? <Trans i18nKey="landing.experience.genresSubWide" /> : f.sub}
               </div>
             </div>
           </div>
@@ -866,10 +877,10 @@ function Wishlist({ covers, onWish }: { covers: VideoCard[]; onWish: () => void 
   return (
     <div className="relative isolate overflow-hidden text-center" style={{ ...sectionBg(0.2), height: u(956, 403), paddingTop: u(24, 18) }}>
       <ArtBackground url={wishArt} shade={wishArt ? "rgba(0,0,0,.2)" : undefined} />
-      <GoldTitle size={u(84, 30)}>《心愿榜》</GoldTitle>
-      <div className="font-bold" style={{ ...GOLD_TEXT, filter: "none", fontFamily: SERIF, fontSize: u(30, 13), marginTop: u(14, 6) }}>你想看的故事，由你来定</div>
+      <GoldTitle size={u(84, 30)}>{t("landing.wishlist.title")}</GoldTitle>
+      <div className="font-bold" style={{ ...GOLD_TEXT, filter: "none", fontFamily: SERIF, fontSize: u(30, 13), marginTop: u(14, 6) }}>{t("landing.wishlist.sub")}</div>
       <p className="text-white/80 mx-auto" style={{ fontSize: u(17, 11), marginTop: u(16, 6), maxWidth: u(1000, 380), lineHeight: 1.6 }}>
-        为喜欢的题材投票，人气最高的故事优先制作上线；你的每一次期待，都会被看见。
+        {t("landing.wishlist.body")}
       </p>
       <div className="absolute pointer-events-none rounded-[50%]" style={{ left: cx - u(560, 200), top: u(640, 300), width: u(1120, 400), height: u(130, 50), background: "radial-gradient(ellipse, rgba(255,120,60,.35), rgba(255,170,60,.12) 50%, transparent 72%)" }} />
       {slots.map((s) => {
@@ -895,7 +906,7 @@ function Wishlist({ covers, onWish }: { covers: VideoCard[]; onWish: () => void 
         );
       })}
       <div className="absolute left-1/2 -translate-x-1/2" style={{ top: u(782, 344) }}>
-        <GoldButton icon={<Crown size={u(18, 14)} />} label="我要许愿" onClick={onWish} w={u(300, 327)} h={u(61, 48)} font={u(20, 16)} />
+        <GoldButton icon={<Crown size={u(18, 14)} />} label={t("landing.wishlist.wish")} onClick={onWish} w={u(300, 327)} h={u(61, 48)} font={u(20, 16)} />
       </div>
     </div>
   );
@@ -916,11 +927,11 @@ function Creator({ covers, contact }: { covers: VideoCard[]; contact: string }) 
     <div className="relative isolate overflow-hidden" style={{ height: u(768, 356), background: "#050505" }}>
       <ArtBackground url={uploaded ?? nth(covers, 5)?.cover} warm={!uploaded} shade={shade} />
       <div style={{ paddingLeft: u(205, 34), paddingTop: u(95, 48) }}>
-        <GoldTitle size={u(66, 28)} className="italic">创作者计划</GoldTitle>
-        <div className="font-bold text-white" style={{ fontFamily: SERIF, fontSize: u(36, 15), marginTop: u(26, 14) }}>把你的故事，拍成下一部热剧</div>
-        <p className="text-white/80" style={{ fontSize: u(20, 12), lineHeight: 1.8, marginTop: u(26, 12) }}>投稿剧本、创意或作品，获得更多曝光与分成；<br />让更多人看到你的故事。</p>
+        <GoldTitle size={u(66, 28)} className="italic">{t("landing.creator.title")}</GoldTitle>
+        <div className="font-bold text-white" style={{ fontFamily: SERIF, fontSize: u(36, 15), marginTop: u(26, 14) }}>{t("landing.creator.sub")}</div>
+        <p className="text-white/80" style={{ fontSize: u(20, 12), lineHeight: 1.8, marginTop: u(26, 12), maxWidth: wide ? undefined : u(0, 300) }}><Trans i18nKey="landing.creator.body" /></p>
         <div style={{ marginTop: u(56, 30) }}>
-          <GoldButton icon={<Lightbulb size={u(18, 12)} />} label="了解创作者计划" href={external ? contact : undefined} to={external ? undefined : contact}
+          <GoldButton icon={<Lightbulb size={u(18, 12)} />} label={t("landing.creator.cta")} href={external ? contact : undefined} to={external ? undefined : contact}
             w={u(300, 164)} h={u(67, 35)} font={u(20, 13)} />
         </div>
       </div>
@@ -952,7 +963,7 @@ function About({ covers }: { covers: VideoCard[] }) {
           <div className="italic text-right" style={{ ...GOLD_TEXT, fontFamily: SERIF, fontSize: u(22, 8), marginTop: u(6, 2) }}>AI · Short Drama</div>
         </div>
         <span className="self-stretch w-px" style={{ background: "linear-gradient(180deg,transparent,rgba(240,190,100,.7),transparent)" }} />
-        <p className="font-bold text-[#f6e6c4] whitespace-nowrap" style={{ fontFamily: SERIF, fontSize: u(24, 10.5), lineHeight: 1.7 }}>打开{BRAND}，<br />遇见更多好故事</p>
+        <p className="font-bold text-[#f6e6c4] whitespace-nowrap" style={{ fontFamily: SERIF, fontSize: u(24, 10.5), lineHeight: 1.7 }}><Trans i18nKey="landing.about.slogan" values={{ brand: BRAND }} /></p>
       </div>
     </div>
   );
@@ -966,21 +977,21 @@ function LandingFooter({ onAbout }: { onAbout: () => void }) {
   const origin = window.location.origin;
   const contact = site?.telegram || (site?.email ? `mailto:${site.email}` : "/go-home");
   const addresses: [string, string][] = [];
-  if (site?.mirrors[0]) addresses.push(["最新地址：", site.mirrors[0]]);
-  addresses.push(["官网地址：", site?.permanent_domain || origin]);
-  addresses.push(["永久发布页：", `${origin}/go-home`]);
+  if (site?.mirrors[0]) addresses.push([t("landing.footer.latest"), site.mirrors[0]]);
+  addresses.push([t("landing.footer.official"), site?.permanent_domain || origin]);
+  addresses.push([t("landing.footer.permanent"), `${origin}/go-home`]);
   const linkCls = "text-white/35 hover:text-white";
   const cols: { title: string; links: { label: string; href?: string; onClick?: () => void }[] }[] = [
-    { title: "服务支持", links: [{ label: "常见问题", href: "/go-home" }, { label: "用户反馈", href: contact }] },
-    { title: "关于我们", links: [{ label: "公司简介", onClick: onAbout }, { label: "联系我们", href: contact }] },
-    { title: "法律信息", links: [{ label: "用户协议", href: "/terms" }, { label: "隐私政策", href: "/privacy" }] },
+    { title: t("landing.footer.support"), links: [{ label: t("landing.footer.faq"), href: "/go-home" }, { label: t("landing.footer.feedback"), href: contact }] },
+    { title: t("landing.footer.about"), links: [{ label: t("landing.footer.company"), onClick: onAbout }, { label: t("landing.footer.contact"), href: contact }] },
+    { title: t("landing.footer.legal"), links: [{ label: t("legal.terms"), href: "/terms" }, { label: t("legal.privacy"), href: "/privacy" }] },
   ];
   return (
     <footer className="bg-[#121212] border-t border-white/10" style={{ padding: wide ? `${u(38, 0)}px ${u(40, 0)}px ${u(30, 0)}px` : `${u(0, 22)}px ${u(0, 12)}px ${u(0, 22)}px` }}>
       <div className={wide ? "flex justify-between" : ""}>
         <div>
           <Wordmark scale={u(7.5, 7.15)} />
-          <p className="text-white/35" style={{ fontSize: u(12, 12), marginTop: u(12, 10) }}>随时随地，畅看好剧</p>
+          <p className="text-white/35" style={{ fontSize: u(12, 12), marginTop: u(12, 10) }}>{t("landing.footer.slogan")}</p>
           {wide && (
             <div className="flex flex-col" style={{ marginTop: u(14, 0), gap: u(8, 0), fontSize: u(12, 0) }}>
               {addresses.map(([label, url]) => (
@@ -1021,39 +1032,39 @@ function IosHelp({ device, external, onClose }: { device: Device; external: bool
   const onIphone = device.os === "ios";
   const page = `${window.location.origin}/app/home`;
   const qr = useMemo(() => (onIphone ? "" : renderSVG(`${window.location.origin}/app/download`, { border: 1 })), [onIphone]);
-  const copy = () => navigator.clipboard?.writeText(page).then(() => toast("网址已复制，请在 Safari 中打开", "ok")).catch(() => toast(page));
+  const copy = () => navigator.clipboard?.writeText(page).then(() => toast(t("landing.ios.copied"), "ok")).catch(() => toast(page));
   const steps: [ReactNode, string][] = external
     ? [
-        [<Download key="a" size={18} />, "点击「立即下载」，按页面提示完成安装"],
-        [<Settings key="b" size={18} />, "如提示「未受信任的开发者」：设置 → 通用 → VPN与设备管理，点开开发者并信任"],
-        [<Play key="c" size={18} />, `回到桌面，点开「${BRAND}」即可观看`],
+        [<Download key="a" size={18} />, t("landing.ios.ext1")],
+        [<Settings key="b" size={18} />, t("landing.ios.ext2")],
+        [<Play key="c" size={18} />, t("landing.ios.ext3", { brand: BRAND })],
       ]
     : [
-        [<Download key="a" size={18} />, "点击「立即下载」，在弹出的提示中选择「允许」"],
-        [<Settings key="b" size={18} />, "打开手机「设置」，点击顶部的「已下载描述文件」"],
-        [<ShieldCheck key="c" size={18} />, "点击右上角「安装」，输入锁屏密码后确认"],
-        [<Play key="d" size={18} />, `回到桌面，点开「${BRAND}」即可全屏观看`],
+        [<Download key="a" size={18} />, t("landing.ios.step1")],
+        [<Settings key="b" size={18} />, t("landing.ios.step2")],
+        [<ShieldCheck key="c" size={18} />, t("landing.ios.step3")],
+        [<Play key="d" size={18} />, t("landing.ios.step4", { brand: BRAND })],
       ];
   const button = "h-11 rounded-full text-[14px] font-bold flex items-center justify-center gap-1.5";
   return (
-    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/70" role="dialog" aria-modal="true" aria-label="苹果手机安装说明" onClick={onClose}>
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/70" role="dialog" aria-modal="true" aria-label={t("landing.ios.label")} onClick={onClose}>
       <div className="w-full sm:w-[420px] max-h-[92dvh] overflow-y-auto rounded-t-[20px] sm:rounded-[20px] border border-[#f2c56d]/40 bg-[#14110c] p-5 pb-7" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="text-[17px] font-bold" style={{ ...GOLD_TEXT, filter: "none" }}>苹果手机安装</h2>
-          <button type="button" onClick={onClose} aria-label="关闭" className="w-8 h-8 rounded-full flex items-center justify-center text-white/70"><X size={18} /></button>
+          <h2 className="text-[17px] font-bold" style={{ ...GOLD_TEXT, filter: "none" }}>{t("landing.ios.title")}</h2>
+          <button type="button" onClick={onClose} aria-label={t("common.close")} className="w-8 h-8 rounded-full flex items-center justify-center text-white/70"><X size={18} /></button>
         </div>
         <p className="mt-1 text-[12.5px] leading-relaxed text-white/60">
-          {external ? "按提示安装苹果版 App。" : `iPhone 无需安装包：装好描述文件后，主屏幕会出现「${BRAND}」图标，点开就像 App 一样全屏观看。`}
+          {external ? t("landing.ios.extIntro") : t("landing.ios.intro", { brand: BRAND })}
         </p>
         {!onIphone && (
           <div className="mt-4 flex items-center gap-4 rounded-[14px] border border-[#f2c56d]/30 bg-white/[.03] p-3">
-            <div className="w-[104px] h-[104px] shrink-0 rounded-[10px] bg-white p-1.5 [&_svg]:w-full [&_svg]:h-full" role="img" aria-label="苹果手机下载二维码" dangerouslySetInnerHTML={{ __html: qr }} />
-            <p className="text-[13px] leading-relaxed text-white/85">用 iPhone 的<b className="text-[#f2c56d]">相机</b>扫描二维码，在 Safari 中打开后按下面的步骤安装。</p>
+            <div className="w-[104px] h-[104px] shrink-0 rounded-[10px] bg-white p-1.5 [&_svg]:w-full [&_svg]:h-full" role="img" aria-label={t("landing.ios.qrLabel")} dangerouslySetInnerHTML={{ __html: qr }} />
+            <p className="text-[13px] leading-relaxed text-white/85"><Trans i18nKey="landing.ios.scan" components={{ b: <b className="text-[#f2c56d]" /> }} /></p>
           </div>
         )}
         {onIphone && !device.safari && (
           <p className="mt-3 rounded-[12px] border border-[#f2c56d]/40 bg-[#f2c56d]/10 px-3 py-2 text-[13px] leading-relaxed text-[#f6d48c]">
-            请先复制网址，用 <b>Safari 浏览器</b>打开本页再下载：其他浏览器无法安装。
+            <Trans i18nKey="landing.ios.safariOnly" components={{ b: <b /> }} />
           </p>
         )}
         <ol className="mt-4 space-y-3">
@@ -1066,16 +1077,16 @@ function IosHelp({ device, external, onClose }: { device: Device; external: bool
         </ol>
         {onIphone && (
           <div className="mt-5 grid grid-cols-2 gap-3">
-            <button type="button" onClick={copy} className={`${button} border border-[#f2c56d]/70 text-[#f2c56d]`}><Copy size={16} />复制网址</button>
+            <button type="button" onClick={copy} className={`${button} border border-[#f2c56d]/70 text-[#f2c56d]`}><Copy size={16} />{t("landing.ios.copyUrl")}</button>
             {device.safari
-              ? <a href="/app/download/ios" className={`${button} text-[#1b1206]`} style={{ background: GOLD_FILL }}><Download size={16} />立即下载</a>
-              : <button type="button" onClick={onClose} className={`${button} text-[#1b1206]`} style={{ background: GOLD_FILL }}>知道了</button>}
+              ? <a href="/app/download/ios" className={`${button} text-[#1b1206]`} style={{ background: GOLD_FILL }}><Download size={16} />{t("landing.downloadNow")}</a>
+              : <button type="button" onClick={onClose} className={`${button} text-[#1b1206]`} style={{ background: GOLD_FILL }}>{t("common.gotIt")}</button>}
           </div>
         )}
         {!external && (
           <div className="mt-4 space-y-1.5 text-[11.5px] leading-relaxed text-white/45">
-            <p>描述文件只添加这一个主屏幕图标，不读取手机里的任何数据，可随时在 设置 → 通用 → VPN与设备管理 中删除。</p>
-            <p className="flex items-center gap-1 flex-wrap">也可以在 Safari 中点<Share size={12} className="inline" />分享 →<SquarePlus size={12} className="inline" />「添加到主屏幕」。</p>
+            <p>{t("landing.ios.profileNote")}</p>
+            <p className="flex items-center gap-1 flex-wrap"><Trans i18nKey="landing.ios.shareHint" components={{ share: <Share size={12} className="inline" />, add: <SquarePlus size={12} className="inline" /> }} /></p>
           </div>
         )}
       </div>
@@ -1090,22 +1101,22 @@ function IosHelp({ device, external, onClose }: { device: Device; external: bool
 function InAppGuide({ device, onClose }: { device: Device; onClose: () => void }) {
   const toast = useUi((s) => s.toast);
   const link = `${window.location.origin}/app/download`;
-  const browser = device.os === "ios" ? "Safari" : "浏览器";
+  const browser = device.os === "ios" ? "Safari" : t("landing.inApp.browser");
   return (
-    <div className="fixed inset-0 z-[90] bg-black/90" role="dialog" aria-modal="true" aria-label={`请在${browser}中打开`} onClick={onClose}>
+    <div className="fixed inset-0 z-[90] bg-black/90" role="dialog" aria-modal="true" aria-label={t("landing.inApp.label", { browser })} onClick={onClose}>
       <svg className="absolute right-[14px] top-[4px]" width="110" height="128" viewBox="0 0 110 128" fill="none" stroke="#f2c56d" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M16 122C22 74 52 38 92 14" strokeDasharray="8 8" />
         <path d="M74 9 94 13 88 33" />
       </svg>
       <div className="mx-auto mt-[150px] w-[min(86vw,360px)] text-center text-white">
         <p className="text-[19px] font-bold leading-relaxed">
-          点击右上角 <span className="inline-flex items-center justify-center align-middle rounded-full border border-white/70 px-2 h-[24px] text-[16px] leading-none tracking-[2px]">···</span>
+          <Trans i18nKey="landing.inApp.tapMenu" components={{ dots: <span className="inline-flex items-center justify-center align-middle rounded-full border border-white/70 px-2 h-[24px] text-[16px] leading-none tracking-[2px]">···</span> }} />
         </p>
-        <p className="mt-2 text-[17px]">选择「<b className="text-[#f8ca06]">{device.os === "ios" ? "在 Safari 中打开" : "在浏览器打开"}</b>」</p>
-        <p className="mt-5 text-[13px] leading-relaxed text-white/65">{device.weChat ? "微信" : "当前应用"}内无法下载安装包，在{browser}中打开后，会自动为你的手机匹配对应的安装包。</p>
-        <button type="button" onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(link).then(() => toast(`链接已复制，请粘贴到${browser}打开`, "ok")).catch(() => toast(link)); }}
+        <p className="mt-2 text-[17px]"><Trans i18nKey="landing.inApp.choose" values={{ option: device.os === "ios" ? t("landing.inApp.openSafari") : t("landing.inApp.openBrowser") }} components={{ b: <b className="text-[#f8ca06]" /> }} /></p>
+        <p className="mt-5 text-[13px] leading-relaxed text-white/65">{t("landing.inApp.blocked", { app: device.weChat ? t("landing.inApp.wechat") : t("landing.inApp.thisApp"), browser })}</p>
+        <button type="button" onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(link).then(() => toast(t("landing.inApp.copied", { browser }), "ok")).catch(() => toast(link)); }}
           className="mt-6 h-11 px-6 rounded-full text-[14px] font-bold text-[#1b1206] inline-flex items-center gap-1.5" style={{ background: GOLD_FILL }}>
-          <Copy size={16} />复制下载链接
+          <Copy size={16} />{t("landing.inApp.copy")}
         </button>
       </div>
     </div>

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
+using ReelGuo.Api;
 using ReelGuo.Api.Admin;
 using ReelGuo.Api.Apps;
 using ReelGuo.Api.Legal;
@@ -68,6 +69,9 @@ builder.Services.AddHealthChecks().AddDbContextCheck<ReelGuoDbContext>("database
 builder.Services.Configure<GeoOptions>(builder.Configuration.GetSection(GeoOptions.Section));
 builder.Services.Configure<AppOptions>(builder.Configuration.GetSection(AppOptions.Section));
 builder.Services.Configure<SiteOptions>(builder.Configuration.GetSection(SiteOptions.Section));
+// Which site this API serves: its name and language (Brand.cs); one API per site, each with its own database.
+builder.Services.Configure<BrandOptions>(builder.Configuration.GetSection(BrandOptions.Section));
+builder.Services.AddSingleton<SiteBrand>();
 // Search-engine pages: the web app's HTML with each page's content (Caddy sends page paths here).
 builder.Services.Configure<SeoOptions>(builder.Configuration.GetSection(SeoOptions.Section));
 builder.Services.AddMemoryCache();
@@ -167,6 +171,21 @@ if (!BuildTime.IsGeneratingOpenApi)
     {
         await using var scope = app.Services.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<ReelGuoDbContext>().Database.MigrateAsync();
+    }
+    // A site in another language gets its default channels and coin packs in that language (once).
+    await using (var scope = app.Services.CreateAsyncScope())
+    {
+        var sp = scope.ServiceProvider;
+        var seedLog = sp.GetRequiredService<ILoggerFactory>().CreateLogger("ReelGuo.Api.Sites.SiteSeed");
+        try
+        {
+            await ReelGuo.Api.Sites.SiteSeed.LocalizeAsync(sp.GetRequiredService<ReelGuoDbContext>(), sp.GetRequiredService<SiteBrand>(),
+                sp.GetRequiredService<TimeProvider>(), seedLog);
+        }
+        catch (Exception ex) when (ex is Npgsql.NpgsqlException or DbUpdateException or InvalidOperationException or TimeoutException)
+        {
+            seedLog.LogWarning(ex, "Could not translate the default channels and products yet; the next start tries again");
+        }
     }
     await AdminAuth.EnsureBootstrapAdminAsync(app.Services);
 }

@@ -33,7 +33,7 @@ function Get-FolderSize([string]$Path) {
 switch ($Action) {
     'status' {
         Write-Step 'Services'
-        foreach ($s in @($PgService, $ApiService, $WorkerService, $WebService, $TunnelService)) {
+        foreach ($s in @($PgService) + @(Get-AppServiceNames) + @($WebService, $TunnelService)) {
             $svc = Get-Service $s -ErrorAction SilentlyContinue
             if ($svc) { Write-Note ('{0,-20} {1,-8} {2}' -f $s, $svc.Status, $svc.StartType) } else { Write-Note ('{0,-20} (not installed)' -f $s) }
         }
@@ -78,12 +78,12 @@ switch ($Action) {
         Start-ReelGuo
         if (Wait-Healthy 300) { [void](Test-Site) }
     }
-    'backup' { $f = Invoke-Backup; Write-Ok "backup: $(Join-Path $BackupDir $f)" }
+    'backup' { foreach ($f in @(Invoke-BackupAll)) { Write-Ok "backup: $(Join-Path $BackupDir $f)" } }
     'backups' {
         if (Test-Path $BackupDir) { Get-ChildItem $BackupDir -Filter *.dump | Sort-Object Name -Descending | ForEach-Object { Write-Host ('  {0}   {1:N1} MB' -f $_.Name, ($_.Length / 1MB)) } }
     }
     'disk' {
-        foreach ($p in @(@('releases', $ReleasesDir), @('media (data\storage)', $StorageDir), @('backups', $BackupDir), @('tools', $ToolsDir), @('database', $PgData))) {
+        foreach ($p in @(@('releases', $ReleasesDir), @('media (data\storage)', $StorageDir), @('other sites (sites)', $SitesDir), @('backups', $BackupDir), @('tools', $ToolsDir), @('database', $PgData))) {
             Write-Note ('{0,-22} {1,8:N0} MB   {2}' -f $p[0], ((Get-FolderSize $p[1]) / 1MB), $p[1])
         }
         $drive = Get-PSDrive -Name ($StagingHome.Substring(0, 1))

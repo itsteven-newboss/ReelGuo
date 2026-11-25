@@ -44,7 +44,28 @@ public enum SeriesStatus
     Removed,
 }
 
-/// <summary>A show made of numbered episodes. HGhub's client calls this a "video".</summary>
+public enum SeriesKind
+{
+    /// <summary>Numbered episodes played in order.</summary>
+    Standard,
+    /// <summary>互动剧: the episodes are scenes; when one ends the viewer picks what happens next (see <see cref="StoryOption"/>).</summary>
+    Interactive,
+}
+
+/// <summary>What happens when a scene of an interactive series ends.</summary>
+public enum SceneOutcome
+{
+    /// <summary>Not set up yet (publishing is blocked).</summary>
+    Unset,
+    /// <summary>The question and the options (<see cref="Episode.Options"/>) appear.</summary>
+    Choice,
+    /// <summary>Plays <see cref="Episode.NextEpisodeId"/> straight away.</summary>
+    Continue,
+    /// <summary>The story ends here, with <see cref="Episode.EndingTitle"/>.</summary>
+    Ending,
+}
+
+/// <summary>A show made of numbered episodes (or, for <see cref="SeriesKind.Interactive"/>, of scenes). HGhub's client calls this a "video".</summary>
 public sealed class Series
 {
     public long Id { get; set; }
@@ -72,6 +93,15 @@ public sealed class Series
     public bool IsOriginal { get; set; } = true;
     /// <summary>The status badge on cards; new series start with 新片.</summary>
     public CardBadge CardBadge { get; set; } = CardBadge.New;
+    public SeriesKind Kind { get; set; }
+    /// <summary>Interactive: the scene the story starts with; null means the lowest-numbered scene. Not a foreign key, so
+    /// deleting that scene only leaves a publish problem.</summary>
+    public long? StoryStartEpisodeId { get; set; }
+    /// <summary>Interactive: hidden scores such as 好感度 (jsonb, <see cref="StoryVariable"/>[]), changed by options' effects.</summary>
+    public string StoryVariablesJson { get; set; } = "[]";
+    /// <summary>Interactive: where the admin placed each scene on the story map (jsonb, episode id → <see cref="MapPoint"/>);
+    /// null or missing scenes are laid out automatically.</summary>
+    public string? StoryLayoutJson { get; set; }
     public int TotalEpisodes { get; set; }
     public int EpisodeCount { get; set; }
     public DateTimeOffset? PublishedAt { get; set; }
@@ -156,7 +186,23 @@ public sealed class Episode
 
     /// <summary>Free even when the series charges for this episode number (e.g. a promotional episode).</summary>
     public bool IsFree { get; set; }
+    /// <summary>This episode's own price in coins, instead of the series' rule (e.g. a special ending of a 互动剧); null = the series' rule.</summary>
+    public int? CustomPrice { get; set; }
     public DateTimeOffset? PublishedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+
+    // Interactive series only: what happens when this scene ends.
+    public SceneOutcome Outcome { get; set; }
+    /// <summary>The question above the options (选择提示), e.g. 「门外是消失三年的前任，你要？」.</summary>
+    public string? ChoicePrompt { get; set; }
+    /// <summary>The options appear this many seconds before the scene ends (0 = when it ends, holding the last frame).</summary>
+    public int ChoiceLeadSeconds { get; set; }
+    /// <summary>Seconds the viewer has to choose before the default option plays; null = the options wait.</summary>
+    public int? ChoiceCountdown { get; set; }
+    /// <summary>The scene that plays next when <see cref="Outcome"/> is Continue.</summary>
+    public long? NextEpisodeId { get; set; }
+    /// <summary>The ending's name (结局「真相」) when <see cref="Outcome"/> is Ending.</summary>
+    public string? EndingTitle { get; set; }
+    public List<StoryOption> Options { get; set; } = [];
 }

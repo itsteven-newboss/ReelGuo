@@ -1,10 +1,10 @@
 import { ApiError, unwrap, type Schemas } from "@reelguo/api-client";
 import { Spinner } from "@reelguo/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ImagePlus, Trash2 } from "lucide-react";
+import { ArrowLeft, GitBranch, ImagePlus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, CSRF_HEADER } from "../session";
-import { Button, Card, CARD_BADGES, CardBadgePills, ErrorText, Field, PageHeader, StatusBadge, inputClass, type CardBadge } from "../ui";
+import { Button, Card, CARD_BADGES, CardBadgePills, ErrorText, Field, FieldGroup, PageHeader, StatusBadge, inputClass, type CardBadge } from "../ui";
 import { DeleteSeriesDialog } from "./DeleteSeriesDialog";
 import { EpisodesPanel } from "./Episodes";
 
@@ -13,6 +13,7 @@ type SeriesInput = Schemas["SeriesInput"];
 
 /** Form state: lists are edited as text and parsed on save. */
 type FormState = {
+  kind: "standard" | "interactive";
   category_slug: string;
   title: string;
   description: string;
@@ -38,7 +39,7 @@ type FormState = {
 };
 
 const EMPTY: FormState = {
-  category_slug: "", title: "", description: "", tags: "", score: "0", total_episodes: "0",
+  kind: "standard", category_slug: "", title: "", description: "", tags: "", score: "0", total_episodes: "0",
   // New series start as 原创 + 新片 (the server's default too).
   is_finished: false, is_original: true, card_badge: "new", author_name: "", external_id: "",
   // 版权与合规 is optional; a new series starts as the server's defaults (PublishRules.ApplyNewSeriesDefaults).
@@ -52,6 +53,7 @@ const splitList = (v: string) => v.split(/[,，|、\s]+/).map((t) => t.trim()).f
 
 function toForm(s: SeriesDto): FormState {
   return {
+    kind: s.kind ?? "standard",
     category_slug: s.category_slug, title: s.title, description: s.description, tags: s.tags.join("，"),
     score: String(s.score), total_episodes: String(s.total_episodes), is_finished: s.is_finished, is_original: s.is_original,
     card_badge: s.card_badge, author_name: s.author_name ?? "", external_id: s.external_id ?? "",
@@ -64,6 +66,7 @@ function toForm(s: SeriesDto): FormState {
 
 function toInput(f: FormState): SeriesInput {
   return {
+    kind: f.kind,
     category_slug: f.category_slug, title: f.title, description: f.description, tags: splitList(f.tags),
     score: Number(f.score) || 0, total_episodes: Number(f.total_episodes) || 0, is_finished: f.is_finished, is_original: f.is_original,
     card_badge: f.card_badge, author_name: f.author_name || null, external_id: f.external_id || null,
@@ -76,7 +79,11 @@ function toInput(f: FormState): SeriesInput {
   };
 }
 
-export function SeriesEditor({ id, onBack, onCreated }: { id: number | "new"; onBack: () => void; onCreated: (id: number) => void }) {
+export function SeriesEditor({ id, onBack, onCreated, onStory }: {
+  id: number | "new"; onBack: () => void; onCreated: (id: number) => void;
+  /** Opens the story editor (剧情编辑) of an interactive series. */
+  onStory: (id: number) => void;
+}) {
   const qc = useQueryClient();
   const isNew = id === "new";
   const key = ["admin", "series", "detail", id];
@@ -183,6 +190,16 @@ export function SeriesEditor({ id, onBack, onCreated }: { id: number | "new"; on
           <ul className="list-disc pl-5 text-[12.5px] text-mut space-y-0.5">{s.publish_problems.map((p) => <li key={p}>{p}</li>)}</ul>
         </Card>
       )}
+      {s && s.kind === "interactive" && (
+        <Card className="p-4 mb-4 flex items-center gap-4 border border-primary/30">
+          <GitBranch size={22} className="text-primary shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="text-[13.5px] font-semibold">互动剧</div>
+            <p className="text-[12px] text-mut mt-0.5">下面的每个分集是一个片段（S1、S2…）。在剧情编辑里设置每个片段播完后出现哪些选项、跳到哪里、哪些是结局。</p>
+          </div>
+          <Button variant="primary" onClick={() => onStory(s.id)}>剧情编辑</Button>
+        </Card>
+      )}
       {publishError && (
         <Card className="p-4 mb-4">
           <ErrorText error={publishError} />
@@ -195,6 +212,17 @@ export function SeriesEditor({ id, onBack, onCreated }: { id: number | "new"; on
           <Card className="p-5 grid grid-cols-2 gap-4">
             <div className="col-span-2 text-[14px] font-semibold">基本信息</div>
             <Field label="剧名" className="col-span-2"><input required maxLength={200} value={form.title} onChange={(e) => set("title", e.target.value)} className={inputClass} /></Field>
+            <FieldGroup label="类型" className="col-span-2"
+              hint={form.kind === "interactive"
+                ? "互动剧：每个上传的视频是一个片段，播完后由观众选择接下来看哪个片段。保存后点「剧情编辑」编排剧情。"
+                : "普通剧集：分集按顺序播放。"}>
+              <div className="flex gap-1 p-1 rounded-(--r-ctl) bg-s3 w-fit">
+                {([["standard", "普通剧集"], ["interactive", "互动剧"]] as const).map(([v, l]) => (
+                  <button type="button" key={v} onClick={() => set("kind", v)}
+                    className={`px-3 h-7 rounded-(--r-ctl) text-[12px] ${form.kind === v ? "bg-sec text-primary font-semibold" : "text-mut"}`}>{l}</button>
+                ))}
+              </div>
+            </FieldGroup>
             <Field label="频道" hint="未开放的频道（如 AI换脸）不能添加内容">
               <select required value={form.category_slug} onChange={(e) => set("category_slug", e.target.value)} className={inputClass}>
                 {channelOptions.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
@@ -232,9 +260,13 @@ export function SeriesEditor({ id, onBack, onCreated }: { id: number | "new"; on
             <div className="col-span-2">
               <div className="text-[14px] font-semibold">付费设置</div>
               <p className="text-[11.5px] text-dim mt-0.5">
-                {Number(form.episode_price) > 0
-                  ? `前 ${Number(form.free_episodes) || 0} 集免费，之后每集 ${Number(form.episode_price)} 金币（VIP 免费看）。分集列表里勾选「始终免费」的单集不收费。`
-                  : "全剧免费。设置单集价格后，免费集数之后的剧集需用金币解锁或开通 VIP。"}
+                {form.kind === "interactive"
+                  ? Number(form.episode_price) > 0
+                    ? `互动剧按片段收费：S1-S${Number(form.free_episodes) || 0} 免费，其余片段每个 ${Number(form.episode_price)} 金币（VIP 免费看）。可在剧情编辑里把某个片段设为「始终免费」，比如第一个选择之前的片段。`
+                    : "全剧免费。设置单集价格后，免费数量之后的片段需用金币解锁或开通 VIP。"
+                  : Number(form.episode_price) > 0
+                    ? `前 ${Number(form.free_episodes) || 0} 集免费，之后每集 ${Number(form.episode_price)} 金币（VIP 免费看）。分集列表里勾选「始终免费」的单集不收费。`
+                    : "全剧免费。设置单集价格后，免费集数之后的剧集需用金币解锁或开通 VIP。"}
               </p>
             </div>
             <Field label="单集价格（金币）" hint="0 = 全剧免费"><input type="number" min={0} max={10000} value={form.episode_price} onChange={(e) => set("episode_price", e.target.value)} className={inputClass} /></Field>
@@ -293,13 +325,13 @@ export function SeriesEditor({ id, onBack, onCreated }: { id: number | "new"; on
 
 function TriState({ label, value, onChange }: { label: string; value: FormState["ai_generated"]; onChange: (v: FormState["ai_generated"]) => void }) {
   return (
-    <Field label={label}>
+    <FieldGroup label={label}>
       <div className="flex gap-1 p-1 rounded-(--r-ctl) bg-s3 w-fit">
         {([["yes", "是"], ["no", "否"], ["", "未声明"]] as const).map(([v, l]) => (
           <button type="button" key={v} onClick={() => onChange(v)}
             className={`px-3 h-7 rounded-(--r-ctl) text-[12px] ${value === v ? "bg-sec text-primary font-semibold" : "text-mut"}`}>{l}</button>
         ))}
       </div>
-    </Field>
+    </FieldGroup>
   );
 }

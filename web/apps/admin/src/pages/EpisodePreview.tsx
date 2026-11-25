@@ -87,11 +87,13 @@ function sourceLabel(p: PreviewDto | undefined) {
   return p.kind === "hls" ? "线上版本 · HLS" : "线上版本 · MP4";
 }
 
-function PreviewPlayer({ preview, aspect, onSize, onRetry }: {
+export function PreviewPlayer({ preview, aspect, onSize, onRetry, onEnded }: {
   preview: PreviewDto;
   aspect: number;
   onSize: (w: number, h: number) => void;
   onRetry: () => void;
+  /** The story preview (试玩) moves on when a scene ends. */
+  onEnded?: () => void;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -150,6 +152,6 @@ function PreviewPlayer({ preview, aspect, onSize, onRetry }: {
     <video ref={ref} controls autoPlay playsInline poster={preview.poster_url ?? undefined}
       className="block w-full max-h-[70vh] object-contain bg-black" style={{ aspectRatio: String(aspect) }}
       onLoadedMetadata={(e) => onSize(e.currentTarget.videoWidth, e.currentTarget.videoHeight)}
-      onError={onMediaError} />
+      onEnded={onEnded} onError={onMediaError} />
   );
 }

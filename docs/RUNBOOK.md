@@ -300,6 +300,68 @@ The same list is shown to web visitors: the footer, the 回家的路 page (`/go-
 daily 地址收藏提醒 dialog. Set `Site__PermanentDomain`, `Site__Telegram` and `Site__Email` to show those too (empty
 values are hidden). Home-page 公告 (announcements) and 专题 (topics) are edited in admin and need no release.
 
+## 9b. Interactive series (互动剧)
+
+A 互动剧 is a series whose videos are scenes; when a scene ends, the viewer picks what happens next. How it works
+underneath: [ARCHITECTURE.md §9.15](ARCHITECTURE.md#915-interactive-series-互动剧-).
+
+**Making one:**
+1. **内容管理 → 新建剧集**, 类型 **互动剧**. (An existing series can be switched too.)
+2. Upload the scenes as episodes (the series page's uploader or **文件夹上传**). Each video is a scene: S1, S2, … by its
+   episode number. Give them titles; endings' titles stay hidden from viewers until they reach them.
+3. **剧情编辑** (the button on the series page). Pick a scene in the map or the list and set what happens when it ends:
+   - **出现选项:** the question (选择提示, up to 40 characters), 2–4 options (button text up to 12, an optional line up to
+     30, the scene it leads to), when they appear (when the video ends, holding the last frame, or 3/5/10 seconds before
+     the end while it plays) and an optional countdown (5–30 seconds) with the default option it plays.
+   - **自动接续:** plays another scene straight away; use it to bring branches back together, so the number of scenes
+     to film doesn't double at every choice.
+   - **这是结局:** the ending's name (up to 20 characters), shown as 结局 2 / 3 「真相」.
+   **设为起点** picks the first scene (else S1). **试玩** plays the story as it is in the editor, saved or not, with
+   every scene unlocked.
+   - **The map:** drag boxes to arrange them (saved with the story; **自动排列** goes back to the automatic layout).
+     Drag from the dot on a box's right edge onto another box to add an option leading there, then fill in its text.
+   - **隐藏数值 (hidden scores):** add up to 5, e.g. 好感度 starting at 0. On an option, the sliders button sets how
+     taking it changes a score (好感度 +1) and when it shows (好感度 ≥ 2; all conditions must hold). Viewers never see
+     the numbers. Keep at least one option without conditions at each choice: if none qualify, all of them show.
+4. Save, then **发布** on the series page. Publishing waits until every scene viewers can reach is processed and set up
+   and at least one ending can be reached; the editor lists what is missing. Scenes nothing leads to are only a warning.
+
+**Live stories:** a published story must stay complete, so a save that would break it is refused with the problems
+listed. A scene that another scene leads to can't be deleted until that option or continuation is changed. Viewers
+who were on a removed scene resume at their last choice that still exists.
+
+**Pricing** is the series' 单集价格 and 免费集数, counted in scenes (S1 … Sn free). Per scene, the editor's 价格 can
+override it: 始终免费, or 单独定价 (e.g. a special ending at 60 coins, even in an otherwise free series). Make everything
+before the first choice free; an option leading to a paid scene shows its price, and the unlock card offers 换个选择.
+Going back and choosing again never charges twice.
+
+**Sharing:** at an ending, viewers can tap 分享结局 for a 「我解锁了结局」 image with a QR code to the series (the
+share sheet on phones; a download plus the copied link elsewhere).
+
+**Statistics** in the editor: how often each option was taken (and how often by the countdown), signed-in viewers
+currently on each scene, how many reached each ending, and paid unlocks per scene. 「64% 的观众也这么选」 shows to
+viewers once a choice point has 100 choices.
+
+**Demo content:** `node scripts/seed-story-demo.mjs [--api …] [--password …]` (API and worker running) creates the
+seven-scene example 《深夜来客（互动剧示例）》 with three endings, the last one paid; 好感度 rises when you open the
+door and help her, and 「替她隐瞒」 only shows at 好感度 ≥ 2.
+
+## 9c. Country sites (Yelrama, VpineDrama, ApineDrama)
+
+Each country site is its own deployment: its own admin console and admins, videos, channels, viewers and orders. On
+staging they share the server (docs/STAGING.md §6b: `add-site.ps1`, then `update.ps1`).
+
+- **Running a site:** sign in to its own console (`admin.<domain>`, password printed by `add-site.ps1`), create the
+  other admins there, rename the channels (频道管理), upload and publish its videos, set its 公告, 专题 and 下载页图片
+  (the download page has no picture of its own until one is uploaded). Content titles and descriptions are typed in
+  the site's language. 地区屏蔽 and 年龄验证 are per site too.
+- **New interface text** goes into every dictionary: `web/apps/client/src/i18n/zh-CN.ts` first, then `id.ts`, `vi.ts`
+  and `pt-BR.ts` (the build fails while one lacks a key). Server text likewise in
+  `backend/src/ReelGuo.Api/Sites/Texts/<locale>.json` (a test fails while one lacks a key). Have a native speaker
+  review new text before it ships.
+- **A new site:** add `web/sites/<key>/site.json` (and its icon in `Assets/sites/`, then `pnpm brand:icons`); a new
+  language also needs a client dictionary, a server text file and legal texts, and its name in `SiteText.Locales`.
+
 ## 9a. Search engines
 
 Page paths are answered by the API with the page's content for search engines (docs/ARCHITECTURE.md §9.13).

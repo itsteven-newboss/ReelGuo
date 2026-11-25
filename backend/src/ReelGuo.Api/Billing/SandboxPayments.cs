@@ -188,7 +188,7 @@ public static class SandboxCheckout
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="robots" content="noindex">
         <link rel="icon" href="data:,">
-        <title>{{Enc(title)}} · {{Brand.Name}}</title>
+        <title>{{Enc(title)}}</title>
         <style>
           body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #0f0f12; color: #ececf1; font: 15px/1.6 system-ui, sans-serif; }
           main { width: min(420px, 100% - 32px); background: #1c1c21; border-radius: 16px; padding: 24px; }

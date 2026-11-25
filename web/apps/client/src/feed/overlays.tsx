@@ -3,6 +3,7 @@ import {
   MessageCircle, Minimize, Pause, PictureInPicture2, Play, RectangleHorizontal, SkipForward, Star, Volume2, VolumeX, Zap,
 } from "lucide-react";
 import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { t } from "../i18n";
 import { fmtCount, fmtTime } from "../player/format";
 
 /* ---------------------------------------------------------------------------------------------
@@ -21,13 +22,13 @@ export function MobileRail({ bottom, author, liked, likeCount, onLike, fav, favC
   return (
     <div className="absolute right-2 z-20 w-[68px] flex flex-col items-center gap-3.5" style={{ bottom }}>
       {author && <span className="max-w-full text-[12.5px] ov-ink-4 ov-shadow truncate">{author}</span>}
-      <RailButton label="点赞" count={likeCount} pressed={liked} onClick={onLike}
+      <RailButton label={t("actions.like")} count={likeCount} pressed={liked} onClick={onLike}
         icon={<Heart size={19} className={liked ? "text-[#ff4d6d] fill-current" : "ov-ink fill-current"} />} />
-      <RailButton label="收藏" count={favCount} pressed={fav} onClick={onFav}
+      <RailButton label={t("actions.fav")} count={favCount} pressed={fav} onClick={onFav}
         icon={<Star size={19} className={fav ? "text-[#f3c969] fill-current" : "ov-ink fill-current"} />} />
-      <RailButton label="评论" count={comments} onClick={onComments} icon={<MessageCircle size={19} className="ov-ink fill-current" />} />
-      <RailButton label="分享" onClick={onShare} icon={<Link2 size={19} className="ov-ink" />} />
-      <button onClick={onRate} aria-label={`倍速 ${rate} 倍`} className="h-8 px-1 text-[15px] font-bold ov-ink ov-shadow tabular-nums pressable">{rate}X</button>
+      <RailButton label={t("actions.comment")} count={comments} onClick={onComments} icon={<MessageCircle size={19} className="ov-ink fill-current" />} />
+      <RailButton label={t("actions.share")} onClick={onShare} icon={<Link2 size={19} className="ov-ink" />} />
+      <button onClick={onRate} aria-label={t("player.rateLabel", { rate })} className="h-8 px-1 text-[15px] font-bold ov-ink ov-shadow tabular-nums pressable">{rate}X</button>
     </div>
   );
 }
@@ -45,8 +46,8 @@ function RailButton({ label, icon, count, onClick, pressed }: { label: string; i
 export function MobileTopChips({ muted, onMute, onReport }: { muted: boolean; onMute: () => void; onReport: () => void }) {
   return (
     <div className="absolute right-3 z-40 flex items-center gap-2" style={{ top: "calc(var(--sat) + 6px)" }}>
-      <Chip label={muted ? "取消静音" : "静音"} onClick={onMute}>{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</Chip>
-      <button onClick={onReport} className="ov-chip h-9 px-3.5 rounded-full text-[13px] font-semibold pressable elev-1 backdrop-blur-md">反馈</button>
+      <Chip label={muted ? t("player.unmute") : t("player.mute")} onClick={onMute}>{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</Chip>
+      <button onClick={onReport} className="ov-chip h-9 px-3.5 rounded-full text-[13px] font-semibold pressable elev-1 backdrop-blur-md">{t("actions.feedback")}</button>
     </div>
   );
 }
@@ -64,7 +65,7 @@ export function Chip({ label, onClick, children, strong = false }: { label: stri
 export function ContextHeader({ title, index, total, onBack }: { title: string; index: number; total: number; onBack: () => void }) {
   return (
     <div className="absolute inset-x-0 z-20 flex items-center gap-2 px-2.5" style={{ top: "calc(var(--sat) + 8px)", paddingRight: 148 }}>
-      <Chip label="返回" onClick={onBack}><ChevronLeft size={20} /></Chip>
+      <Chip label={t("common.back")} onClick={onBack}><ChevronLeft size={20} /></Chip>
       <span className="text-[14.5px] font-semibold ov-ink ov-shadow truncate">{title}</span>
       {total > 1 && <span className="ml-auto shrink-0 whitespace-nowrap tabular-nums px-2 py-0.5 rounded-full ov-chip text-[11px] font-semibold">{index + 1} / {total}</span>}
     </div>
@@ -112,8 +113,10 @@ export function SeekLine({ progress, duration, height, onSeek, thick = false }: 
 
 /** Bottom of the phone player, as on the reference's mobile series page: title, one line of synopsis, the seek line,
  * then "选集 · 全集 N 集 · 第 N 集", which opens the episode list. */
-export function MobileInfo({ bottom, title, description, total, episode, onDetail, onFullscreen, seek }: {
+export function MobileInfo({ bottom, title, description, total, episode, onDetail, onFullscreen, seek, episodeLabel }: {
   bottom: string; title: string; description?: string; total?: number; episode: number; onDetail: () => void; onFullscreen?: () => void; seek?: ReactNode;
+  /** Replaces 「选集 · 全集 N 集 · 第 n 集」 (互动剧: 「剧情图 · scene」). */
+  episodeLabel?: string;
 }) {
   return (
     <div className="absolute inset-x-0 z-20" style={{ bottom }}>
@@ -124,10 +127,10 @@ export function MobileInfo({ bottom, title, description, total, episode, onDetai
       {seek && <div className="relative mx-4 mt-3">{seek}</div>}
       <div className="relative flex items-center" style={{ background: "rgba(10,10,10,.6)" }}>
         <button onClick={onDetail} className="flex-1 min-w-0 h-11 px-4 flex items-center text-[13.5px] font-medium ov-ink pressable">
-          选集 · {total ? `全集 ${total} 集 · ` : ""}第 {episode} 集<ChevronRight size={13} className="ml-0.5 opacity-70" />
+          {episodeLabel ? <span className="truncate">{episodeLabel}</span> : <span className="truncate">{total ? t("player.episodeBarTotal", { total, n: episode }) : t("player.episodeBar", { n: episode })}</span>}<ChevronRight size={13} className="ml-0.5 shrink-0 opacity-70" />
         </button>
         {onFullscreen && (
-          <button onClick={onFullscreen} aria-label="全屏" className="w-12 h-11 flex items-center justify-center ov-ink pressable"><Maximize size={18} /></button>
+          <button onClick={onFullscreen} aria-label={t("player.fullscreen")} className="w-12 h-11 flex items-center justify-center ov-ink pressable"><Maximize size={18} /></button>
         )}
       </div>
     </div>
@@ -162,9 +165,9 @@ export function ErrorCard({ detail, onReload }: { detail: string; onReload: () =
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center">
       <div className="rounded-xl p-5 flex flex-col items-center gap-3 text-[13px] ov-ink-2" style={{ background: "rgba(0,0,0,.74)" }}>
-        <span>视频暂时无法加载</span>
+        <span>{t("player.loadFailed")}</span>
         <span className="text-[10.5px] ov-ink-4 max-w-[240px] text-center break-all">{detail}</span>
-        <button className="px-4 py-1.5 rounded-full ov-chip-strong text-[#8fd0ff] text-[12.5px] font-semibold pressable" onClick={onReload}>重新加载</button>
+        <button className="px-4 py-1.5 rounded-full ov-chip-strong text-[#8fd0ff] text-[12.5px] font-semibold pressable" onClick={onReload}>{t("player.reload")}</button>
       </div>
     </div>
   );
@@ -177,7 +180,7 @@ export function SpeedChip({ rate, locked, holding, top, onClick }: { rate: numbe
       className={`absolute left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-3.5 h-8 rounded-full backdrop-blur-md text-[12px] font-bold elev-2 pressable ${locked ? "bg-primary text-on-primary" : "ov-chip text-[#f3c969]"}`}
       style={{ top }}>
       <Zap size={13} className="fill-current" />
-      {rate}x {locked ? "已锁定 · 点按解除" : holding ? "倍速中 · 松开恢复" : "倍速"}
+      {rate}x {locked ? t("player.speedLocked") : holding ? t("player.speedHolding") : t("player.speed")}
     </button>
   );
 }
@@ -187,7 +190,7 @@ export function LockHint({ armed }: { armed: boolean }) {
     <div className={`absolute left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-4 h-10 rounded-xl backdrop-blur-md elev-2 transition-all duration-200 ${armed ? "bg-primary text-on-primary scale-110" : "ov-chip-strong ov-ink-2"}`}
       style={{ top: "38%" }}>
       <Lock size={16} />
-      <span className="text-[12.5px] font-bold">{armed ? "松开锁定 2.0x" : "上滑到此锁定倍速"}</span>
+      <span className="text-[12.5px] font-bold">{armed ? t("player.lockArmed") : t("player.lockHint")}</span>
     </div>
   );
 }
@@ -203,7 +206,7 @@ export function ControlsLock({ onUnlock }: { onUnlock: () => void }) {
   };
   return (
     <div className="absolute inset-0 z-50" onPointerDown={show}>
-      <button onClick={onUnlock} aria-label="解锁播放控制"
+      <button onClick={onUnlock} aria-label={t("player.unlockControls")}
         className={`absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full flex items-center justify-center transition-opacity duration-300 ${visible ? "opacity-100" : "opacity-0"}`}
         style={{ color: "rgba(255,255,255,.75)", background: "rgba(0,0,0,.35)" }}>
         <LockOpen size={19} />
@@ -222,14 +225,14 @@ export function FullscreenControls({ paused, time, duration, rate, rotated, onTo
   return (
     <>
       <div className="absolute right-4 z-40 flex items-center gap-2" style={{ top: edge }}>
-        <Chip label="锁定播放控制" onClick={onLock} strong><Lock size={16} /></Chip>
-        <Chip label="退出全屏" onClick={onExit} strong><Minimize size={18} /></Chip>
+        <Chip label={t("player.lockControls")} onClick={onLock} strong><Lock size={16} /></Chip>
+        <Chip label={t("player.exitFullscreen")} onClick={onExit} strong><Minimize size={18} /></Chip>
       </div>
       <div className="absolute inset-x-0 z-30 px-4" style={{ bottom: rotated ? 46 : `calc(var(--sab) + ${52 + base}px)` }}>
         <SeekLine progress={duration ? time / duration : 0} duration={duration} height={26} onSeek={onSeek} thick />
       </div>
       <div className="absolute inset-x-0 z-40 flex items-center gap-3 px-4" style={{ bottom: rotated ? 10 : `calc(var(--sab) + 10px)` }}>
-        <Chip label={paused ? "播放" : "暂停"} onClick={onToggle}>{paused ? <Play size={18} className="fill-current" /> : <Pause size={17} className="fill-current" />}</Chip>
+        <Chip label={paused ? t("player.play") : t("player.pause")} onClick={onToggle}>{paused ? <Play size={18} className="fill-current" /> : <Pause size={17} className="fill-current" />}</Chip>
         <span className="text-[11.5px] font-semibold ov-ink-2 tabular-nums">{fmtTime(time)}</span>
         <button onClick={onRate}
           className={`ml-auto flex items-center gap-1 px-2.5 h-8 rounded-full text-[12px] font-bold pressable ${rate !== 1 ? "bg-primary text-on-primary" : "ov-chip ov-ink-2"}`}>
@@ -248,7 +251,7 @@ export function FullscreenControls({ paused, time, duration, rate, rotated, onTo
 export function DesktopContextHeader({ title, index, total, onBack }: { title: string; index: number; total: number; onBack: () => void }) {
   return (
     <div className="absolute top-[18px] left-5 right-5 z-20 flex items-center gap-3 text-[12.5px] text-[#e8ecf2]">
-      <button onClick={onBack} aria-label="返回" className="w-8 h-8 grid place-items-center rounded-full bg-white/[.06] hover:bg-white/[.14] pressable">
+      <button onClick={onBack} aria-label={t("common.back")} className="w-8 h-8 grid place-items-center rounded-full bg-white/[.06] hover:bg-white/[.14] pressable">
         <ChevronLeft size={17} />
       </button>
       <span className="truncate max-w-[70%] font-semibold ov-shadow">{title}</span>
@@ -269,24 +272,24 @@ export function DesktopRail({ index, total, onPrev, onNext, liked, likeCount, on
   return (
     <div className="desktop-fade absolute right-[22px] bottom-[92px] z-20 flex flex-col items-center gap-4">
       <div className="flex flex-col gap-[9px] items-center pb-3.5 mb-1 border-b border-white/10">
-        <button className={nav} onClick={onPrev} disabled={index === 0} aria-label="上一个" title="上一个 ↑"><ChevronUp size={19} /></button>
-        <button className={nav} onClick={onNext} disabled={index >= total - 1} aria-label="下一个" title="下一个 ↓"><ChevronDown size={19} /></button>
+        <button className={nav} onClick={onPrev} disabled={index === 0} aria-label={t("player.prevItem")} title={`${t("player.prevItem")} ↑`}><ChevronUp size={19} /></button>
+        <button className={nav} onClick={onNext} disabled={index >= total - 1} aria-label={t("player.nextItem")} title={`${t("player.nextItem")} ↓`}><ChevronDown size={19} /></button>
         <small className="text-[9.5px] text-[#8b929d] tabular-nums tracking-wide">{String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}</small>
       </div>
-      <button className={item} onClick={onLike} aria-pressed={liked} title="喜欢 L">
+      <button className={item} onClick={onLike} aria-pressed={liked} title={`${t("actions.like")} L`}>
         <Heart size={30} className={liked ? "text-like fill-current" : "ov-shadow"} /><span className={count}>{fmtCount(likeCount)}</span>
       </button>
-      <button className={item} onClick={onComments} title="评论 C">
+      <button className={item} onClick={onComments} title={`${t("actions.comment")} C`}>
         <MessageCircle size={27} className="fill-current ov-shadow" /><span className={count}>{fmtCount(comments)}</span>
       </button>
-      <button className={item} onClick={onFav} aria-pressed={fav} title="收藏 S">
+      <button className={item} onClick={onFav} aria-pressed={fav} title={`${t("actions.fav")} S`}>
         <Star size={27} className={fav ? "text-[#f3c969] fill-current" : "ov-shadow"} /><span className={count}>{fmtCount(favCount)}</span>
       </button>
-      <button className={item} onClick={onEpisodes} title="选集 E">
-        <ListVideo size={26} className="ov-shadow" /><span className={count}>选集</span>
+      <button className={item} onClick={onEpisodes} title={`${t("series.episodes")} E`}>
+        <ListVideo size={26} className="ov-shadow" /><span className={count}>{t("series.episodes")}</span>
       </button>
-      <button className={item} onClick={onShare} title="分享">
-        <Link2 size={25} className="ov-shadow" /><span className={count}>分享</span>
+      <button className={item} onClick={onShare} title={t("actions.share")}>
+        <Link2 size={25} className="ov-shadow" /><span className={count}>{t("actions.share")}</span>
       </button>
     </div>
   );
@@ -300,13 +303,13 @@ export function DesktopMeta({ author, episode, total, score, title, description 
     <div className="desktop-fade absolute left-[26px] right-[108px] bottom-[84px] z-10 max-w-[620px]">
       <div className="flex items-center gap-2">
         <span className="text-[15px] font-bold text-white ov-shadow truncate">@{author}</span>
-        {total > 0 && <span className="shrink-0 px-1.5 py-px rounded-md text-[10px] font-bold text-white bg-white/15">第 {episode}/{total} 集</span>}
-        {score > 0 && <span className="shrink-0 text-[11px] font-bold text-[#f3c969] ov-shadow">{score.toFixed(1)} 分</span>}
+        {total > 0 && <span className="shrink-0 px-1.5 py-px rounded-md text-[10px] font-bold text-white bg-white/15">{t("player.epOf", { n: episode, total })}</span>}
+        {score > 0 && <span className="shrink-0 text-[11px] font-bold text-[#f3c969] ov-shadow">{t("common.score", { score: score.toFixed(1) })}</span>}
       </div>
       <p className="mt-1 text-[13.5px] leading-snug ov-ink-2 ov-shadow clamp-2">{title}</p>
       <button onClick={() => setOpen((v) => !v)} className="mt-1 text-left w-full">
-        <p className={`text-[11.5px] leading-relaxed ov-ink-4 ${open ? "" : "clamp-1"}`}>{description || "暂无简介"}</p>
-        <span className="text-[10.5px] text-[#8fd0ff] font-semibold">{open ? "收起" : "展开简介"}</span>
+        <p className={`text-[11.5px] leading-relaxed ov-ink-4 ${open ? "" : "clamp-1"}`}>{description || t("series.noSynopsis")}</p>
+        <span className="text-[10.5px] text-[#8fd0ff] font-semibold">{open ? t("common.collapse") : t("player.expandSynopsis")}</span>
       </button>
     </div>
   );
@@ -335,14 +338,14 @@ export function DesktopControls({ paused, time, duration, buffered, rate, muted,
           <div className="absolute h-full bg-white/10" style={{ width: `${duration ? (buffered / duration) * 100 : 0}%` }} />
           <div className="absolute h-full bg-primary rounded-sm" style={{ width: `${played}%` }} />
         </div>
-        <input type="range" min={0} max={duration || 0} step={0.1} value={preview ?? time} aria-label="播放进度"
+        <input type="range" min={0} max={duration || 0} step={0.1} value={preview ?? time} aria-label={t("player.progress")}
           className="absolute inset-0 w-full opacity-0 cursor-pointer"
           onChange={(e) => setPreview(Number(e.target.value))}
           onPointerUp={() => { if (preview !== null) { onSeek(preview); setPreview(null); } }}
           onKeyUp={() => { if (preview !== null) { onSeek(preview); setPreview(null); } }} />
       </div>
       <div className="flex items-center gap-[5px] h-[38px]">
-        <button className={`${control} text-white`} onClick={onToggle} aria-label={paused ? "播放 (空格)" : "暂停 (空格)"}>
+        <button className={`${control} text-white`} onClick={onToggle} aria-label={paused ? t("player.playKey") : t("player.pauseKey")}>
           {paused ? <Play size={18} className="fill-current" /> : <Pause size={18} className="fill-current" />}
         </button>
         <span className="inline-flex gap-1 items-baseline text-[11.5px] tabular-nums text-[#d3dae4] ml-1.5">
@@ -351,32 +354,32 @@ export function DesktopControls({ paused, time, duration, buffered, rate, muted,
         <button className={control} onClick={onNext} disabled={nextDisabled} title={nextTitle} aria-label={nextTitle}><SkipForward size={17} /></button>
         <span className="flex-1" />
         <div className="relative">
-          <button className={`${control} text-[11.5px] font-semibold tabular-nums`} onClick={() => setSpeedOpen((v) => !v)} aria-label="倍速">
+          <button className={`${control} text-[11.5px] font-semibold tabular-nums`} onClick={() => setSpeedOpen((v) => !v)} aria-label={t("player.speed")}>
             {rate === 1 ? <Gauge size={17} /> : `${rate}x`}
           </button>
           {speedOpen && (
             <div className="absolute bottom-[calc(100%+10px)] left-1/2 -translate-x-1/2 w-[132px] p-1.5 rounded-[10px] bg-[#252a31]/[.98] shadow-[0_12px_42px_rgba(0,0,0,.5)] flex flex-col gap-px a-scale-in">
-              <div className="text-[10px] text-[#78828f] px-2 pt-1.5 pb-2">播放速度</div>
+              <div className="text-[10px] text-[#78828f] px-2 pt-1.5 pb-2">{t("player.speedTitle")}</div>
               {SPEEDS.map((s) => (
                 <button key={s} role="menuitemradio" aria-checked={s === rate} onClick={() => { onRate(s); setSpeedOpen(false); }}
                   className={`flex items-center justify-between h-[30px] px-2 rounded-md text-[12px] hover:bg-white/[.07] ${s === rate ? "text-primary" : "text-[#c9d1dc]"}`}>
-                  {s === 1 ? "正常" : `${s}x`}
+                  {s === 1 ? t("player.normalSpeed") : `${s}x`}
                 </button>
               ))}
             </div>
           )}
         </div>
         <div className="group flex items-center">
-          <button className={control} onClick={onMute} aria-label={muted ? "取消静音 (M)" : "静音 (M)"}>{muted || volume === 0 ? <VolumeX size={17} /> : <Volume2 size={17} />}</button>
+          <button className={control} onClick={onMute} aria-label={muted ? `${t("player.unmute")} (M)` : `${t("player.mute")} (M)`}>{muted || volume === 0 ? <VolumeX size={17} /> : <Volume2 size={17} />}</button>
           <div className="w-0 group-hover:w-[74px] group-focus-within:w-[74px] overflow-hidden transition-[width] duration-200 flex items-center">
-            <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : volume} aria-label="音量" className="w-[68px] mx-[3px] accent-[var(--p-primary)]"
+            <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : volume} aria-label={t("player.volume")} className="w-[68px] mx-[3px] accent-[var(--p-primary)]"
               onChange={(e) => onVolume(Number(e.target.value))} />
           </div>
         </div>
-        <button className={control} onClick={onPip} aria-label="画中画"><PictureInPicture2 size={17} /></button>
-        {onLock && <button className={control} onClick={onLock} aria-label="锁定播放控制"><Lock size={16} /></button>}
-        {onTheater && <button className={`${control} ${theater ? "text-primary" : ""}`} onClick={onTheater} aria-label="影院模式 (T)"><RectangleHorizontal size={17} /></button>}
-        <button className={control} onClick={onFullscreen} aria-label="全屏 (F)">{fullscreen ? <Minimize size={17} /> : <Maximize size={17} />}</button>
+        <button className={control} onClick={onPip} aria-label={t("player.pip")}><PictureInPicture2 size={17} /></button>
+        {onLock && <button className={control} onClick={onLock} aria-label={t("player.lockControls")}><Lock size={16} /></button>}
+        {onTheater && <button className={`${control} ${theater ? "text-primary" : ""}`} onClick={onTheater} aria-label={`${t("player.theater")} (T)`}><RectangleHorizontal size={17} /></button>}
+        <button className={control} onClick={onFullscreen} aria-label={`${t("player.fullscreen")} (F)`}>{fullscreen ? <Minimize size={17} /> : <Maximize size={17} />}</button>
       </div>
     </div>
   );

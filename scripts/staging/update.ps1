@@ -11,8 +11,10 @@
       1. Checks the server and the settings.
       2. Fetches the new code with git (fast-forward only), or deploys -Ref (a branch, tag or commit).
          With -SkipPull it deploys the code that is already in this folder (for example copied over by hand).
-      3. Backs up the database.
-      4. Builds the new release into its own folder while the current one keeps running.
+      3. Backs up the database (every site's, when the server runs more than one: REELGUO_SITES).
+      4. Builds the new release into its own folder while the current one keeps running: the API and worker once, the
+         web app and admin console once per site (its name and language). A site added with add-site.ps1 gets its
+         database, storage folder and services here.
       5. Switches to it: stops the services, points C:\reelguo-staging\current at the new release, starts them
          (about a minute of downtime). Database migrations run when the API starts.
          While an admin is optimizing or uploading videos in the admin console, it waits for them to finish first
@@ -21,7 +23,7 @@
 
     If the new version does not become ready, nothing is rolled back automatically (the database may already be
     migrated). The script prints the logs and the ways back: rollback.ps1 (the previous release, instantly), and
-    rollback.ps1 -RestoreBackup <file> (previous release and the backup taken in step 3).
+    rollback.ps1 -RestoreBackup <file>[,<file>...] (previous release and the backups taken in step 3).
 
 .PARAMETER Ref
     Branch, tag or commit to deploy (fetched from origin). Default: the current branch, fast-forwarded.
@@ -86,11 +88,20 @@ if ($before -eq $after) { Write-Ok "code: $after (unchanged; rebuilding anyway)"
 # ---------------------------------------------------------------------------------------------------------------
 $previous = Get-CurrentRelease
 if (-not $Force) { Wait-AdminIdle }
-$backupFile = ''
+$backupFiles = @()
 if (-not $SkipBackup) {
     Write-Step 'Backing up the database'
-    $backupFile = Invoke-Backup
-    Write-Ok "backup: $backupFile"
+    $backupFiles = @(Invoke-BackupAll)
+    foreach ($f in $backupFiles) { Write-Ok "backup: $f" }
+}
+$backupFile = $backupFiles -join ','
+
+# Every other site has its database (created the first time) and storage folder.
+foreach ($key in Get-SiteKeys) {
+    Use-Site $key {
+        Initialize-Database
+        New-Item -ItemType Directory -Force -Path (Get-SiteStorageDir) | Out-Null
+    }
 }
 
 $release = New-Release
@@ -114,4 +125,5 @@ Remove-OldReleases
 Add-DeployRecord 'update' ($(if ($siteOk) { "ok (backup $backupFile)" } else { "started, some checks failed (backup $backupFile)" }))
 Write-Step "Staging runs $releaseId"
 Write-Host "  Site: $(Get-Setting 'REELGUO_APP_URL')    History: $DeployLog"
+foreach ($key in Get-SiteKeys) { Use-Site $key { Write-Host "  Site ${key}: $(Get-Setting 'REELGUO_APP_URL')$(if (Get-AdminHost) { "    admin: https://$(Get-AdminHost)" })    admin on this server: $((Get-AdminBase).Replace('127.0.0.1', 'localhost'))" } }
 if (-not $siteOk) { Write-Warn 'Some checks failed (see above).'; exit 2 }

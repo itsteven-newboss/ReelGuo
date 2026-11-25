@@ -13,24 +13,29 @@ namespace ReelGuo.Api.Apps;
 /// screen as a full-screen app with our icon. iPhones can't install app files from a website, and this needs no Apple
 /// account. Safari downloads it, then 设置 → 已下载描述文件 → 安装.
 /// <para>
-/// Every profile has the same identifier, so installing it again from another of our domains replaces the old icon
-/// instead of adding a second one. Signed when <c>App:ProfileCertificatePath</c> is set (iOS then shows 已验证 instead of
+/// Every profile of a site has the same identifier, so installing it again from another of its domains replaces the old
+/// icon instead of adding a second one; each site has its own (黄月短剧 keeps the original one). Signed when <c>App:ProfileCertificatePath</c> is set (iOS then shows 已验证 instead of
 /// 未签名); see docs/RUNBOOK.md §9.
 /// </para>
 /// </summary>
-public sealed class WebClipProfile(IOptions<AppOptions> options, ILogger<WebClipProfile> log)
+public sealed class WebClipProfile(IOptions<AppOptions> options, SiteBrand brand, ILogger<WebClipProfile> log)
 {
     public const string ContentType = "application/x-apple-aspen-config";
-    public const string Identifier = "com.reelguo.webclip";
 
-    private static readonly Lazy<byte[]> Icon = new(() =>
+    /// <summary>The profile's identifier: 黄月短剧's as it always was, another site's with its key added.</summary>
+    public static string IdentifierFor(SiteBrand brand) => brand.Key == "huangyue" ? "com.reelguo.webclip" : $"com.reelguo.webclip.{brand.Key}";
+
+    /// <summary>The site's home-screen icon (Apps/WebClip/&lt;key&gt;.png, written by scripts/brand-icons.mjs).</summary>
+    public static byte[] IconFor(SiteBrand brand) => Icons.GetOrAdd(brand.Key, key =>
     {
-        using var stream = typeof(WebClipProfile).Assembly.GetManifestResourceStream("apps/webclip-icon.png")
-            ?? throw new InvalidOperationException("The web clip icon is missing from the build");
+        using var stream = typeof(WebClipProfile).Assembly.GetManifestResourceStream($"apps/webclip/{key}.png")
+            ?? throw new InvalidOperationException($"The web clip icon apps/webclip/{key}.png is missing from the build (pnpm brand:icons)");
         using var copy = new MemoryStream();
         stream.CopyTo(copy);
         return copy.ToArray();
     });
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> Icons = new();
 
     private readonly Lock _gate = new();
     private (string Path, DateTime Written, X509Certificate2 Cert, X509Certificate2Collection Chain)? _signing;
@@ -38,14 +43,16 @@ public sealed class WebClipProfile(IOptions<AppOptions> options, ILogger<WebClip
     /// <summary>The profile for the site at <paramref name="origin"/> (e.g. https://huangyueai.com), signed when configured.</summary>
     public byte[] Build(string origin)
     {
-        var plist = Encoding.UTF8.GetBytes(Plist(origin, Icon.Value));
+        var plist = Encoding.UTF8.GetBytes(Plist(origin, IconFor(brand), brand));
         return Sign(plist) ?? plist;
     }
 
-    internal static string Plist(string origin, byte[] icon)
+    internal static string Plist(string origin, byte[] icon, SiteBrand brand)
     {
         static string S(string value) => SecurityElement.Escape(value);
         var url = origin.TrimEnd('/') + "/";
+        var identifier = IdentifierFor(brand);
+        var name = brand.Name;
         return $"""
             <?xml version="1.0" encoding="UTF-8"?>
             <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -63,17 +70,17 @@ public sealed class WebClipProfile(IOptions<AppOptions> options, ILogger<WebClip
             			<key>IsRemovable</key>
             			<true/>
             			<key>Label</key>
-            			<string>{S(Brand.Name)}</string>
+            			<string>{S(name)}</string>
             			<key>PayloadDescription</key>
-            			<string>{S($"在主屏幕添加「{Brand.Name}」")}</string>
+            			<string>{S(brand.T("webclip.add"))}</string>
             			<key>PayloadDisplayName</key>
-            			<string>{S(Brand.Name)}</string>
+            			<string>{S(name)}</string>
             			<key>PayloadIdentifier</key>
-            			<string>{Identifier}.clip</string>
+            			<string>{identifier}.clip</string>
             			<key>PayloadType</key>
             			<string>com.apple.webClip.managed</string>
             			<key>PayloadUUID</key>
-            			<string>{Uuid(url, "clip")}</string>
+            			<string>{Uuid(identifier, url, "clip")}</string>
             			<key>PayloadVersion</key>
             			<integer>1</integer>
             			<key>Precomposed</key>
@@ -83,19 +90,19 @@ public sealed class WebClipProfile(IOptions<AppOptions> options, ILogger<WebClip
             		</dict>
             	</array>
             	<key>PayloadDescription</key>
-            	<string>{S($"安装后主屏幕会出现「{Brand.Name}」图标，点开即可全屏观看。本描述文件只添加这一个图标，不读取手机里的任何数据，可随时在 设置 → 通用 → VPN与设备管理 中删除。仅限 18 岁以上成年人使用。")}</string>
+            	<string>{S(brand.T("webclip.description"))}</string>
             	<key>PayloadDisplayName</key>
-            	<string>{S(Brand.Name)}</string>
+            	<string>{S(name)}</string>
             	<key>PayloadIdentifier</key>
-            	<string>{Identifier}</string>
+            	<string>{identifier}</string>
             	<key>PayloadOrganization</key>
-            	<string>{S(Brand.Name)}</string>
+            	<string>{S(name)}</string>
             	<key>PayloadRemovalDisallowed</key>
             	<false/>
             	<key>PayloadType</key>
             	<string>Configuration</string>
             	<key>PayloadUUID</key>
-            	<string>{Uuid(url, "profile")}</string>
+            	<string>{Uuid(identifier, url, "profile")}</string>
             	<key>PayloadVersion</key>
             	<integer>1</integer>
             </dict>
@@ -105,9 +112,9 @@ public sealed class WebClipProfile(IOptions<AppOptions> options, ILogger<WebClip
     }
 
     /// <summary>A stable UUID per site address, so the same profile downloaded twice is the same profile.</summary>
-    private static string Uuid(string url, string part)
+    private static string Uuid(string identifier, string url, string part)
     {
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{Identifier}|{part}|{url}"));
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{identifier}|{part}|{url}"));
         hash[6] = (byte)(hash[6] & 0x0F | 0x50);   // version 5 (name-based)
         hash[8] = (byte)(hash[8] & 0x3F | 0x80);   // RFC 4122 variant
         return new Guid(hash.AsSpan(0, 16), bigEndian: true).ToString().ToUpperInvariant();

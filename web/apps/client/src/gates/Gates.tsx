@@ -7,6 +7,8 @@ import { useAuth } from "../state/auth";
 import { useSession } from "../state/session";
 import { ToastHost } from "../ui/Overlays";
 import { LegalLinks } from "../pages/Legal";
+import { Trans } from "react-i18next";
+import { t } from "../i18n";
 
 /** Shown instead of the app when the API answers 451 for this visitor's country. */
 export function RegionBlocked() {
@@ -38,16 +40,16 @@ export function AgeGate() {
       style={{ background: "radial-gradient(60% 45% at 50% 0%, color-mix(in srgb, var(--p-primary) 14%, transparent), transparent 70%), #0d0d0d" }}>
       <div className="w-full max-w-[500px] text-center a-rise">
         <div className="flex justify-center"><Wordmark scale={13} /></div>
-        <h1 id="age-title" className="mt-10 text-[20px] lg:text-[22px] text-on leading-relaxed">本站含有成人内容，<br />仅限年满 18 周岁的成年人访问。</h1>
+        <h1 id="age-title" className="mt-10 text-[20px] lg:text-[22px] text-on leading-relaxed"><Trans i18nKey="ageGate.title" /></h1>
         <button onClick={confirmAge}
           className="mt-8 w-full h-[58px] rounded-full bg-primary text-on-primary text-[16px] font-bold ring-2 ring-white ring-offset-2 ring-offset-[#0d0d0d]">
-          我已年满 18 周岁，进入网站
+          {t("ageGate.enter")}
         </button>
         <button onClick={() => window.location.replace("https://www.google.com")}
           className="mt-4 w-full h-[58px] rounded-full bg-white/[.04] border border-white/[.08] text-mut text-[16px]">
-          未满 18 周岁，离开
+          {t("ageGate.leave")}
         </button>
-        <p className="mt-8 text-[13px] text-dim">进入即表示您确认已年满 18 周岁，并同意遵守当地法律法规。</p>
+        <p className="mt-8 text-[13px] text-dim">{t("ageGate.note")}</p>
         <LegalLinks className="mt-3 justify-center" />
       </div>
     </div>

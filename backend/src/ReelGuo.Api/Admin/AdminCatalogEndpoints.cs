@@ -43,7 +43,9 @@ public sealed record SeriesInput(
     /// <summary>Leading episodes that are always free.</summary>
     int FreeEpisodes = Pricing.DefaultFreeEpisodes,
     /// <summary>The cards' status badge; left out, it is kept as it is (新片 for a new series).</summary>
-    CardBadge? CardBadge = null);
+    CardBadge? CardBadge = null,
+    /// <summary>Ordinary series or 互动剧 (interactive); left out, it is kept as it is (ordinary for a new series).</summary>
+    SeriesKind? Kind = null);
 
 /// <summary>原创 and / or the status badge for several series; a field left out is not changed.</summary>
 public sealed record SetLabelsRequest(List<long> Ids, bool? IsOriginal, CardBadge? CardBadge);
@@ -60,11 +62,13 @@ public sealed record AdminSeriesDto(
     SeriesStatus Status, DateTimeOffset? PublishedAt,
     string? RightsHolder, string? ContractRef, DateOnly? LicenceStart, DateOnly? LicenceEnd, List<string> Territories,
     bool? AiGenerated, bool? HasRealPerson, string? ConsentRef, int RecommendWeight, int EpisodePrice, int FreeEpisodes,
-    List<AdminEpisodeDto> Episodes, List<string> PublishProblems, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+    List<AdminEpisodeDto> Episodes, List<string> PublishProblems, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
+    SeriesKind Kind = SeriesKind.Standard);
 
 public sealed record AdminSeriesListItem(
     long Id, string Title, string CategorySlug, string CategoryName, SeriesStatus Status, int ReadyEpisodes, int EpisodeRows,
-    int Processing, int Failed, string? CoverUrl, DateTimeOffset UpdatedAt, bool IsOriginal, CardBadge CardBadge);
+    int Processing, int Failed, string? CoverUrl, DateTimeOffset UpdatedAt, bool IsOriginal, CardBadge CardBadge,
+    SeriesKind Kind = SeriesKind.Standard);
 
 public sealed record AdminSeriesPage(List<AdminSeriesListItem> Items, int Page, int Size, int Total);
 
@@ -103,6 +107,7 @@ public static class AdminCatalogEndpoints
         series.MapPost("/{id:long}/unpublish", Unpublish).WithSummary("Hides a published series.");
         series.MapPost("/{id:long}/episodes", CreateEpisode).WithSummary("Creates an episode and returns where to upload its video.");
         series.MapAdminSeriesDeletion();
+        series.MapAdminStory();
 
         var episodes = admin.MapGroup("/episodes").WithTags("Admin: catalog");
         episodes.MapPut("/{id:long}", UpdateEpisode).WithSummary("Updates an episode's title, and whether it is free even in a paid series.");
@@ -167,7 +172,7 @@ public static class AdminCatalogEndpoints
         var rows = await query.OrderByDescending(x => x.UpdatedAt).Skip((p - 1) * s).Take(s)
             .Select(x => new
             {
-                x.Id, x.Title, x.Category.Slug, CategoryName = x.Category.Name, x.Status, x.CoverKey, x.UpdatedAt, x.IsOriginal, x.CardBadge,
+                x.Id, x.Title, x.Category.Slug, CategoryName = x.Category.Name, x.Status, x.CoverKey, x.UpdatedAt, x.IsOriginal, x.CardBadge, x.Kind,
                 Ready = x.Episodes.Count(e => e.Status == EpisodeStatus.Ready),
                 Rows = x.Episodes.Count,
                 Processing = x.Episodes.Count(e => e.Status == EpisodeStatus.Processing || e.Status == EpisodeStatus.Uploading),
@@ -176,7 +181,7 @@ public static class AdminCatalogEndpoints
             .ToListAsync(ct);
 
         var items = rows.Select(x => new AdminSeriesListItem(x.Id, x.Title, x.Slug, x.CategoryName, x.Status, x.Ready, x.Rows,
-            x.Processing, x.Failed, signer.PublicUrlOrNull(x.CoverKey), x.UpdatedAt, x.IsOriginal, x.CardBadge)).ToList();
+            x.Processing, x.Failed, signer.PublicUrlOrNull(x.CoverKey), x.UpdatedAt, x.IsOriginal, x.CardBadge, x.Kind)).ToList();
         return TypedResults.Ok(new AdminSeriesPage(items, p, s, total));
     }
 
@@ -263,6 +268,7 @@ public static class AdminCatalogEndpoints
         series.IsFinished = input.IsFinished;
         series.IsOriginal = input.IsOriginal;
         if (input.CardBadge is { } badge) series.CardBadge = badge;
+        if (input.Kind is { } kind) series.Kind = kind;
         series.TotalEpisodes = input.TotalEpisodes;
         series.ExternalId = externalId;
         series.RightsHolder = Clean(input.RightsHolder);
@@ -293,12 +299,22 @@ public static class AdminCatalogEndpoints
         var ready = s.Episodes.Count(e => e.Status == EpisodeStatus.Ready);
         var problems = s.Status == SeriesStatus.Published
             ? []
-            : PublishRules.Check(s, s.Category, ready, DateOnly.FromDateTime(time.GetUtcNow().UtcDateTime));
+            : await ProblemsAsync(db, s, ready, time, ct);
         return new AdminSeriesDto(
             s.Id, s.Category.Slug, s.Title, s.Description, s.Tags, s.Score, s.IsFinished, s.IsOriginal, s.CardBadge, s.TotalEpisodes,
             s.Author?.Nickname, s.ExternalId, signer.PublicUrlOrNull(s.CoverKey), s.Status, s.PublishedAt,
             s.RightsHolder, s.ContractRef, s.LicenceStart, s.LicenceEnd, s.Territories, s.AiGenerated, s.HasRealPerson, s.ConsentRef,
-            s.RecommendWeight, s.EpisodePrice, s.FreeEpisodes, s.Episodes.Select(e => ToDto(e, signer)).ToList(), problems, s.CreatedAt, s.UpdatedAt);
+            s.RecommendWeight, s.EpisodePrice, s.FreeEpisodes, s.Episodes.Select(e => ToDto(e, signer)).ToList(), problems, s.CreatedAt, s.UpdatedAt,
+            s.Kind);
+    }
+
+    /// <summary>What blocks publishing: the publish rules, and for a 互动剧 the story's errors.</summary>
+    private static async Task<List<string>> ProblemsAsync(ReelGuoDbContext db, Series s, int ready, TimeProvider time, CancellationToken ct)
+    {
+        var problems = PublishRules.Check(s, s.Category, ready, DateOnly.FromDateTime(time.GetUtcNow().UtcDateTime));
+        if (s.Kind == SeriesKind.Interactive)
+            problems.AddRange((await StoryRules.CheckAsync(db, s.Id, ct)).Where(p => p.Level == StoryProblemLevel.Error).Select(p => $"剧情：{p.Message}"));
+        return problems;
     }
 
     internal static AdminEpisodeDto ToDto(Episode e, MediaUrlSigner signer) => new(
@@ -366,7 +382,7 @@ public static class AdminCatalogEndpoints
 
         var now = time.GetUtcNow();
         var ready = await db.Episodes.CountAsync(e => e.SeriesId == id && e.Status == EpisodeStatus.Ready, ct);
-        var problems = PublishRules.Check(series, series.Category, ready, DateOnly.FromDateTime(now.UtcDateTime));
+        var problems = await ProblemsAsync(db, series, ready, time, ct);
         if (problems.Count > 0)
             return TypedResults.BadRequest(ApiErrorResponse.Of("publish_blocked", "还不能发布，请先处理以下问题", problems));
 
@@ -526,12 +542,15 @@ public static class AdminCatalogEndpoints
         return TypedResults.Ok(ToDto(episode, signer));
     }
 
-    private static async Task<Results<NoContent, NotFound<ApiErrorResponse>>> DeleteEpisode(
+    private static async Task<Results<NoContent, NotFound<ApiErrorResponse>, Conflict<ApiErrorResponse>>> DeleteEpisode(
         long id, HttpContext http, ReelGuoDbContext db, StorageBuckets storage, CosVideoStore cos, TimeProvider time, ILoggerFactory logs,
         CancellationToken ct)
     {
         var episode = await db.Episodes.FirstOrDefaultAsync(e => e.Id == id, ct);
         if (episode is null) return TypedResults.NotFound(ApiErrorResponse.Of("not_found", "分集不存在"));
+        // A 互动剧 scene another scene leads to: deleting it would break the story.
+        if (await AdminStoryEndpoints.InUseAsync(db, id, ct) is { } reason)
+            return TypedResults.Conflict(ApiErrorResponse.Of("scene_in_use", reason));
 
         db.Episodes.Remove(episode);
         db.AddAudit(time, AdminActor.From(http), "episode.delete", "series", episode.SeriesId.ToString(), new { episode = episode.EpisodeNumber });

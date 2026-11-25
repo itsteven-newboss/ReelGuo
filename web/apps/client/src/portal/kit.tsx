@@ -4,6 +4,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useRanks, type VideoCard } from "../api";
 import { statusBadge } from "./badges";
 import { href, Link } from "../router";
+import { t } from "../i18n";
 
 /*
  * Building blocks of the portal layout, measured on the reference site at 1440 px (desktop) and 390 px (phone):
@@ -21,7 +22,7 @@ export type Crumb = { label: string; to?: string };
 /** "首页 / 专题": 14 px, 60 % white, the current page in the accent colour. */
 export function Breadcrumb({ items }: { items: Crumb[] }) {
   return (
-    <nav aria-label="位置" className="flex flex-wrap items-center gap-[3px] text-[12px] lg:text-[14px] leading-[20px] text-white/60 pt-3 lg:pt-2">
+    <nav aria-label={t("kit.breadcrumb")} className="flex flex-wrap items-center gap-[3px] text-[12px] lg:text-[14px] leading-[20px] text-white/60 pt-3 lg:pt-2">
       {items.map((c, i) => (
         <span key={i} className="flex items-center gap-[3px]">
           {i > 0 && <span>/</span>}
@@ -76,8 +77,9 @@ const DAY = 86_400_000;
 /** Published within the last week: the "新片" (new) badge. */
 export const isNew = (v: { published_at?: string | null }) => !!v.published_at && Date.now() - new Date(v.published_at).getTime() < 7 * DAY;
 
-export const progressLabel = (v: Pick<VideoCard, "is_finished" | "episode_count" | "total_episodes">) =>
-  v.is_finished ? `全${Math.max(v.episode_count, v.total_episodes)}集` : `更新至${v.episode_count}集`;
+/** 「更新至5集」 / 「全20集」; an interactive series (互动剧) has scenes, not episodes, so it just says so. */
+export const progressLabel = (v: Pick<VideoCard, "is_finished" | "episode_count" | "total_episodes" | "kind">) =>
+  v.kind === "interactive" ? t("series.interactive") : v.is_finished ? t("series.progressAll", { count: Math.max(v.episode_count, v.total_episodes) }) : t("series.progressUpTo", { count: v.episode_count });
 
 /** "44.4w" / "6272.2w", as on the reference's cards. */
 export function fmtPlays(n: number): string {
@@ -99,17 +101,23 @@ export function useHotIds() {
  * Cover badges, as on the reference: 原创 (set in admin) first, then the status badge, 热播 or 新片 (see statusBadge).
  * Joined into one pill when both show; 热播 meets 原创 on a slanted seam.
  */
-export function CardBadges({ original, status, className = "" }: { original: boolean; status: "hot" | "new" | null; className?: string }) {
-  if (!original && !status) return null;
+export function CardBadges({ original, status, interactive = false, className = "" }: {
+  original: boolean; status: "hot" | "new" | null;
+  /** 互动剧: a separate 互动 pill after the others. */
+  interactive?: boolean;
+  className?: string;
+}) {
+  if (!original && !status && !interactive) return null;
   const base = "h-[26px] lg:h-[23px] px-[9.75px] lg:px-[7.5px] text-[12px] font-medium text-[#111] flex items-center leading-none";
   return (
     <span className={`flex ${className}`}>
-      {original && <span className={`${base} bg-[#ffd21c] ${status ? "rounded-l-full" : "rounded-full"}`}>原创</span>}
+      {interactive && <span className={`${base} order-last ml-1 rounded-full bg-[#c4a8ff]`}>{t("kit.badgeInteractive")}</span>}
+      {original && <span className={`${base} bg-[#ffd21c] ${status ? "rounded-l-full" : "rounded-full"}`}>{t("kit.badgeOriginal")}</span>}
       {status === "hot" && (
         <span className={`${base} bg-[#ff591c] ${original ? "rounded-r-full -ml-[5px] pl-[14.75px] lg:pl-[12.5px]" : "rounded-full"}`}
-          style={original ? { clipPath: "polygon(5px 0, 100% 0, 100% 100%, 0 100%)" } : undefined}>热播</span>
+          style={original ? { clipPath: "polygon(5px 0, 100% 0, 100% 100%, 0 100%)" } : undefined}>{t("kit.badgeHot")}</span>
       )}
-      {status === "new" && <span className={`${base} bg-[#89eed3] ${original ? "rounded-r-full" : "rounded-full"}`}>新片</span>}
+      {status === "new" && <span className={`${base} bg-[#89eed3] ${original ? "rounded-r-full" : "rounded-full"}`}>{t("kit.badgeNew")}</span>}
     </span>
   );
 }
@@ -135,14 +143,15 @@ export function PosterCard({ v }: { v: VideoCard }) {
     <div className="min-w-0">
       <Link to={href.video(v.id)} className="group block relative w-full overflow-hidden rounded-[12px] lg:rounded-[0.9rem] bg-[#242424]" style={{ aspectRatio: "3 / 4" }}>
         <div className="absolute inset-0 transition-transform duration-300 group-hover:scale-[1.04]"><Img src={v.cover} /></div>
-        <CardBadges original={v.is_original} status={statusBadge(v.card_badge, hotIds.has(v.id), isNew(v))} className="absolute top-[6px] left-[6px]" />
+        <CardBadges original={v.is_original} status={statusBadge(v.card_badge, hotIds.has(v.id), isNew(v))} interactive={v.kind === "interactive"}
+          className="absolute top-[6px] left-[6px]" />
         {v.score > 0 && (
           <span className="absolute top-[6px] right-[6px] h-[26px] lg:h-[23px] px-[7px] lg:px-[5px] rounded-[6px] lg:rounded-[4.5px] bg-black/70 backdrop-blur-sm text-[12px] font-bold text-[#ffd900] flex items-center tabular-nums">
-            {v.score.toFixed(1)}分
+            {t("common.score", { score: v.score.toFixed(1) })}
           </span>
         )}
         <div className="absolute left-[6px] right-[6px] bottom-[6px] lg:left-[.4167vw] lg:right-[.4167vw] lg:bottom-[.52vw] flex items-end gap-1">
-          <span title={`${fmtPlays(v.hot)}次播放`}
+          <span title={t("home.plays", { count: fmtPlays(v.hot) })}
             className="h-[20px] lg:h-auto px-[6px] lg:px-[.3646vw] lg:py-[.1875rem] rounded-[5px] lg:rounded-[.3125vw] bg-black/55 lg:bg-black/80 text-[11px] lg:text-[.875rem] leading-[18px] lg:leading-[1.25rem] text-white flex items-center gap-[2px] lg:gap-[.15625vw] shrink-0 tabular-nums">
             <FlameIcon className="w-[12px] h-[12px] lg:w-[.8333vw] lg:h-[.8333vw] shrink-0" />{fmtPlays(v.hot)}
           </span>
@@ -229,18 +238,18 @@ export function Pager({ page, pages, onPage }: { page: number; pages: number; on
   const cell = "w-7 h-7 rounded-[4.5px] text-[12.25px] font-semibold flex items-center justify-center tabular-nums";
   const go = () => { const n = Number(jump); if (n >= 1 && n <= pages) { onPage(n); setJump(""); } };
   return (
-    <nav aria-label="分页" className="flex flex-wrap items-center justify-center gap-[6px] py-3 my-3">
-      <button aria-label="上一页" disabled={page <= 1} onClick={() => onPage(page - 1)} className={`${cell} text-white disabled:opacity-30`}><ChevronLeft size={12} /></button>
+    <nav aria-label={t("kit.pagination")} className="flex flex-wrap items-center justify-center gap-[6px] py-3 my-3">
+      <button aria-label={t("kit.prevPage")} disabled={page <= 1} onClick={() => onPage(page - 1)} className={`${cell} text-white disabled:opacity-30`}><ChevronLeft size={12} /></button>
       {nums.map((n, i) => n === "…"
         ? <span key={`e${i}`} className="w-[18px] text-center text-[12.25px] font-semibold text-[#888]">...</span>
         : <button key={n} onClick={() => onPage(n)} aria-current={n === page ? "page" : undefined}
             className={`${cell} ${n === page ? "bg-[#ffd21c] text-black" : "text-white hover:bg-white/10"}`}>{n}</button>)}
-      <button aria-label="下一页" disabled={page >= pages} onClick={() => onPage(page + 1)} className={`${cell} text-white disabled:opacity-30`}><ChevronRight size={12} /></button>
+      <button aria-label={t("kit.nextPage")} disabled={page >= pages} onClick={() => onPage(page + 1)} className={`${cell} text-white disabled:opacity-30`}><ChevronRight size={12} /></button>
       <span className="flex items-center gap-[6px] ml-5">
-        <button onClick={go} className="h-7 px-[10px] rounded-[4.5px] bg-[#ffd21c] text-black text-[12px] font-semibold">跳转至</button>
-        <input value={jump} onChange={(e) => setJump(e.target.value.replace(/\D/g, ""))} onKeyDown={(e) => e.key === "Enter" && go()} inputMode="numeric" aria-label="页码"
+        <button onClick={go} className="h-7 px-[10px] rounded-[4.5px] bg-[#ffd21c] text-black text-[12px] font-semibold">{t("kit.jumpTo")}</button>
+        <input value={jump} onChange={(e) => setJump(e.target.value.replace(/\D/g, ""))} onKeyDown={(e) => e.key === "Enter" && go()} inputMode="numeric" aria-label={t("kit.pageNumber")}
           className="w-[57px] h-7 px-2 rounded-[4.5px] bg-[#23211f] border border-white/20 text-[12.25px] text-white outline-none focus:border-primary" />
-        <span className="text-[12.25px] font-medium text-white">页</span>
+        {t("kit.pageUnit") && <span className="text-[12.25px] font-medium text-white">{t("kit.pageUnit")}</span>}
       </span>
     </nav>
   );
@@ -268,13 +277,13 @@ export function Faq({ items, open = false, small = false }: { items: { q: string
   );
 }
 
-export function LoadMore({ hasMore, loading, onMore, endText = "— 已经到底啦 —" }: { hasMore: boolean; loading: boolean; onMore: () => void; endText?: string }) {
+export function LoadMore({ hasMore, loading, onMore, endText = t("kit.end") }: { hasMore: boolean; loading: boolean; onMore: () => void; endText?: string }) {
   return (
     <div className="flex justify-center py-8">
       {hasMore ? (
         <button onClick={onMore} disabled={loading}
           className="h-9 px-8 rounded-full bg-white/10 border border-white/10 hover:bg-white/15 text-[13px] text-white flex items-center gap-2 disabled:opacity-60">
-          {loading ? <><Spinner size={16} />加载中…</> : "加载更多"}
+          {loading ? <><Spinner size={16} />{t("common.loading")}</> : t("kit.loadMore")}
         </button>
       ) : <span className="text-[12px] text-white/35">{endText}</span>}
     </div>

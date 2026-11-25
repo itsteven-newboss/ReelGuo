@@ -153,7 +153,7 @@ public sealed class AppDownloadTests(PostgresFixture db) : IClassFixture<Postgre
         Assert.StartsWith("<?xml", plist);
         Assert.Contains("<string>com.apple.webClip.managed</string>", plist);
         Assert.Contains("<string>https://m.example.net/</string>", plist);   // a domain is reached over https (Cloudflare)
-        Assert.Contains($"<string>{Brand.Name}</string>", plist);
+        Assert.Contains($"<string>{SiteBrand.Default.Name}</string>", plist);
         var icon = Convert.FromBase64String(plist.Split("<data>")[1].Split("</data>")[0]);
         Assert.Equal([0x89, 0x50, 0x4E, 0x47], icon[..4]);
 
@@ -161,7 +161,7 @@ public sealed class AppDownloadTests(PostgresFixture db) : IClassFixture<Postgre
         Assert.Equal(plist, (await Profile("m.example.net")).Text);
         var other = (await Profile("m2.example.org")).Text;
         Assert.Contains("<string>https://m2.example.org/</string>", other);
-        Assert.Contains($"<string>{WebClipProfile.Identifier}</string>", other);
+        Assert.Contains($"<string>{WebClipProfile.IdentifierFor(SiteBrand.Default)}</string>", other);
         Assert.NotEqual(Uuids(plist), Uuids(other));
         Assert.Contains("<string>http://localhost/</string>", (await Profile("localhost")).Text);
 

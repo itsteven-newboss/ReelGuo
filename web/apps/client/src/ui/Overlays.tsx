@@ -1,6 +1,7 @@
 import { Check, Heart, Sparkles, Star, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useUi } from "../state/ui";
+import { t } from "../i18n";
 
 /** Bottom-centred toasts (UI-REFERENCE §1). */
 export function ToastHost() {
@@ -62,7 +63,7 @@ export function Sheet({ open, onClose, children, height = "72vh", layer = "z-40"
 
 export function CloseButton({ onClick }: { onClick: () => void }) {
   return (
-    <button onClick={onClick} aria-label="关闭" className="w-8 h-8 rounded-full bg-s3 flex items-center justify-center text-mut pressable">
+    <button onClick={onClick} aria-label={t("common.close")} className="w-8 h-8 rounded-full bg-s3 flex items-center justify-center text-mut pressable">
       <X size={14} />
     </button>
   );

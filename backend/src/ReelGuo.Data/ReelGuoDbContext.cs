@@ -45,6 +45,8 @@ public sealed class ReelGuoDbContext(DbContextOptions<ReelGuoDbContext> options)
     public DbSet<TopicSeries> TopicSeries => Set<TopicSeries>();
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<SeriesRating> SeriesRatings => Set<SeriesRating>();
+    public DbSet<StoryOption> StoryOptions => Set<StoryOption>();
+    public DbSet<StoryProgress> StoryProgress => Set<StoryProgress>();
 
     /// <summary>Shared Npgsql + snake_case setup for the API, the worker, tests and the EF tools.</summary>
     public static void Configure(DbContextOptionsBuilder options, string connectionString) =>
@@ -58,6 +60,8 @@ public sealed class ReelGuoDbContext(DbContextOptions<ReelGuoDbContext> options)
         builder.Properties<CategoryStatus>().HaveConversion<string>().HaveMaxLength(32);
         builder.Properties<SeriesStatus>().HaveConversion<string>().HaveMaxLength(32);
         builder.Properties<CardBadge>().HaveConversion<string>().HaveMaxLength(16);
+        builder.Properties<SeriesKind>().HaveConversion<string>().HaveMaxLength(16);
+        builder.Properties<SceneOutcome>().HaveConversion<string>().HaveMaxLength(16);
         builder.Properties<EpisodeStatus>().HaveConversion<string>().HaveMaxLength(32);
         builder.Properties<UserRole>().HaveConversion<string>().HaveMaxLength(32);
         builder.Properties<UserStatus>().HaveConversion<string>().HaveMaxLength(32);
@@ -117,6 +121,8 @@ public sealed class ReelGuoDbContext(DbContextOptions<ReelGuoDbContext> options)
             e.Property(x => x.ConsentRef).HasMaxLength(200);
             e.HasOne(x => x.Category).WithMany(c => c.Series).HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Author).WithMany().HasForeignKey(x => x.AuthorId).OnDelete(DeleteBehavior.SetNull);
+            e.Property(x => x.StoryVariablesJson).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
+            e.Property(x => x.StoryLayoutJson).HasColumnType("jsonb");
         });
 
         model.Entity<Episode>(e =>
@@ -126,6 +132,35 @@ public sealed class ReelGuoDbContext(DbContextOptions<ReelGuoDbContext> options)
             e.Property(x => x.Title).HasMaxLength(200);
             e.Property(x => x.ProcessingError).HasMaxLength(2000);
             e.HasOne(x => x.Series).WithMany(s => s.Episodes).HasForeignKey(x => x.SeriesId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(x => x.ChoicePrompt).HasMaxLength(100);
+            e.Property(x => x.EndingTitle).HasMaxLength(60);
+            // NO ACTION (checked at the end of the statement): deleting a whole series removes its scenes together, while
+            // deleting one scene another scene still continues to fails (the admin API refuses that first, with a message).
+            e.HasOne<Episode>().WithMany().HasForeignKey(x => x.NextEpisodeId).OnDelete(DeleteBehavior.NoAction);
+        });
+
+        model.Entity<StoryOption>(e =>
+        {
+            e.Property(x => x.Label).HasMaxLength(40);
+            e.Property(x => x.Description).HasMaxLength(100);
+            e.Property(x => x.EffectsJson).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
+            e.Property(x => x.ConditionsJson).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
+            e.HasIndex(x => new { x.FromEpisodeId, x.SortOrder });
+            e.HasIndex(x => x.TargetEpisodeId);
+            e.HasOne(x => x.From).WithMany(x => x.Options).HasForeignKey(x => x.FromEpisodeId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Target).WithMany().HasForeignKey(x => x.TargetEpisodeId).OnDelete(DeleteBehavior.NoAction);
+            e.HasOne<Series>().WithMany().HasForeignKey(x => x.SeriesId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<StoryProgress>(e =>
+        {
+            e.ToTable("story_progress");
+            e.HasKey(x => new { x.UserId, x.SeriesId });
+            e.Ignore(x => x.Path);
+            e.Property(x => x.PathJson).HasColumnType("jsonb");
+            e.HasIndex(x => new { x.SeriesId, x.Scene });
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Series>().WithMany().HasForeignKey(x => x.SeriesId).OnDelete(DeleteBehavior.Cascade);
         });
 
         model.Entity<MediaJob>(e =>

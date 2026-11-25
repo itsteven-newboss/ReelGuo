@@ -87,7 +87,7 @@ public sealed partial class PageTemplate(IOptions<SeoOptions> options, IHttpClie
     private const string RootDiv = "<div id=\"root\"></div>";
 
     /// <summary>Puts the page into the template: title, description, robots, canonical, Open Graph, JSON-LD, and the content.</summary>
-    public static string Render(string template, SeoPage page, string baseUrl, bool allowIndexing)
+    public static string Render(string template, SeoPage page, string baseUrl, bool allowIndexing, string siteName)
     {
         var head = new StringBuilder();
         head.Append("<title>").Append(Html.Text(page.Title)).Append("</title>\n");
@@ -101,7 +101,7 @@ public sealed partial class PageTemplate(IOptions<SeoOptions> options, IHttpClie
             head.Append("    <link rel=\"canonical\" href=\"").Append(Html.Attr(url)).Append("\" />\n");
             head.Append("    <meta property=\"og:url\" content=\"").Append(Html.Attr(url)).Append("\" />\n");
         }
-        head.Append($"    <meta property=\"og:site_name\" content=\"{Brand.Name}\" />\n");
+        head.Append("    <meta property=\"og:site_name\" content=\"").Append(Html.Attr(siteName)).Append("\" />\n");
         head.Append("    <meta property=\"og:type\" content=\"").Append(Html.Attr(page.OgType)).Append("\" />\n");
         head.Append("    <meta property=\"og:title\" content=\"").Append(Html.Attr(page.Title)).Append("\" />\n");
         head.Append("    <meta property=\"og:description\" content=\"").Append(Html.Attr(page.Description)).Append("\" />\n");

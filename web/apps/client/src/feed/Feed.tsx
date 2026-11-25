@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Expand } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { href } from "../router";
+import { t } from "../i18n";
 import { useReport } from "../social/Report";
 import { playQuery, seriesQuery, useAppConfig, usePlay, useSeries, useSeriesAccess, type VideoCard } from "../api";
 import { isLocked } from "../billing/money";
@@ -23,6 +24,8 @@ import { useLibrary } from "../state/library";
 import { closeOverlay, openOverlay } from "../state/nav";
 import { useUi } from "../state/ui";
 import { Sheet } from "../ui/Overlays";
+import { useStoryPlayer } from "../story/StoryLayer";
+import { useStory } from "../story/useStory";
 import { DetailPanel, EpisodeGrid, type LockedFn, type Panel } from "./DetailSheet";
 import { BRAND } from "../brand";
 import {
@@ -72,8 +75,11 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
   const [epMap, setEpMap] = useState<Record<number, number>>(() => (startEp && cur ? { [cur.id]: startEp } : {}));
   const series = useSeries(curId);
   const episodes = series.data?.episodes ?? [];
-  const curEp = (curId && epMap[curId]) || episodes[0]?.ep_num || 1;
-  const play = usePlay(curId, series.data ? curEp : undefined);
+  // 互动剧: the episodes are scenes and the story decides what plays next (story/StoryLayer.tsx).
+  const interactive = series.data?.kind === "interactive";
+  const storyQ = useStory(curId, interactive);
+  const curEp = (curId && epMap[curId]) || (interactive ? storyQ.data?.start : undefined) || episodes[0]?.ep_num || 1;
+  const play = usePlay(curId, series.data && (!interactive || storyQ.data) ? curEp : undefined);
 
   // Paid episodes (Phase 5): the API answers 402 episode_locked until the viewer unlocks it or has VIP.
   const monetization = useAppConfig().data?.monetization ?? false;
@@ -258,12 +264,40 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
     if (panel) closeOverlay();
   }, [curId, panel]);
 
-  const nextEp = episodes.find((e) => e.ep_num > curEp)?.ep_num;
+  const nextEp = interactive ? undefined : episodes.find((e) => e.ep_num > curEp)?.ep_num;
+
+  const sceneLocked = useCallback((ep: number) => {
+    const e = episodes.find((x) => x.ep_num === ep);
+    return !!e && !!lockedFn && lockedFn(e);
+  }, [episodes, lockedFn]);
+  const story = useStoryPlayer({
+    seriesId: curId ?? 0,
+    series: series.data ? { title: series.data.title, cover: series.data.cover } : undefined,
+    story: interactive ? storyQ.data : undefined,
+    ep: curEp,
+    wide,
+    locked: sceneLocked,
+    onGo: (ep, startAt) => {
+      if (!curId) return;
+      if (ep === curEp) {
+        setError("");
+        seekTo(startAt);
+        video.current?.play();
+        return;
+      }
+      setChosen(`${curId}:${ep}`);
+      setResume(startAt > 0 ? { id: curId, ep, t: startAt } : null);
+      setEpMap((m) => ({ ...m, [curId]: ep }));
+      if (panel) closeOverlay();
+    },
+    onMap: () => openPanel("episodes"),
+  });
 
   const onTime = (t: number) => {
     setTime(t);
     qoe.current?.time(t);
     if (!curId) return;
+    story?.onTime(t, duration);
     // Rankings: watched to 90% counts as a completion (reported once per session).
     if (duration > 0 && t >= duration * 0.9) playEvents().track({ type: "complete", series_id: curId, ep: curEp });
     if (t - lastSave.current >= SAVE_EVERY_S || t < lastSave.current) {
@@ -316,7 +350,7 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
           setLockArmed(false);
           if (e.lock) {
             setSpeedLock(true);
-            toast("已锁定 2.0x 倍速 · 点顶部标签解除");
+            toast(t("player.speedLockedToast"));
           }
           break;
         case "scrub":
@@ -391,16 +425,16 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
   // Signed in, these are saved to the account (optimistic; undone with a toast if the server refuses).
   const onFav = () => {
     if (!curId) return;
-    void toggleSeriesFav(curId).then((on) => { if (on !== null) toast(on ? "已收藏" : "已取消收藏", on ? "star" : "info"); });
+    void toggleSeriesFav(curId).then((on) => { if (on !== null) toast(on ? t("actions.faved") : t("actions.unfaved"), on ? "star" : "info"); });
   };
   const onLike = () => {
     if (!curId) return;
-    void toggleSeriesLike(curId).then((on) => { if (on !== null) toast(on ? "已加入喜欢" : "已取消喜欢", on ? "heart" : "info"); });
+    void toggleSeriesLike(curId).then((on) => { if (on !== null) toast(on ? t("actions.liked") : t("actions.unliked"), on ? "heart" : "info"); });
   };
   const onShare = () => {
     if (!curId) return;
     const url = `${window.location.origin}${href.video(curId, curEp)}`;
-    navigator.clipboard?.writeText(url).then(() => toast("链接已复制", "ok")).catch(() => toast(url));
+    navigator.clipboard?.writeText(url).then(() => toast(t("actions.linkCopied"), "ok")).catch(() => toast(url));
   };
   const onComments = () => openPanel("comments");
 
@@ -446,7 +480,7 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
 
   const toggleDesktopFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
-    else void root.current?.requestFullscreen().catch(() => toast("无法进入全屏"));
+    else void root.current?.requestFullscreen().catch(() => toast(t("player.fullscreenFailed")));
   };
 
   const togglePip = async () => {
@@ -454,9 +488,9 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
       const v = video.current?.el();
       if (document.pictureInPictureElement) await document.exitPictureInPicture();
       else if (v && document.pictureInPictureEnabled) await v.requestPictureInPicture();
-      else toast("当前环境不支持画中画");
+      else toast(t("player.pipUnsupported"));
     } catch {
-      toast("画中画开启失败");
+      toast(t("player.pipFailed"));
     }
   };
 
@@ -578,7 +612,8 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
                         onSize={(_, h) => qoe.current?.size(h)}
                         onEnded={() => {
                           if (curId) playEvents().track({ type: "complete", series_id: curId, ep: curEp });
-                          if (nextEp) pickEp(nextEp);
+                          if (story) story.onEnded();
+                          else if (nextEp) pickEp(nextEp);
                         }}
                         onError={(message) => {
                           qoe.current?.fail(message);
@@ -590,17 +625,18 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
                     </div>
 
                     {!wide && scrub && <ScrubOverlay target={scrub.target} fraction={scrub.fraction} duration={duration} />}
-                    {paused && !error && !scrub && <PauseIndicator />}
+                    {paused && !error && !scrub && !story?.open && <PauseIndicator />}
                     {waiting && !paused && !error && (
                       <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none"><Spinner size={36} /></div>
                     )}
                     {error && <ErrorCard detail={error} onReload={() => { setError(""); setWaiting(true); video.current?.reload(); }} />}
+                    {story?.overlay}
 
                     {!wide && (!clean || holding) && (holding || speedLock || rate !== 1) && (
                       <SpeedChip rate={effectiveRate} locked={speedLock} holding={holding}
                         top={rotated || viewportLandscape ? "14px" : "calc(var(--sat) + 54px)"}
                         onClick={() => {
-                          if (speedLock) { setSpeedLock(false); toast("已解除倍速锁定"); }
+                          if (speedLock) { setSpeedLock(false); toast(t("player.speedUnlocked")); }
                           else if (rate !== 1 && !holding) setRate(1);
                         }} />
                     )}
@@ -617,7 +653,8 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
                     <Img src={v.cover} eager={Math.abs(i - index) <= 1} />
                     <div className="absolute inset-0" style={{ background: isActive && playLocked ? "rgba(0,0,0,.55)" : "rgba(0,0,0,.25)" }} />
                     {isActive && playLocked && series.data ? (
-                      <Paywall series={series.data} ep={curEp} intent={chosen === `${v.id}:${curEp}`} wide={wide} />
+                      <Paywall series={series.data} ep={curEp} intent={chosen === `${v.id}:${curEp}`} wide={wide}
+                        title={story ? t("story.lockedTitle") : undefined} onBack={story ? story.rewind : undefined} />
                     ) : isActive && <div className="absolute inset-0 flex items-center justify-center"><Spinner /></div>}
                   </div>
                 )}
@@ -633,11 +670,11 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
                   <div className="absolute left-1/2 -translate-x-1/2 z-20 flex items-center gap-2" style={{ top: "64%" }}>
                     <button onClick={() => setLandscapeFit((f) => (f === "contain" ? "cover" : "contain"))}
                       className="ov-chip-strong backdrop-blur-md px-3 h-7 rounded-full text-[11.5px] font-semibold pressable elev-1">
-                      {landscapeFit === "contain" ? "放大铺满" : "完整适应"}
+                      {landscapeFit === "contain" ? t("player.fill") : t("player.fit")}
                     </button>
                     <button onClick={() => void enterFullscreen()}
                       className="ov-chip-strong backdrop-blur-md px-3 h-7 rounded-full text-[11.5px] font-semibold flex items-center gap-1 pressable elev-1">
-                      <Expand size={12} />横屏全屏
+                      <Expand size={12} />{t("player.landscape")}
                     </button>
                   </div>
                 )}
@@ -646,7 +683,7 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
                   ? <DesktopContextHeader title={title} index={index} total={items.length} onBack={onBack} />
                   : <ContextHeader title={title} index={index} total={items.length} onBack={onBack} />)}
 
-                {showUi && !wide && (
+                {showUi && !wide && !(isActive && story?.open) && (
                   <>
                     <MobileRail bottom={`calc(var(--sab) + ${bottomInset + 92}px)`} author={v.author?.name ?? BRAND}
                       liked={isLiked(v.id)} likeCount={((isActive ? series.data?.counts.like : undefined) ?? v.like_count) + bump(isLiked(v.id))} onLike={onLike}
@@ -655,6 +692,7 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
                       onShare={onShare} rate={effectiveRate} onRate={cycleRate} />
                     <MobileInfo bottom={mobileBottom} title={v.title} description={v.description} total={isActive ? episodes.length : v.episode_count}
                       episode={isActive ? curEp : 1} onDetail={() => openPanel("episodes")} onFullscreen={() => void enterFullscreen()}
+                      episodeLabel={isActive && story ? `${t("story.mapTab")} · ${story.sceneTitle}` : undefined}
                       seek={isActive ? (
                         <SeekLine progress={duration ? time / duration : 0} duration={duration} height={22}
                           onSeek={(t) => { setError(""); setTime(t); seekTo(t); }} />
@@ -680,7 +718,7 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
 
         {wide && (
           <DesktopControls paused={paused} time={time} duration={duration} buffered={buffered} rate={rate} muted={muted} volume={volume}
-            theater={theater} fullscreen={docFullscreen} nextTitle={nextEp ? "下一集" : "下一部 ↓"} nextDisabled={!nextEp && index >= items.length - 1}
+            theater={theater} fullscreen={docFullscreen} nextTitle={nextEp ? t("player.next") : `${t("player.nextSeries")} ↓`} nextDisabled={!nextEp && index >= items.length - 1}
             onToggle={() => video.current?.toggle()} onSeek={(t) => { setTime(t); seekTo(t); }}
             onNext={() => (nextEp ? pickEp(nextEp) : go(1))} onRate={setRate} onMute={() => setMuted(!muted)} onVolume={setVolume}
             onPip={() => void togglePip()} onLock={() => setLocked(true)} onTheater={() => setTheater(!theater)} onFullscreen={toggleDesktopFullscreen} />
@@ -697,10 +735,10 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
             ) : series.data && (
               <div className="w-[372px] h-full flex flex-col pt-3">
                 <div className="flex items-center px-4 h-10 shrink-0">
-                  <span className="text-[13.5px] font-bold text-on">选集</span>
-                  <button onClick={closeOverlay} className="ml-auto text-[12px] text-mut hover:text-on">关闭</button>
+                  <span className="text-[13.5px] font-bold text-on">{t("series.episodes")}</span>
+                  <button onClick={closeOverlay} className="ml-auto text-[12px] text-mut hover:text-on">{t("common.close")}</button>
                 </div>
-                <EpisodeGrid series={series.data} current={curEp} onPick={pickEp} locked={lockedFn} />
+                {story ? story.map : <EpisodeGrid series={series.data} current={curEp} onPick={pickEp} locked={lockedFn} />}
               </div>
             )}
           </div>
@@ -709,7 +747,8 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
             {series.data && panel === "comments" && curId ? (
               <CommentsPanel target={{ kind: "series", id: curId, ep: curEp, title: series.data.title }} total={series.data.counts.comment} onClose={closeOverlay} />
             ) : series.data && panel && (
-              <DetailPanel series={series.data} panel={panel} current={curEp} onPanel={setPanel} onPick={pickEp} onClose={closeOverlay} locked={lockedFn} />
+              <DetailPanel series={series.data} panel={panel} current={curEp} onPanel={setPanel} onPick={pickEp} onClose={closeOverlay} locked={lockedFn}
+                episodes={story?.map ?? undefined} />
             )}
           </Sheet>
         )}
@@ -717,7 +756,7 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
 
       {!wide && showUi && !locked && active && (
         <MobileTopChips muted={muted} onMute={() => setMuted(!muted)}
-          onReport={() => cur && useReport.getState().open({ type: "series", id: cur.id, label: `剧集：${cur.title}` })} />
+          onReport={() => cur && useReport.getState().open({ type: "series", id: cur.id, label: t("report.seriesLabel", { title: cur.title }) })} />
       )}
       {locked && <ControlsLock onUnlock={() => { setLocked(false); wake(); }} />}
     </div>

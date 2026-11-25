@@ -26,7 +26,7 @@ export function LegalLinks({ className = "" }: { className?: string }) {
     <div className={`flex flex-wrap gap-x-3 gap-y-1 text-[12px] ${className}`}>
       {(Object.keys(LEGAL_PATHS) as LegalPath[]).map((path) => (
         <a key={path} href={path} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">
-          《{t(LEGAL_PATHS[path])}》
+          {t("legal.link", { name: t(LEGAL_PATHS[path]) })}
         </a>
       ))}
     </div>

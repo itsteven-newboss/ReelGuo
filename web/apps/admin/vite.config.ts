@@ -3,6 +3,8 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 // Production response headers (also in infra/Caddyfile); `vite preview` serves the build with them.
 import securityHeaders from "../../security-headers.json" with { type: "json" };
+// The site this console is for (REELGUO_SITE): its name and favicon. The console itself stays Chinese.
+import { reelguoSite } from "../../sites/plugin.mjs";
 
 // Node types aren't installed in this app; the config only reads one variable.
 declare const process: { env: Record<string, string | undefined> };
@@ -14,7 +16,7 @@ const apiProxy = { "/api": apiUrl, "/media": apiUrl };
 const previewHeaders = Object.fromEntries(Object.entries(securityHeaders).filter(([k]) => !k.startsWith("//")));
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [reelguoSite(undefined, { htmlLang: false }), react(), tailwindcss()],
   server: { port: 5174, strictPort: true, proxy: apiProxy },
   preview: { port: 4174, strictPort: true, proxy: apiProxy, headers: previewHeaders },
 });

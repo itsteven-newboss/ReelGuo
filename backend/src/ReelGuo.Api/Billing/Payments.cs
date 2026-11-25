@@ -89,7 +89,7 @@ public static class OrderNumbers
 /// so a provider re-sending it changes nothing. Payments are credited only when the amount and currency match the
 /// order exactly. Refunds and chargebacks take back what the order granted.
 /// </summary>
-public sealed class PaymentProcessor(ReelGuoDbContext db, WalletService wallets, TimeProvider time, ILogger<PaymentProcessor> logger)
+public sealed class PaymentProcessor(ReelGuoDbContext db, WalletService wallets, TimeProvider time, SiteBrand brand, ILogger<PaymentProcessor> logger)
 {
     public const int MaxPayloadChars = 8 * 1024;
 
@@ -200,7 +200,7 @@ public sealed class PaymentProcessor(ReelGuoDbContext db, WalletService wallets,
                 var wallet = await wallets.LockAsync(order.UserId, ct);
                 var (bonusDelta, coinsDelta) = WalletService.Reversal(wallet.BonusCoins, order.Coins, order.BonusCoins);
                 wallets.Apply(wallet, chargeback ? WalletEntryKind.Chargeback : WalletEntryKind.Refund, coinsDelta, bonusDelta, -order.VipDays,
-                    $"{(chargeback ? "拒付" : "退款")}：{order.ProductName}", orderId: order.Id, note: Clip(notice.Reason));
+                    brand.T(chargeback ? "wallet.chargeback" : "wallet.refund", ("product", order.ProductName)), orderId: order.Id, note: Clip(notice.Reason));
 
                 ReelGuoTelemetry.Orders.Add(1, new("outcome", chargeback ? "charged_back" : "refunded"), new("kind", kind));
                 ReelGuoTelemetry.Revenue.Add(-order.PriceCents, new KeyValuePair<string, object?>("currency", order.Currency));

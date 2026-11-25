@@ -908,6 +908,199 @@
         }
       }
     },
+    "/api/v1/series/{id}/story": {
+      "get": {
+        "tags": [
+          "Story"
+        ],
+        "summary": "An interactive series' scenes, options and endings, with the signed-in viewer's saved place. 404 when the series isn't interactive or isn't available.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "451": {
+            "description": "Unavailable For Legal Reasons",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoryDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/series/{id}/story/next": {
+      "post": {
+        "tags": [
+          "Story"
+        ],
+        "summary": "The scene after the one that ended (the option taken, or the scene it continues to). Counts the choice and, signed in, saves the viewer's place.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoryNextRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "451": {
+            "description": "Unavailable For Legal Reasons",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoryNextDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/series/{id}/story/progress": {
+      "put": {
+        "tags": [
+          "Story"
+        ],
+        "summary": "Saves where the viewer is: after going back to an earlier choice, starting over, or signing in with progress made as a guest.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoryProgressRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "451": {
+            "description": "Unavailable For Legal Reasons",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoryProgressDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/register": {
       "post": {
         "tags": [
@@ -4455,6 +4648,126 @@
         }
       }
     },
+    "/api/admin/series/{id}/story": {
+      "get": {
+        "tags": [
+          "Admin: catalog"
+        ],
+        "summary": "An interactive series' scenes with what happens when each ends, the problems found, and per-option statistics.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminStoryDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Admin: catalog"
+        ],
+        "summary": "Saves the start scene and the scenes' settings at once. A published series' story must stay playable: a save with errors is refused with the problems listed.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminStoryInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminStoryDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/episodes/{id}": {
       "put": {
         "tags": [
@@ -4557,6 +4870,16 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -8280,6 +8603,28 @@
           }
         }
       },
+      "AdminMapPoint": {
+        "required": [
+          "episode_id",
+          "x",
+          "y"
+        ],
+        "type": "object",
+        "properties": {
+          "episode_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "x": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "y": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "AdminMemberDto": {
         "required": [
           "id",
@@ -8976,6 +9321,194 @@
           }
         }
       },
+      "AdminSceneDto": {
+        "required": [
+          "episode_id",
+          "ep_num",
+          "title",
+          "status",
+          "duration",
+          "poster_url",
+          "is_free",
+          "price",
+          "outcome",
+          "prompt",
+          "lead_seconds",
+          "countdown",
+          "next_episode_id",
+          "ending_title",
+          "options",
+          "viewers_here",
+          "ending_reached",
+          "unlocks"
+        ],
+        "type": "object",
+        "properties": {
+          "episode_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ep_num": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EpisodeStatus"
+          },
+          "duration": {
+            "type": "number",
+            "format": "double"
+          },
+          "poster_url": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "is_free": {
+            "type": "boolean"
+          },
+          "price": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/SceneOutcome"
+          },
+          "prompt": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lead_seconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "countdown": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "next_episode_id": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "ending_title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminStoryOptionDto"
+            }
+          },
+          "viewers_here": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ending_reached": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unlocks": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "custom_price": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "AdminSceneInput": {
+        "required": [
+          "episode_id",
+          "outcome",
+          "prompt",
+          "lead_seconds",
+          "countdown",
+          "next_episode_id",
+          "ending_title",
+          "options"
+        ],
+        "type": "object",
+        "properties": {
+          "episode_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/SceneOutcome"
+          },
+          "prompt": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lead_seconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "countdown": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "next_episode_id": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "ending_title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "options": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/AdminStoryOptionInput"
+            }
+          },
+          "is_free": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "custom_price": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "AdminSeriesDto": {
         "required": [
           "id",
@@ -9156,6 +9689,9 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SeriesKind"
           }
         }
       },
@@ -9224,6 +9760,9 @@
           },
           "card_badge": {
             "$ref": "#/components/schemas/CardBadge"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SeriesKind"
           }
         }
       },
@@ -9277,6 +9816,226 @@
           },
           "actor": {
             "type": "string"
+          }
+        }
+      },
+      "AdminStoryDto": {
+        "required": [
+          "series_id",
+          "title",
+          "kind",
+          "status",
+          "start_episode_id",
+          "effective_start_episode_id",
+          "scenes",
+          "problems",
+          "variables",
+          "layout"
+        ],
+        "type": "object",
+        "properties": {
+          "series_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SeriesKind"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SeriesStatus"
+          },
+          "start_episode_id": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "effective_start_episode_id": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "scenes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminSceneDto"
+            }
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoryProblem"
+            }
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoryVariable"
+            }
+          },
+          "layout": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminMapPoint"
+            }
+          }
+        }
+      },
+      "AdminStoryInput": {
+        "required": [
+          "start_episode_id",
+          "scenes"
+        ],
+        "type": "object",
+        "properties": {
+          "start_episode_id": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "scenes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminSceneInput"
+            }
+          },
+          "variables": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/StoryVariable"
+            }
+          },
+          "layout": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/AdminMapPoint"
+            }
+          }
+        }
+      },
+      "AdminStoryOptionDto": {
+        "required": [
+          "id",
+          "label",
+          "description",
+          "target_episode_id",
+          "is_default",
+          "chosen",
+          "timed_out",
+          "effects",
+          "conditions"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "label": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "target_episode_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "chosen": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "timed_out": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoryEffect"
+            }
+          },
+          "conditions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoryCondition"
+            }
+          }
+        }
+      },
+      "AdminStoryOptionInput": {
+        "required": [
+          "id",
+          "label",
+          "description",
+          "target_episode_id",
+          "is_default"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "label": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "target_episode_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "effects": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/StoryEffect"
+            }
+          },
+          "conditions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/StoryCondition"
+            }
           }
         }
       },
@@ -12796,6 +13555,14 @@
           }
         }
       },
+      "SceneOutcome": {
+        "enum": [
+          "unset",
+          "choice",
+          "continue",
+          "ending"
+        ]
+      },
       "SearchResultDto": {
         "required": [
           "items",
@@ -13007,6 +13774,9 @@
           },
           "rating": {
             "$ref": "#/components/schemas/RatingDto"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SeriesKind"
           }
         }
       },
@@ -13157,8 +13927,25 @@
                 "$ref": "#/components/schemas/CardBadge"
               }
             ]
+          },
+          "kind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SeriesKind"
+              }
+            ]
           }
         }
+      },
+      "SeriesKind": {
+        "enum": [
+          "standard",
+          "interactive"
+        ],
+        "default": "standard"
       },
       "SeriesStatus": {
         "enum": [
@@ -13424,6 +14211,404 @@
           },
           "sandbox": {
             "type": "boolean"
+          }
+        }
+      },
+      "StoryCondition": {
+        "required": [
+          "variable",
+          "op",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "variable": {
+            "type": "string"
+          },
+          "op": {
+            "type": "string"
+          },
+          "value": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "StoryDto": {
+        "required": [
+          "series_id",
+          "start",
+          "ending_count",
+          "scenes",
+          "progress",
+          "variables"
+        ],
+        "type": "object",
+        "properties": {
+          "series_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "start": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ending_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "scenes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StorySceneDto"
+            }
+          },
+          "progress": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StoryProgressDto"
+              }
+            ]
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoryVariable"
+            }
+          }
+        }
+      },
+      "StoryEffect": {
+        "required": [
+          "variable",
+          "add"
+        ],
+        "type": "object",
+        "properties": {
+          "variable": {
+            "type": "string"
+          },
+          "add": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "StoryNextDto": {
+        "required": [
+          "scene",
+          "ending",
+          "ending_title",
+          "share"
+        ],
+        "type": "object",
+        "properties": {
+          "scene": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ending": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "ending_title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "share": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "StoryNextRequest": {
+        "required": [
+          "from",
+          "option"
+        ],
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "option": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "timed_out": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "StoryOptionDto": {
+        "required": [
+          "id",
+          "label",
+          "description",
+          "target",
+          "is_default",
+          "effects",
+          "conditions"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "label": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "target": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoryEffect"
+            }
+          },
+          "conditions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoryCondition"
+            }
+          }
+        }
+      },
+      "StoryProblem": {
+        "required": [
+          "level",
+          "episode_id",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "level": {
+            "$ref": "#/components/schemas/StoryProblemLevel"
+          },
+          "episode_id": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "StoryProblemLevel": {
+        "enum": [
+          "error",
+          "warning"
+        ]
+      },
+      "StoryProgressDto": {
+        "required": [
+          "scene",
+          "path",
+          "endings"
+        ],
+        "type": "object",
+        "properties": {
+          "scene": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoryStepDto"
+            }
+          },
+          "endings": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
+      },
+      "StoryProgressRequest": {
+        "required": [
+          "scene",
+          "path",
+          "endings"
+        ],
+        "type": "object",
+        "properties": {
+          "scene": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "path": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/StoryStepDto"
+            }
+          },
+          "endings": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
+      },
+      "StorySceneDto": {
+        "required": [
+          "ep_num",
+          "title",
+          "duration",
+          "is_free",
+          "price",
+          "outcome",
+          "prompt",
+          "lead_seconds",
+          "countdown",
+          "next",
+          "ending",
+          "ending_title",
+          "options"
+        ],
+        "type": "object",
+        "properties": {
+          "ep_num": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          },
+          "duration": {
+            "type": "number",
+            "format": "double"
+          },
+          "is_free": {
+            "type": "boolean"
+          },
+          "price": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/SceneOutcome"
+          },
+          "prompt": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lead_seconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "countdown": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "next": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "ending": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "ending_title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoryOptionDto"
+            }
+          }
+        }
+      },
+      "StoryStepDto": {
+        "required": [
+          "scene",
+          "option"
+        ],
+        "type": "object",
+        "properties": {
+          "scene": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "option": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "StoryVariable": {
+        "required": [
+          "key",
+          "name",
+          "initial"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "initial": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -14180,6 +15365,9 @@
           },
           "card_badge": {
             "$ref": "#/components/schemas/CardBadge"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SeriesKind"
           }
         }
       },
@@ -14442,6 +15630,9 @@
     },
     {
       "name": "Billing"
+    },
+    {
+      "name": "Story"
     },
     {
       "name": "Account"

@@ -56,7 +56,7 @@ export function SettingsPage() {
 
   return (
     <Container>
-      <Breadcrumb items={[{ label: BRAND, to: "/" }, { label: "个人中心", to: href.me() }, { label: t("settings.title") }]} />
+      <Breadcrumb items={[{ label: BRAND, to: "/" }, { label: t("header.me"), to: href.me() }, { label: t("settings.title") }]} />
       <PageTitle sub={t("settings.sub")}>{t("settings.title")}</PageTitle>
       <div className="max-w-[880px]">
         <Section title={t("settings.playback")}>

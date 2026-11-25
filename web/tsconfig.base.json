@@ -15,6 +15,8 @@
     "skipLibCheck": true,
     "noEmit": true,
     "resolveJsonModule": true,
-    "useDefineForClassFields": true
+    "useDefineForClassFields": true,
+    // The site a build is for (web/sites/plugin.mjs points the bundler at REELGUO_SITE's folder); 黄月短剧 for type checks.
+    "paths": { "@reelguo/site": ["./sites/huangyue/index.ts"] }
   }
 }

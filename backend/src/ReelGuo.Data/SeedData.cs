@@ -6,7 +6,7 @@ namespace ReelGuo.Data;
 /// Rows created by the initial migration. Values must be constants: EF compares them on every
 /// new migration, so changing them here produces an update migration.
 /// </summary>
-internal static class SeedData
+public static class SeedData
 {
     private static readonly DateTimeOffset Epoch = new(2026, 11, 10, 0, 0, 0, TimeSpan.Zero);
 

@@ -1,6 +1,11 @@
-# Shared helpers for the staging scripts (setup.ps1, update.ps1, rollback.ps1, ops.ps1, seed-demo.ps1, backup.ps1).
-# Staging runs natively on Windows (no Docker): PostgreSQL, the API, the worker and Caddy are Windows services,
-# Cloudflare Tunnel too. Dot-sourced by the scripts; not run on its own. Windows PowerShell 5.1 and PowerShell 7.
+# Shared helpers for the staging scripts (setup.ps1, update.ps1, rollback.ps1, ops.ps1, seed-demo.ps1, backup.ps1,
+# add-site.ps1). Staging runs natively on Windows (no Docker): PostgreSQL, the API, the worker and Caddy are Windows
+# services, Cloudflare Tunnel too. Dot-sourced by the scripts; not run on its own. Windows PowerShell 5.1 and 7.
+#
+# More than one site can run on the server (REELGUO_SITES, docs/STAGING.md "More sites"): the main site (the original
+# settings) plus each listed site with its own settings (sites\<key>\site.env), database, API and worker services,
+# storage, admin console and web build in its language (web\sites\<key>). Caddy serves them all, chosen by host name.
+# Functions that work on one site use the current site (Use-Site); outside Use-Site that is the main site.
 # Keep this file ASCII-only: Windows PowerShell 5.1 misreads non-ASCII characters in files without a BOM.
 
 Set-StrictMode -Version 2.0
@@ -35,6 +40,21 @@ $WebService      = 'ReelGuoWeb'
 $TunnelService   = 'cloudflared'
 $BackupTaskName  = 'ReelGuo staging backup'
 $KeepReleases    = 5
+$SitesDir        = Join-Path $StagingHome 'sites'
+$WebSitesDir     = Join-Path $RepoRoot 'web\sites'
+
+# The site the functions below work on: '' is the main site, else a key of REELGUO_SITES (see Use-Site).
+$script:SiteKey = ''
+
+# Settings every site must have of its own: a site never falls back to the main site's value for these.
+$SiteOnlyKeys = @(
+    'REELGUO_APP_URL', 'REELGUO_ADMIN_HOST', 'REELGUO_API_PORT', 'REELGUO_ADMIN_PORT',
+    'REELGUO_DB_NAME', 'REELGUO_DB_USER', 'REELGUO_DB_PASSWORD', 'REELGUO_JWT_KEY', 'REELGUO_MEDIA_KEY', 'REELGUO_ADMIN_PASSWORD',
+    'REELGUO_VIDEO_PROVIDER', 'REELGUO_COS_BUCKET', 'REELGUO_COS_FOLDER', 'REELGUO_COS_CDN_HOST',
+    'REELGUO_PERMANENT_DOMAIN', 'REELGUO_TELEGRAM', 'REELGUO_CONTACT_EMAIL', 'REELGUO_ALLOW_INDEXING',
+    'REELGUO_BILLING_ENABLED', 'REELGUO_PAYMENT_PROVIDER', 'REELGUO_BILLING_DESCRIPTOR',
+    'REELGUO_ALLOW_SANDBOX_PAYMENTS', 'REELGUO_SANDBOX_SECRET'
+)
 
 # ---------------------------------------------------------------------------------------------------------------
 # Output
@@ -62,10 +82,10 @@ function Invoke-Checked([string]$What, [string]$Exe, [string[]]$Arguments) {
 # Settings (C:\reelguo-staging\staging.env): KEY=VALUE lines, comments kept as they are
 # ---------------------------------------------------------------------------------------------------------------
 
-function Read-Settings {
+function Read-Settings([string]$Path = $SettingsFile) {
     $map = @{}
-    if (-not (Test-Path $SettingsFile)) { return $map }
-    foreach ($line in @(Read-SettingsLines)) {
+    if (-not (Test-Path $Path)) { return $map }
+    foreach ($line in @(Read-SettingsLines $Path)) {
         $t = $line.Trim()
         if ($t -eq '' -or $t.StartsWith('#')) { continue }
         $i = $t.IndexOf('=')
@@ -75,21 +95,86 @@ function Read-Settings {
     return $map
 }
 
+
+# A setting of the current site: its own site.env first; the main staging.env for shared settings (never for
+# $SiteOnlyKeys, which each site must have of its own).
 function Get-Setting([string]$Key, [string]$Default = '') {
+    if ($script:SiteKey) {
+        $own = Read-Settings (Get-SiteSettingsFile $script:SiteKey)
+        if ($own.ContainsKey($Key) -and $own[$Key] -ne '') { return $own[$Key] }
+        if ($SiteOnlyKeys -contains $Key) { return $Default }
+    }
+    $s = Read-Settings
+    if ($s.ContainsKey($Key) -and $s[$Key] -ne '') { return $s[$Key] }
+    return $Default
+}
+
+# A setting of the main site, whichever site is current.
+function Get-MainSetting([string]$Key, [string]$Default = '') {
     $s = Read-Settings
     if ($s.ContainsKey($Key) -and $s[$Key] -ne '') { return $s[$Key] }
     return $Default
 }
 
 # The admin console's own address (REELGUO_ADMIN_HOST), as a bare host name: "https://Admin.x.com/" -> "admin.x.com".
+
 function Get-AdminHost {
     return (((Get-Setting 'REELGUO_ADMIN_HOST').Trim().ToLowerInvariant()) -replace '^https?://', '' -replace '/.*$', '')
 }
 
+# The current site's own host name, from REELGUO_APP_URL ('' when it isn't a valid address).
+function Get-AppHost {
+    try { return ([uri](Get-Setting 'REELGUO_APP_URL')).Host.ToLowerInvariant() } catch { return '' }
+}
+
+# ---------------------------------------------------------------------------------------------------------------
+# Sites (REELGUO_SITES in staging.env; each with C:\reelguo-staging\sites\<key>\site.env)
+# ---------------------------------------------------------------------------------------------------------------
+
+# The keys of the other sites on this server, as in web\sites\<key> (REELGUO_SITES=yelrama,vpinedrama).
+function Get-SiteKeys {
+    return @((Get-MainSetting 'REELGUO_SITES') -split '[,;\s]+' | Where-Object { $_ } | ForEach-Object { $_.Trim().ToLowerInvariant() } | Select-Object -Unique)
+}
+
+function Get-SiteSettingsFile([string]$Key) { return (Join-Path (Join-Path $SitesDir $Key) 'site.env') }
+
+# Runs a block with $Key as the current site ('' = the main site): Get-Setting, the service names, ports and paths
+# then follow that site. Returns what the block returns.
+function Use-Site([string]$Key, [scriptblock]$Body) {
+    $previous = $script:SiteKey
+    $script:SiteKey = $Key
+    try { & $Body } finally { $script:SiteKey = $previous }
+}
+
+# web\sites\<key>\site.json: the site's name, short name and language.
+function Get-SiteInfo([string]$Key) {
+    return (Get-Content (Join-Path $WebSitesDir "$Key\site.json") -Raw -Encoding UTF8 | ConvertFrom-Json)
+}
+
+function Get-SiteLabel { if ($script:SiteKey) { return "site $($script:SiteKey)" } else { return 'main site' } }
+
+# The current site's services and storage.
+function Get-ApiServiceName { if ($script:SiteKey) { return "$ApiService-$($script:SiteKey)" } else { return $ApiService } }
+function Get-WorkerServiceName { if ($script:SiteKey) { return "$WorkerService-$($script:SiteKey)" } else { return $WorkerService } }
+function Get-SiteStorageDir { if ($script:SiteKey) { return (Join-Path (Join-Path $SitesDir $script:SiteKey) 'storage') } else { return $StorageDir } }
+function Get-EventSource([string]$Program) { if ($script:SiteKey) { return "ReelGuo.$Program.$($script:SiteKey)" } else { return "ReelGuo.$Program" } }
+
+# Where the current site's programs and web files are inside a release folder.
+function Get-SiteReleaseDir([string]$Dir) { if ($script:SiteKey) { return (Join-Path $Dir "sites\$($script:SiteKey)") } else { return $Dir } }
+
+# Every API and worker service, of the main site and the other sites.
+function Get-AppServiceNames {
+    $names = @()
+    foreach ($key in @('') + @(Get-SiteKeys)) { $names += Use-Site $key { @((Get-ApiServiceName), (Get-WorkerServiceName)) } }
+    return $names
+}
+
+# Writes a setting of the current site (its site.env; staging.env for the main site).
 function Set-Setting([string]$Key, [string]$Value) {
+    $path = if ($script:SiteKey) { Get-SiteSettingsFile $script:SiteKey } else { $SettingsFile }
     $lines = New-Object System.Collections.Generic.List[string]
-    if (Test-Path $SettingsFile) {
-        $existing = @(Read-SettingsLines)
+    if (Test-Path $path) {
+        $existing = @(Read-SettingsLines $path)
         if ($existing.Count -gt 0) { $lines.AddRange([string[]]$existing) }
     }
     $done = $false
@@ -97,10 +182,12 @@ function Set-Setting([string]$Key, [string]$Value) {
         if ($lines[$i] -match "^\s*$([regex]::Escape($Key))\s*=") { $lines[$i] = "$Key=$Value"; $done = $true; break }
     }
     if (-not $done) { $lines.Add("$Key=$Value") }
-    Write-TextFile $SettingsFile (($lines -join "`r`n") + "`r`n")
+    New-Item -ItemType Directory -Force -Path (Split-Path $path) | Out-Null
+    Write-TextFile $path (($lines -join "`r`n") + "`r`n")
 }
 
 # UTF-8 without a byte-order mark.
+
 function Write-TextFile([string]$Path, [string]$Text) {
     [System.IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding($false)))
 }
@@ -137,23 +224,24 @@ function Protect-StagingHome {
     else { Write-Warn "Could not restrict access to $StagingHome (icacls exit code $code)" }
 }
 
-# The settings file's lines. If access is denied (files locked by an earlier version of Protect-StagingHome), the
+# A settings file's lines. If access is denied (files locked by an earlier version of Protect-StagingHome), the
 # folder's permissions are repaired once and the file is read again.
-function Read-SettingsLines {
-    try { return [System.IO.File]::ReadAllLines($SettingsFile) }
+function Read-SettingsLines([string]$Path = $SettingsFile) {
+    try { return [System.IO.File]::ReadAllLines($Path) }
     catch {
         $e = $_.Exception
         while ($e.InnerException) { $e = $e.InnerException }
         if ($e -isnot [System.UnauthorizedAccessException]) { throw }
         $p = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
         if (-not $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-            Stop-WithError "Access to $SettingsFile was denied. Run PowerShell as Administrator."
+            Stop-WithError "Access to $Path was denied. Run PowerShell as Administrator."
         }
-        Write-Note "access to $SettingsFile was denied: repairing the permissions of $StagingHome"
+        Write-Note "access to $Path was denied: repairing the permissions of $StagingHome"
         Protect-StagingHome
-        return [System.IO.File]::ReadAllLines($SettingsFile)
+        return [System.IO.File]::ReadAllLines($Path)
     }
 }
+
 
 function Test-SettingsReady {
     if (-not (Test-Path $SettingsFile)) { Stop-WithError "$SettingsFile does not exist yet. Run .\scripts\staging\setup.ps1 first." }
@@ -165,15 +253,6 @@ function Test-SettingsReady {
     if ($mode -eq 'tunnel' -and (Get-Setting 'CLOUDFLARE_TUNNEL_TOKEN') -eq '') {
         Stop-WithError "CLOUDFLARE_TUNNEL_TOKEN is empty in $SettingsFile (tunnel mode)."
     }
-    $adminHost = Get-AdminHost
-    if ($adminHost -and $adminHost -notmatch '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$') {
-        Stop-WithError "REELGUO_ADMIN_HOST must be a host name such as admin.yourdomain.com (it is '$adminHost')."
-    }
-    if ($adminHost) {
-        $appHost = ''
-        try { $appHost = ([uri](Get-Setting 'REELGUO_APP_URL')).Host } catch { $appHost = '' }
-        if ($adminHost -eq $appHost) { Stop-WithError 'REELGUO_ADMIN_HOST must differ from the site address (REELGUO_APP_URL).' }
-    }
     $otlpEndpoint = Get-Setting 'REELGUO_OTLP_ENDPOINT'
     if ($otlpEndpoint -ne '' -and $otlpEndpoint -notmatch '^https?://[^\s]+$') {
         Stop-WithError "REELGUO_OTLP_ENDPOINT must be an http:// or https:// address (it is '$otlpEndpoint'), or empty."
@@ -182,20 +261,68 @@ function Test-SettingsReady {
         Stop-WithError 'REELGUO_OTLP_PROTOCOL must be http/protobuf or grpc.'
     }
     if ((Get-Setting 'REELGUO_TRACE_DAYS' '7') -notmatch '^[1-9][0-9]?$') { Stop-WithError 'REELGUO_TRACE_DAYS must be a number of days, 1 to 99.' }
+    Test-SiteSettings
+    $hosts = @{}
+    $ports = @{}
+    $buckets = @{}
+    foreach ($key in Get-SiteKeys) {
+        if (-not (Test-Path (Join-Path $WebSitesDir "$key\site.json"))) { Stop-WithError "REELGUO_SITES lists '$key', but the code has no web\sites\$key\site.json." }
+        if (-not (Test-Path (Get-SiteSettingsFile $key))) { Stop-WithError "Site '$key' has no settings yet ($(Get-SiteSettingsFile $key)). Run .\scripts\staging\add-site.ps1 -Site $key ..." }
+        Use-Site $key { Test-SiteSettings }
+    }
+    # Every site needs its own address, ports and (with Cos) bucket.
+    foreach ($key in @('') + @(Get-SiteKeys)) {
+        Use-Site $key {
+            $name = if ($script:SiteKey) { $script:SiteKey } else { 'the main site' }
+            foreach ($h in @((Get-AppHost), (Get-AdminHost)) | Where-Object { $_ }) {
+                if ($hosts.ContainsKey($h)) { Stop-WithError "$h is used by both $($hosts[$h]) and $name." }
+                $hosts[$h] = $name
+            }
+            foreach ($p in @((Get-Setting 'REELGUO_API_PORT' '5080'), (Get-Setting 'REELGUO_ADMIN_PORT' '8081'))) {
+                if ($ports.ContainsKey($p)) { Stop-WithError "Port $p is used by both $($ports[$p]) and $name." }
+                $ports[$p] = $name
+            }
+            if ((Get-Setting 'REELGUO_VIDEO_PROVIDER' 'Hls') -eq 'Cos') {
+                $b = Get-Setting 'REELGUO_COS_BUCKET'
+                if ($buckets.ContainsKey($b)) { Stop-WithError "COS bucket $b is used by both $($buckets[$b]) and ${name}: each site needs its own bucket (a site's cleanup could otherwise delete another site's videos)." }
+                $buckets[$b] = $name
+            }
+        }
+    }
+}
+
+# The current site's own settings (address, admin host, keys, video storage).
+function Test-SiteSettings {
+    $file = if ($script:SiteKey) { Get-SiteSettingsFile $script:SiteKey } else { $SettingsFile }
+    foreach ($k in @('REELGUO_APP_URL', 'REELGUO_MEDIA_KEY', 'REELGUO_JWT_KEY', 'REELGUO_ADMIN_PASSWORD', 'REELGUO_DB_PASSWORD')) {
+        if ((Get-Setting $k) -eq '') { Stop-WithError "$k is empty in $file." }
+    }
+    if ((Get-Setting 'REELGUO_APP_URL') -notmatch '^https?://[^/\s]+$') { Stop-WithError "REELGUO_APP_URL in $file must look like https://yourdomain.com (it is '$(Get-Setting 'REELGUO_APP_URL')')." }
+    if ($script:SiteKey) {
+        foreach ($k in @('REELGUO_API_PORT', 'REELGUO_ADMIN_PORT', 'REELGUO_DB_NAME', 'REELGUO_DB_USER')) {
+            if ((Get-Setting $k) -eq '') { Stop-WithError "$k is empty in $file." }
+        }
+    }
+    $adminHost = Get-AdminHost
+    if ($adminHost -and $adminHost -notmatch '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$') {
+        Stop-WithError "REELGUO_ADMIN_HOST in $file must be a host name such as admin.yourdomain.com (it is '$adminHost')."
+    }
+    if ($adminHost -and $adminHost -eq (Get-AppHost)) { Stop-WithError "REELGUO_ADMIN_HOST in $file must differ from the site address (REELGUO_APP_URL)." }
     $provider = Get-Setting 'REELGUO_VIDEO_PROVIDER' 'Hls'
-    if ($provider -notin @('Hls', 'Cos')) { Stop-WithError "REELGUO_VIDEO_PROVIDER must be Hls or Cos (it is '$provider')." }
+    if ($provider -notin @('Hls', 'Cos')) { Stop-WithError "REELGUO_VIDEO_PROVIDER in $file must be Hls or Cos (it is '$provider')." }
     if ($provider -eq 'Cos') {
         foreach ($k in @('REELGUO_COS_SECRET_ID', 'REELGUO_COS_SECRET_KEY', 'REELGUO_COS_BUCKET', 'REELGUO_COS_REGION')) {
-            if ((Get-Setting $k) -eq '') { Stop-WithError "$k is empty in $SettingsFile (REELGUO_VIDEO_PROVIDER=Cos)." }
+            if ((Get-Setting $k) -eq '') { Stop-WithError "$k is empty (REELGUO_VIDEO_PROVIDER=Cos in $file)." }
         }
         if ((Get-Setting 'REELGUO_COS_BUCKET') -notmatch '^[a-z0-9][a-z0-9-]*-[0-9]{5,}$') {
-            Stop-WithError 'REELGUO_COS_BUCKET must be the full bucket name including the APPID, for example reelguo-1300000000.'
+            Stop-WithError "REELGUO_COS_BUCKET in $file must be the full bucket name including the APPID, for example reelguo-1300000000."
         }
     }
 }
 
 # Adds settings that a newer staging.env.example has and this server's staging.env lacks, with their default values,
 # so an update never runs with a setting missing. Existing values are never touched.
+
 function Add-NewSettings {
     if (-not (Test-Path $SettingsFile) -or -not (Test-Path $SettingsExample)) { return }
     $have = Read-Settings
@@ -368,8 +495,9 @@ function Invoke-Psql([string]$Sql, [string]$Database = 'postgres') {
 }
 
 # The app's login and database (UTF-8, C collation, as on production), listening on this server only.
+# The current site's login and database (UTF-8, C collation, as on production), listening on this server only.
 function Initialize-Database {
-    Write-Step 'Database'
+    Write-Step "Database ($(Get-SiteLabel))"
     Start-Service $PgService
     $db = Get-Setting 'REELGUO_DB_NAME' 'reelguo'
     $user = Get-Setting 'REELGUO_DB_USER' 'reelguo'
@@ -393,6 +521,7 @@ ALTER SYSTEM SET listen_addresses = 'localhost';
 }
 
 # One value from PostgreSQL, as the superuser (for example SHOW listen_addresses).
+
 function Get-PsqlValue([string]$Sql) {
     $env:PGPASSWORD = Get-Setting 'REELGUO_PG_SUPERPASSWORD'
     try {
@@ -440,17 +569,61 @@ function New-Release {
     New-Item -ItemType Directory -Force -Path (Join-Path $dir 'web') | Out-Null
     Copy-Item (Join-Path $RepoRoot 'web\apps\client\dist') (Join-Path $dir 'web\client') -Recurse -Force
     Copy-Item (Join-Path $RepoRoot 'web\apps\admin\dist') (Join-Path $dir 'web\admin') -Recurse -Force
+
+    # Each other site: the web app and admin console built under its name and in its language (REELGUO_SITE), and
+    # the same API and worker programs (hard links, so they take no extra space) with its own settings.
+    foreach ($key in Get-SiteKeys) {
+        Write-Note "site ${key}: web app and admin console (REELGUO_SITE=$key) ..."
+        Push-Location $RepoRoot
+        $env:REELGUO_SITE = $key
+        try {
+            Invoke-Checked "Building the web app for $key" 'pnpm' @('--filter', '@reelguo/client', 'exec', 'vite', 'build')
+            Invoke-Checked "Building the admin console for $key" 'pnpm' @('--filter', '@reelguo/admin', 'exec', 'vite', 'build')
+        } finally {
+            Remove-Item Env:\REELGUO_SITE -ErrorAction SilentlyContinue
+            Pop-Location
+        }
+        $siteDir = Join-Path $dir "sites\$key"
+        New-Item -ItemType Directory -Force -Path (Join-Path $siteDir 'web') | Out-Null
+        Copy-Item (Join-Path $RepoRoot 'web\apps\client\dist') (Join-Path $siteDir 'web\client') -Recurse -Force
+        Copy-Item (Join-Path $RepoRoot 'web\apps\admin\dist') (Join-Path $siteDir 'web\admin') -Recurse -Force
+        Copy-ProgramFolder (Join-Path $dir 'api') (Join-Path $siteDir 'api')
+        Copy-ProgramFolder (Join-Path $dir 'worker') (Join-Path $siteDir 'worker')
+    }
     Write-ReleaseConfig $dir
     Write-Ok "release built: $dir"
     return $dir
 }
 
-# Settings for the API and the worker (appsettings.Production.json) and the Caddyfile, from staging.env.
+# A program folder for another site: every file hard-linked (same disk, no extra space; copied where that fails), except
+# the settings file, which each site writes for itself.
+function Copy-ProgramFolder([string]$From, [string]$To) {
+    $root = (Resolve-Path $From).Path.TrimEnd('\')
+    foreach ($file in Get-ChildItem $root -Recurse -File) {
+        $relative = $file.FullName.Substring($root.Length + 1)
+        if ($relative -eq 'appsettings.Production.json') { continue }
+        $target = Join-Path $To $relative
+        New-Item -ItemType Directory -Force -Path (Split-Path $target) | Out-Null
+        $source = $file.FullName
+        try { New-Item -ItemType HardLink -Path $target -Target $source -ErrorAction Stop | Out-Null }
+        catch { Copy-Item $source $target -Force }
+    }
+}
+
+# Settings for the API and the worker (appsettings.Production.json) of the main site and of every other site, and the
+# Caddyfile, from staging.env and the sites' site.env.
 function Write-ReleaseConfig([string]$Dir) {
+    foreach ($key in @('') + @(Get-SiteKeys)) { Use-Site $key { Write-SiteConfig $Dir } }
+    Write-Caddyfile $Dir
+}
+
+# appsettings.Production.json for the current site's API and worker.
+function Write-SiteConfig([string]$Dir) {
+    $siteDir = Get-SiteReleaseDir $Dir
     $apiPort = Get-Setting 'REELGUO_API_PORT' '5080'
     $connection = 'Host=127.0.0.1;Port=5432;Database={0};Username={1};Password={2}' -f (Get-Setting 'REELGUO_DB_NAME' 'reelguo'), (Get-Setting 'REELGUO_DB_USER' 'reelguo'), (Get-Setting 'REELGUO_DB_PASSWORD')
     $appUrl = Get-Setting 'REELGUO_APP_URL'
-    $storage = @{ Provider = 'FileSystem'; FileSystemRoot = $StorageDir }
+    $storage = @{ Provider = 'FileSystem'; FileSystemRoot = (Get-SiteStorageDir) }
     $logging = @{
         LogLevel = @{ Default = 'Information'; 'Microsoft.AspNetCore' = 'Warning'; 'Microsoft.EntityFrameworkCore' = 'Warning' }
     }
@@ -506,7 +679,7 @@ function Write-ReleaseConfig([string]$Dir) {
             ProfileCertificatePassword = (Get-Setting 'REELGUO_PROFILE_CERT_PASSWORD')
         }
         Seo               = @{
-            TemplatePath   = (Join-Path $CurrentLink 'web\client\index.html')
+            TemplatePath   = (Join-Path (Get-SiteReleaseDir $CurrentLink) 'web\client\index.html')
             AllowIndexing  = ((Get-Setting 'REELGUO_ALLOW_INDEXING' 'false') -eq 'true')
             PublicBaseUrl  = $appUrl
         }
@@ -518,39 +691,68 @@ function Write-ReleaseConfig([string]$Dir) {
             AllowSandboxOutsideDevelopment  = ((Get-Setting 'REELGUO_ALLOW_SANDBOX_PAYMENTS' 'false') -eq 'true')
             SandboxSecret                   = (Get-Setting 'REELGUO_SANDBOX_SECRET')
         }
-        Logging           = $logging + @{ EventLog = @{ SourceName = 'ReelGuo.Api'; LogLevel = @{ Default = 'Information'; 'Microsoft.AspNetCore' = 'Warning'; 'Microsoft.EntityFrameworkCore' = 'Warning' } } }
+        Logging           = $logging + @{ EventLog = @{ SourceName = (Get-EventSource 'Api'); LogLevel = @{ Default = 'Information'; 'Microsoft.AspNetCore' = 'Warning'; 'Microsoft.EntityFrameworkCore' = 'Warning' } } }
     }
     if ($site.Count -gt 0) { $api['Site'] = $site }
+    # Another site: its name and language (web\sites\<key>\site.json); the main site keeps the API's own default.
+    if ($script:SiteKey) {
+        $info = Get-SiteInfo $script:SiteKey
+        $api['Brand'] = [ordered]@{ Key = [string]$info.key; Name = [string]$info.name; Short = [string]$info.short; Locale = [string]$info.locale }
+    }
 
     $worker = [ordered]@{
         ConnectionStrings = @{ Default = $connection }
         Storage           = $storage
         Video             = $video
         Ffmpeg            = @{ BinDirectory = $FfmpegBin }
-        Logging           = $logging + @{ EventLog = @{ SourceName = 'ReelGuo.Worker'; LogLevel = @{ Default = 'Information' } } }
+        Logging           = $logging + @{ EventLog = @{ SourceName = (Get-EventSource 'Worker'); LogLevel = @{ Default = 'Information' } } }
     }
     foreach ($settings in @($api, $worker)) {
         $settings['Telemetry'] = $telemetry
         foreach ($key in $otlp.Keys) { $settings[$key] = $otlp[$key] }
     }
 
-    Write-TextFile (Join-Path $Dir 'api\appsettings.Production.json') ($api | ConvertTo-Json -Depth 10)
-    Write-TextFile (Join-Path $Dir 'worker\appsettings.Production.json') ($worker | ConvertTo-Json -Depth 10)
+    if (-not (Test-Path (Join-Path $siteDir 'api'))) { return }   # an older release, built before this site was added
+    Write-TextFile (Join-Path $siteDir 'api\appsettings.Production.json') ($api | ConvertTo-Json -Depth 10)
+    Write-TextFile (Join-Path $siteDir 'worker\appsettings.Production.json') ($worker | ConvertTo-Json -Depth 10)
+}
 
-    # Caddy: paths with forward slashes; through the "current" link, so a release switch needs no new service.
+# The Caddyfile: the main site on the app port (any host name), each other site on its own host names, and the admin
+# consoles. Paths with forward slashes; through the "current" link, so a release switch needs no new service.
+function Write-Caddyfile([string]$Dir) {
     $tunnel = (Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -eq 'tunnel'
+    $apiPort = Get-Setting 'REELGUO_API_PORT' '5080'
+    $bind = $(if ($tunnel) { '127.0.0.1 [::1]' } else { '0.0.0.0' })
     $appPort = Get-Setting 'REELGUO_WEB_PORT' $(if ($tunnel) { '8080' } else { '80' })
     # Public-port mode: the admin console can have its own address through Cloudflare (REELGUO_ADMIN_HOST). It is
     # served on the app's port and told apart by the host name; every other host name gets the app.
     $adminSite = ''
     $adminHost = Get-AdminHost
     if (-not $tunnel -and $adminHost) {
-        $adminSite = "`n# The admin console through Cloudflare (public-port mode, REELGUO_ADMIN_HOST): the app's port, chosen by host name.`nhttp://${adminHost}:$appPort {`n`tbind 0.0.0.0`n`timport admin_console`n}`n"
+        $adminSite = "`n# The admin console through Cloudflare (public-port mode, REELGUO_ADMIN_HOST): the app's port, chosen by host name.`nhttp://${adminHost}:$appPort {`n`tbind 0.0.0.0`n`timport admin_console 127.0.0.1:$apiPort $(((Join-Path $CurrentLink 'web') -replace '\\', '/'))`n}`n"
+    }
+    # The other sites: their own host names (and www.) on the app port, their admin consoles on their admin host and,
+    # on this server, on their own local port.
+    $sites = ''
+    foreach ($key in Get-SiteKeys) {
+        $sites += Use-Site $key {
+            $siteHost = Get-AppHost
+            $api = "127.0.0.1:$(Get-Setting 'REELGUO_API_PORT')"
+            $web = (Join-Path (Get-SiteReleaseDir $CurrentLink) 'web') -replace '\\', '/'
+            $names = @("http://${siteHost}:$appPort")
+            if (-not $siteHost.StartsWith('www.')) { $names += "http://www.${siteHost}:$appPort" }
+            $text = "`n# Site $key ($siteHost): the app, chosen by host name.`n$($names -join ', ') {`n`tbind $bind`n`timport app_site $api $web`n}`n"
+            $text += "# Site ${key}: its admin console on this server.`n:$(Get-Setting 'REELGUO_ADMIN_PORT') {`n`tbind 127.0.0.1 [::1]`n`timport admin_console $api $web`n}`n"
+            $siteAdmin = Get-AdminHost
+            if ($siteAdmin) { $text += "# Site ${key}: its admin console through Cloudflare (REELGUO_ADMIN_HOST in its site.env).`nhttp://${siteAdmin}:$appPort {`n`tbind $bind`n`timport admin_console $api $web`n}`n" }
+            $text
+        }
     }
     $caddy = [System.IO.File]::ReadAllText($CaddyTemplate)
     $caddy = $caddy.Replace('{{APP_PORT}}', $appPort)
-    $caddy = $caddy.Replace('{{APP_BIND}}', $(if ($tunnel) { '127.0.0.1 [::1]' } else { '0.0.0.0' }))
+    $caddy = $caddy.Replace('{{APP_BIND}}', $bind)
     $caddy = $caddy.Replace('{{ADMIN_HOST_SITE}}', $adminSite)
+    $caddy = $caddy.Replace('{{SITES}}', $sites)
     $caddy = $caddy.Replace('{{ADMIN_PORT}}', (Get-Setting 'REELGUO_ADMIN_PORT' '8081'))
     $caddy = $caddy.Replace('{{API}}', "127.0.0.1:$apiPort")
     $caddy = $caddy.Replace('{{WEB_ROOT}}', ((Join-Path $CurrentLink 'web') -replace '\\', '/'))
@@ -626,9 +828,21 @@ function Install-ReelGuoServices {
     Set-ServiceDefinition $ApiService 'ReelGuo API' (Join-Path $CurrentLink 'api\ReelGuo.Api.exe') @($PgService) @('ASPNETCORE_ENVIRONMENT=Production')
     Set-ServiceDefinition $WorkerService 'ReelGuo worker' (Join-Path $CurrentLink 'worker\ReelGuo.Worker.exe') @($PgService) @('DOTNET_ENVIRONMENT=Production')
     Set-ServiceDefinition $WebService 'ReelGuo web (Caddy)' ('{0} run --config {1} --adapter caddyfile' -f $CaddyExe, (Join-Path $CurrentLink 'Caddyfile')) @($ApiService) $null
+    # The other sites: the same programs from their own folder (their own settings), each with its own log source.
+    foreach ($key in Get-SiteKeys) {
+        Use-Site $key {
+            $dir = Get-SiteReleaseDir $CurrentLink
+            Set-ServiceDefinition (Get-ApiServiceName) "ReelGuo API ($key)" (Join-Path $dir 'api\ReelGuo.Api.exe') @($PgService) @('ASPNETCORE_ENVIRONMENT=Production')
+            Set-ServiceDefinition (Get-WorkerServiceName) "ReelGuo worker ($key)" (Join-Path $dir 'worker\ReelGuo.Worker.exe') @($PgService) @('DOTNET_ENVIRONMENT=Production')
+            foreach ($source in @((Get-EventSource 'Api'), (Get-EventSource 'Worker'))) {
+                if (-not [System.Diagnostics.EventLog]::SourceExists($source)) { New-EventLog -LogName Application -Source $source }
+            }
+        }
+    }
 }
 
 # Cloudflare Tunnel connector as a Windows service (re-installed when the token changes).
+
 function Install-TunnelService {
     if ((Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -ne 'tunnel') { return }
     Write-Step 'Cloudflare Tunnel connector'
@@ -649,14 +863,15 @@ function Install-TunnelService {
 }
 
 function Stop-ReelGuo {
-    foreach ($s in @($WebService, $WorkerService, $ApiService)) {
+    foreach ($s in @($WebService) + @(Get-AppServiceNames)) {
         if (Get-Service $s -ErrorAction SilentlyContinue) { Stop-Service $s -Force -ErrorAction SilentlyContinue }
     }
     Start-Sleep -Seconds 2
 }
 
+
 function Start-ReelGuo {
-    $names = @($PgService, $ApiService, $WorkerService, $WebService)
+    $names = @($PgService) + @(Get-AppServiceNames) + @($WebService)
     if ((Get-Setting 'REELGUO_STAGING_MODE' 'tunnel') -eq 'tunnel') { $names += $TunnelService }
     foreach ($s in $names) {
         if (-not (Get-Service $s -ErrorAction SilentlyContinue)) { continue }
@@ -669,6 +884,7 @@ function Start-ReelGuo {
 
 # Caddy (ReelGuoWeb) needs the app port to itself. Another web server on it, typically IIS, would keep the site from
 # starting, so this stops early and says what holds the port. IIS is not needed: Caddy is the web server.
+
 function Test-WebPortFree {
     $port = [int](Get-Setting 'REELGUO_WEB_PORT' '8080')
     $owners = @(Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique)
@@ -731,14 +947,22 @@ function Invoke-Http([string]$Url, [int]$TimeoutSec = 10) {
 # Waits while an admin is optimizing or uploading videos in the admin console: they report it every 30 s, and a
 # restart now would cut their work off. Asks the API directly on this server (/health/busy answers nothing that came
 # through Caddy or Cloudflare). An older release without that check, or a stopped API, means nothing to wait for.
+# Waits while an admin is optimizing or uploading videos in an admin console (any site): they report it every 30 s,
+# and a restart now would cut their work off. Asks each API directly on this server (/health/busy answers nothing
+# that came through Caddy or Cloudflare). An older release without that check, or a stopped API, means nothing to wait for.
 function Wait-AdminIdle {
-    $url = "$(Get-ApiBase)/health/busy"
     $waiting = $false
     while ($true) {
-        $r = Invoke-Http $url 5
-        if ($r.Status -ne 200) { return }
-        try { $state = $r.Body | ConvertFrom-Json } catch { return }
-        if (-not $state.busy) {
+        $busy = @()
+        foreach ($key in @('') + @(Get-SiteKeys)) {
+            $busy += Use-Site $key {
+                $r = Invoke-Http "$(Get-ApiBase)/health/busy" 5
+                if ($r.Status -ne 200) { return }
+                try { $state = $r.Body | ConvertFrom-Json } catch { return }
+                if ($state.busy) { foreach ($i in @($state.items)) { [pscustomobject]@{ Site = (Get-SiteLabel); Item = $i } } }
+            }
+        }
+        if ($busy.Count -eq 0) {
             if ($waiting) { Write-Ok 'the admin work has finished; continuing' }
             return
         }
@@ -748,27 +972,38 @@ function Wait-AdminIdle {
             Write-Note 'Ctrl+C cancels; nothing has been changed yet. To update anyway, run again with -Force.'
             $waiting = $true
         }
-        foreach ($i in @($state.items)) {
+        foreach ($b in $busy) {
+            $i = $b.Item
             $what = if ($i.kind -eq 'optimize') { 'optimizing videos' } else { 'uploading videos' }
-            Write-Note ("{0:HH:mm} {1}: {2} {3} (last report {4} s ago)" -f (Get-Date), $i.admin, $what, $i.detail, $i.seconds_ago)
+            Write-Note ("{0:HH:mm} {1}, {2}: {3} {4} (last report {5} s ago)" -f (Get-Date), $b.Site, $i.admin, $what, $i.detail, $i.seconds_ago)
         }
         Start-Sleep -Seconds 60
     }
 }
 
+
+# Waits until every site answers /health/ready: the main site through Caddy, the others at their API.
 function Wait-Healthy([int]$TimeoutSec = 300) {
-    Write-Step "Waiting for the site to become ready (up to $([int]($TimeoutSec / 60)) minutes)"
-    $url = "$(Get-LocalBase)/health/ready"
+    Write-Step "Waiting for the site$(if (@(Get-SiteKeys).Count) { 's' }) to become ready (up to $([int]($TimeoutSec / 60)) minutes)"
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
-    $r = [pscustomobject]@{ Status = 0; Body = '(no answer yet)' }
-    while ((Get-Date) -lt $deadline) {
-        $r = Invoke-Http $url 5
-        if ($r.Status -eq 200) { Write-Ok "ready ($url)"; return $true }
-        Start-Sleep -Seconds 5
+    $allReady = $true
+    foreach ($key in @('') + @(Get-SiteKeys)) {
+        $ready = Use-Site $key {
+            $url = if ($script:SiteKey) { "$(Get-ApiBase)/health/ready" } else { "$(Get-LocalBase)/health/ready" }
+            $r = [pscustomobject]@{ Status = 0; Body = '(no answer yet)' }
+            while ((Get-Date) -lt $deadline) {
+                $r = Invoke-Http $url 5
+                if ($r.Status -eq 200) { Write-Ok "$(Get-SiteLabel) ready ($url)"; return $true }
+                Start-Sleep -Seconds 5
+            }
+            Write-Warn "$(Get-SiteLabel) not ready after $TimeoutSec s. Last answer: $($r.Status) $($r.Body)"
+            return $false
+        }
+        if (-not $ready) { $allReady = $false }
     }
-    Write-Warn "Not ready after $TimeoutSec s. Last answer: $($r.Status) $($r.Body)"
-    return $false
+    return $allReady
 }
+
 
 function Test-Site {
     Write-Step 'Checking the site'
@@ -803,11 +1038,42 @@ function Test-Site {
         if ($t -and $t.Status -eq 'Running') { Write-Ok 'Cloudflare tunnel connector running (its connection status is on the tunnel page in Cloudflare)' }
         else { Write-Warn 'Cloudflare tunnel connector (service cloudflared) is not running'; $ok = $false }
     }
+    foreach ($key in Get-SiteKeys) { if (-not (Use-Site $key { Test-OtherSite })) { $ok = $false } }
     return $ok
 }
 
+# The current (other) site, the way Cloudflare reaches it: its host name on the app port.
+function Test-OtherSite {
+    $siteHost = Get-AppHost
+    Write-Step "Checking site $($script:SiteKey) ($siteHost)"
+    $ok = $true
+    foreach ($s in @((Get-ApiServiceName), (Get-WorkerServiceName))) {
+        $svc = Get-Service $s -ErrorAction SilentlyContinue
+        if ($svc -and $svc.Status -eq 'Running') { Write-Ok "service $s running" } else { Write-Warn "service $s is not running"; $ok = $false }
+    }
+    $base = Get-LocalBase
+    $locale = [string](Get-SiteInfo $script:SiteKey).locale
+    $page = (& curl.exe -s --max-time 10 -H "Host: $siteHost" "$base/") -join "`n"
+    if ($page -match '<div id="seo"' -and $page -match ('<html lang="' + [regex]::Escape($locale) + '"')) { Write-Ok "home page for ${siteHost}: the app in $locale with its server-rendered content" }
+    else { Write-Warn "requests for $siteHost do not get this site's home page"; $ok = $false }
+    $config = (& curl.exe -s -o NUL -w '%{http_code}' --max-time 10 -H "Host: $siteHost" "$base/api/v1/config") -join ''
+    if ($config -eq '200') { Write-Ok 'its API answers (/api/v1/config)' } else { Write-Warn "its API /api/v1/config: HTTP $config"; $ok = $false }
+    $admin = Invoke-Http "$(Get-AdminBase)/"
+    if ($admin.Status -eq 200) { Write-Ok "its admin console on this server: $((Get-AdminBase).Replace('127.0.0.1', 'localhost'))" } else { Write-Warn "its admin console: HTTP $($admin.Status)"; $ok = $false }
+    $adminHost = Get-AdminHost
+    if ($adminHost) {
+        $console = (& curl.exe -s --max-time 10 -H "Host: $adminHost" "$base/") -join "`n"
+        if ($console -match 'id="root"' -and $console -notmatch 'id="seo"') { Write-Ok "admin console for $adminHost" }
+        else { Write-Warn "requests for $adminHost do not get the admin console"; $ok = $false }
+    }
+    return $ok
+}
+
+
 function Show-RecentLogs([int]$Count = 25) {
-    foreach ($source in @('ReelGuo.Api', 'ReelGuo.Worker')) {
+    $sources = @('ReelGuo.Api', 'ReelGuo.Worker')
+    foreach ($key in Get-SiteKeys) { $sources += @("ReelGuo.Api.$key", "ReelGuo.Worker.$key") }
+    foreach ($source in $sources) {
         Write-Step "Recent log: $source (Windows Event Log, Application)"
         $events = Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = $source } -MaxEvents $Count -ErrorAction SilentlyContinue
         if ($events) { $events | Sort-Object TimeCreated | ForEach-Object { Write-Host ('{0:HH:mm:ss} {1,-11} {2}' -f $_.TimeCreated, $_.LevelDisplayName, (($_.Message -split "`n")[0..2] -join ' ')) } }
@@ -817,10 +1083,12 @@ function Show-RecentLogs([int]$Count = 25) {
     if (Test-Path $caddyLog) { Write-Step 'Recent log: web (Caddy)'; Get-Content $caddyLog -Tail 10 }
 }
 
+
 # ---------------------------------------------------------------------------------------------------------------
 # Backups (pg_dump, custom format) in C:\reelguo-staging\backups
 # ---------------------------------------------------------------------------------------------------------------
 
+# Backs up the current site's database; returns the file name (<database>-<time>.dump).
 function Invoke-Backup {
     New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
     $db = Get-Setting 'REELGUO_DB_NAME' 'reelguo'
@@ -842,7 +1110,30 @@ function Invoke-Backup {
     return (Split-Path $file -Leaf)
 }
 
+# Backs up every site's database (main first); returns the file names.
+function Invoke-BackupAll {
+    $files = @()
+    foreach ($key in @('') + @(Get-SiteKeys)) {
+        $files += Use-Site $key {
+            if ($script:SiteKey -and -not (Get-PsqlValue "SELECT 1 FROM pg_database WHERE datname = '$(Get-Setting 'REELGUO_DB_NAME')'")) { return }
+            Invoke-Backup
+        }
+    }
+    return $files
+}
+
+# The site ('' = main) whose database a backup file holds: its name starts with the database name.
+function Get-BackupSite([string]$FileName) {
+    $name = Split-Path $FileName -Leaf
+    foreach ($key in @(Get-SiteKeys)) {
+        if (Use-Site $key { $name.StartsWith("$(Get-Setting 'REELGUO_DB_NAME')-") }) { return $key }
+    }
+    if ($name.StartsWith("$(Get-MainSetting 'REELGUO_DB_NAME' 'reelguo')-")) { return '' }
+    Stop-WithError "$name is not a backup of any site's database on this server."
+}
+
 # Replaces the database with a backup, in one transaction. The API and worker must be stopped.
+
 function Invoke-Restore([string]$FileName) {
     $file = Join-Path $BackupDir (Split-Path $FileName -Leaf)
     if (-not (Test-Path $file)) { Stop-WithError "No such backup: $file" }

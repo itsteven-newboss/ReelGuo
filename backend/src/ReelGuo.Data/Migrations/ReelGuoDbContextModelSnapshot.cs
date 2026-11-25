@@ -507,13 +507,35 @@ namespace ReelGuo.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<int?>("ChoiceCountdown")
+                        .HasColumnType("integer")
+                        .HasColumnName("choice_countdown");
+
+                    b.Property<int>("ChoiceLeadSeconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("choice_lead_seconds");
+
+                    b.Property<string>("ChoicePrompt")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("choice_prompt");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<int?>("CustomPrice")
+                        .HasColumnType("integer")
+                        .HasColumnName("custom_price");
+
                     b.Property<double>("DurationSeconds")
                         .HasColumnType("double precision")
                         .HasColumnName("duration_seconds");
+
+                    b.Property<string>("EndingTitle")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("ending_title");
 
                     b.Property<int>("EpisodeNumber")
                         .HasColumnType("integer")
@@ -534,6 +556,16 @@ namespace ReelGuo.Data.Migrations
                     b.Property<int>("MediaVersion")
                         .HasColumnType("integer")
                         .HasColumnName("media_version");
+
+                    b.Property<long?>("NextEpisodeId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("next_episode_id");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("outcome");
 
                     b.Property<string>("PosterKey")
                         .HasColumnType("text")
@@ -594,6 +626,9 @@ namespace ReelGuo.Data.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_episodes");
+
+                    b.HasIndex("NextEpisodeId")
+                        .HasDatabaseName("ix_episodes_next_episode_id");
 
                     b.HasIndex("SeriesId", "EpisodeNumber")
                         .IsUnique()
@@ -1738,6 +1773,12 @@ namespace ReelGuo.Data.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_original");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("kind");
+
                     b.Property<DateTimeOffset?>("LastEpisodeAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_episode_at");
@@ -1780,6 +1821,21 @@ namespace ReelGuo.Data.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)")
                         .HasColumnName("status");
+
+                    b.Property<string>("StoryLayoutJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("story_layout_json");
+
+                    b.Property<long?>("StoryStartEpisodeId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("story_start_episode_id");
+
+                    b.Property<string>("StoryVariablesJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("story_variables_json")
+                        .HasDefaultValueSql("'[]'::jsonb");
 
                     b.PrimitiveCollection<List<string>>("Tags")
                         .IsRequired()
@@ -1913,6 +1969,120 @@ namespace ReelGuo.Data.Migrations
                         {
                             t.HasCheckConstraint("ck_series_ratings_score", "score BETWEEN 1 AND 10");
                         });
+                });
+
+            modelBuilder.Entity("ReelGuo.Data.Entities.StoryOption", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("ChosenCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("chosen_count");
+
+                    b.Property<string>("ConditionsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("conditions_json")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("EffectsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("effects_json")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.Property<long>("FromEpisodeId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("from_episode_id");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_default");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("label");
+
+                    b.Property<long>("SeriesId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("series_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<long>("TargetEpisodeId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("target_episode_id");
+
+                    b.Property<long>("TimeoutCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("timeout_count");
+
+                    b.HasKey("Id")
+                        .HasName("pk_story_options");
+
+                    b.HasIndex("SeriesId")
+                        .HasDatabaseName("ix_story_options_series_id");
+
+                    b.HasIndex("TargetEpisodeId")
+                        .HasDatabaseName("ix_story_options_target_episode_id");
+
+                    b.HasIndex("FromEpisodeId", "SortOrder")
+                        .HasDatabaseName("ix_story_options_from_episode_id_sort_order");
+
+                    b.ToTable("story_options", (string)null);
+                });
+
+            modelBuilder.Entity("ReelGuo.Data.Entities.StoryProgress", b =>
+                {
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.Property<long>("SeriesId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("series_id");
+
+                    b.PrimitiveCollection<List<int>>("Endings")
+                        .IsRequired()
+                        .HasColumnType("integer[]")
+                        .HasColumnName("endings");
+
+                    b.Property<string>("PathJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("path_json");
+
+                    b.Property<int>("Scene")
+                        .HasColumnType("integer")
+                        .HasColumnName("scene");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("UserId", "SeriesId")
+                        .HasName("pk_story_progress");
+
+                    b.HasIndex("SeriesId", "Scene")
+                        .HasDatabaseName("ix_story_progress_series_id_scene");
+
+                    b.ToTable("story_progress", (string)null);
                 });
 
             modelBuilder.Entity("ReelGuo.Data.Entities.TelemetryLog", b =>
@@ -2459,6 +2629,12 @@ namespace ReelGuo.Data.Migrations
 
             modelBuilder.Entity("ReelGuo.Data.Entities.Episode", b =>
                 {
+                    b.HasOne("ReelGuo.Data.Entities.Episode", null)
+                        .WithMany()
+                        .HasForeignKey("NextEpisodeId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .HasConstraintName("fk_episodes_episodes_next_episode_id");
+
                     b.HasOne("ReelGuo.Data.Entities.Series", "Series")
                         .WithMany("Episodes")
                         .HasForeignKey("SeriesId")
@@ -2673,6 +2849,51 @@ namespace ReelGuo.Data.Migrations
                         .HasConstraintName("fk_series_ratings_users_user_id");
                 });
 
+            modelBuilder.Entity("ReelGuo.Data.Entities.StoryOption", b =>
+                {
+                    b.HasOne("ReelGuo.Data.Entities.Episode", "From")
+                        .WithMany("Options")
+                        .HasForeignKey("FromEpisodeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_story_options_episodes_from_episode_id");
+
+                    b.HasOne("ReelGuo.Data.Entities.Series", null)
+                        .WithMany()
+                        .HasForeignKey("SeriesId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_story_options_series_series_id");
+
+                    b.HasOne("ReelGuo.Data.Entities.Episode", "Target")
+                        .WithMany()
+                        .HasForeignKey("TargetEpisodeId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_story_options_episodes_target_episode_id");
+
+                    b.Navigation("From");
+
+                    b.Navigation("Target");
+                });
+
+            modelBuilder.Entity("ReelGuo.Data.Entities.StoryProgress", b =>
+                {
+                    b.HasOne("ReelGuo.Data.Entities.Series", null)
+                        .WithMany()
+                        .HasForeignKey("SeriesId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_story_progress_series_series_id");
+
+                    b.HasOne("ReelGuo.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_story_progress_users_user_id");
+                });
+
             modelBuilder.Entity("ReelGuo.Data.Entities.TopicSeries", b =>
                 {
                     b.HasOne("ReelGuo.Data.Entities.Series", "Series")
@@ -2738,6 +2959,11 @@ namespace ReelGuo.Data.Migrations
             modelBuilder.Entity("ReelGuo.Data.Entities.Category", b =>
                 {
                     b.Navigation("Series");
+                });
+
+            modelBuilder.Entity("ReelGuo.Data.Entities.Episode", b =>
+                {
+                    b.Navigation("Options");
                 });
 
             modelBuilder.Entity("ReelGuo.Data.Entities.Series", b =>

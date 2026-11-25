@@ -15,12 +15,16 @@ const autoTried = new Set<string>();
  * Shown over the cover when the active episode is paid and not yet the viewer's (the API answered 402
  * episode_locked). Swiping to other items keeps working around it.
  */
-export function Paywall({ series, ep, intent, wide }: {
+export function Paywall({ series, ep, intent, wide, title, onBack }: {
   series: SeriesDetail;
   ep: number;
   /** The viewer picked this episode or played on into it (auto-unlock may spend coins only then). */
   intent: boolean;
   wide: boolean;
+  /** Replaces 「第 N 集需解锁」 (互动剧 scenes). */
+  title?: string;
+  /** 互动剧: back to the choice that led here (换个选择). */
+  onBack?: () => void;
 }) {
   const { t } = useTranslation();
   const signedIn = useAuth((s) => s.status === "signed_in");
@@ -57,11 +61,11 @@ export function Paywall({ series, ep, intent, wide }: {
 
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center px-6 pointer-events-none" style={{ paddingBottom: wide ? 0 : 70 }}>
-      <div role="dialog" aria-label={t("billing.lockedTitle", { ep })}
+      <div role="dialog" aria-label={title ?? t("billing.lockedTitle", { ep })}
         className="pointer-events-auto w-full max-w-[300px] rounded-(--r-lg) p-5 text-center elev-3 a-scale-in"
         style={{ background: "rgba(20,20,24,.82)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" }}>
         <span className="mx-auto w-11 h-11 rounded-full bg-white/10 flex items-center justify-center text-white"><Lock size={20} /></span>
-        <div className="mt-3 text-[16px] font-bold text-white">{t("billing.lockedTitle", { ep })}</div>
+        <div className="mt-3 text-[16px] font-bold text-white">{title ?? t("billing.lockedTitle", { ep })}</div>
         <div className="mt-1 text-[11.5px] text-white/60">
           {freeLead > 0 ? t("billing.lockedSubFree", { free: freeLead }) : t("billing.lockedSub")}
         </div>
@@ -87,6 +91,10 @@ export function Paywall({ series, ep, intent, wide }: {
           <span className="flex-1 text-left">{t("billing.openVip")}</span>
           <ChevronRight size={14} className="text-white/50" />
         </button>
+
+        {onBack && (
+          <button onClick={onBack} className="mt-2 w-full h-10 rounded-(--r-ctl) border border-white/15 text-[12.5px] font-semibold text-white pressable">{t("story.chooseOther")}</button>
+        )}
 
         {signedIn && wallet.data && (
           <label className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-white/60 cursor-pointer">

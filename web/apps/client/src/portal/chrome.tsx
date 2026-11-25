@@ -1,4 +1,4 @@
-import { BrandMark, Img, markAspect } from "@reelguo/ui";
+import { BrandMark, Img, markAspect, SITE } from "@reelguo/ui";
 import { ArrowUpToLine, ChevronDown, ChevronRight, CircleUserRound, History, Menu, Search as SearchIcon, Trash2, UserRound, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useCategories, useRanks, useSeries, useSite, useSuggest } from "../api";
@@ -9,11 +9,15 @@ import { useAuth } from "../state/auth";
 import { useLibrary } from "../state/library";
 import { closeOverlay, openOverlay } from "../state/nav";
 import { LEGAL_PATHS, type LegalPath } from "../pages/Legal";
-import { useTranslation } from "react-i18next";
 import { nativeApp } from "../native";
 import { BRAND, BRAND_SHORT } from "../brand";
+import { t } from "../i18n";
 
 /** Desktop layout from 1024 px (Tailwind `lg`); below that the phone header, as on the reference. */
+// Header links: Chinese labels are a few characters; longer words get less padding and 13 px type until a wide window.
+const CHINESE = SITE.locale.startsWith("zh");
+const NAV_ROOMY = CHINESE ? "min-[1366px]:px-[5.5px] min-[1680px]:px-[9px]" : "min-[1680px]:px-[7px]";
+const NAV_TEXT = CHINESE ? "text-[14px]" : "text-[13px] min-[1680px]:text-[14px]";
 export const WIDE_HEADER = "(min-width: 1024px)";
 
 export function useMedia(query: string) {
@@ -42,14 +46,14 @@ function useNavItems(): NavItem[] {
     active: (p: string) => p === `/c/${c.slug}` || (p.startsWith("/video/") && seriesSlug === c.slug),
   }));
   return [
-    { label: "首页", to: "/", active: (p) => p === "/" },
-    { label: `${BRAND_SHORT}原创`, to: href.channel("all", "original"), active: (p, sort) => p === "/c/all" && sort === "original" },
+    { label: t("nav.home"), to: "/", active: (p) => p === "/" },
+    { label: t("nav.original", { short: BRAND_SHORT }), to: href.channel("all", "original"), active: (p, sort) => p === "/c/all" && sort === "original" },
     ...channels,
-    { label: "专题", to: href.topics(), active: (p) => p.startsWith("/topics") },
-    { label: "排行榜", to: href.ranks(), active: (p) => p.startsWith("/ranks") },
-    { label: "博客", to: href.posts(), active: (p) => p.startsWith("/posts") || p.startsWith("/post/"), caret: true },
-    { label: "回家的路", to: href.wayHome(), active: (p) => p === "/go-home" },
-    { label: `${BRAND_SHORT}APP`, to: href.download(), active: (p) => p.startsWith("/app") },
+    { label: t("nav.topics"), to: href.topics(), active: (p) => p.startsWith("/topics") },
+    { label: t("nav.ranks"), to: href.ranks(), active: (p) => p.startsWith("/ranks") },
+    { label: t("nav.blog"), to: href.posts(), active: (p) => p.startsWith("/posts") || p.startsWith("/post/"), caret: true },
+    { label: t("nav.wayHome"), to: href.wayHome(), active: (p) => p === "/go-home" },
+    { label: t("nav.app", { short: BRAND_SHORT }), to: href.download(), active: (p) => p.startsWith("/app") },
   ];
 }
 
@@ -70,8 +74,20 @@ const MARK = (() => {
 /**
  * Brand lockup, laid out like the reference's logo: the mark, 黄月短剧 with a small AI, and the address under it.
  * `scale` is px per em: 10 gives 160 × 58.7. Styles: .rg-logo in index.css.
+ * A site with a Latin name ("wordmark" in its site.json) shows its app icon and the name in two colours, as on the
+ * icon: "yel" white, "rama" yellow, ".com" small under its end.
  */
 export function Wordmark({ scale = 10 }: { scale?: number }) {
+  if (SITE.wordmark) {
+    const [light, accent] = SITE.wordmark;
+    const tld = SITE.domain.startsWith(light + accent) ? SITE.domain.slice(light.length + accent.length) : "";
+    return (
+      <span className="rg-logo rg-logo--latin" style={{ fontSize: scale }} aria-hidden="true">
+        <BrandMark fit={Math.round(4.4 * scale)} className="rg-logo__tile" />
+        <span className="rg-logo__word"><span className="rg-logo__wt">{light}</span><span className="rg-logo__hl">{accent}</span>{tld && <span className="rg-logo__tld">{tld}</span>}</span>
+      </span>
+    );
+  }
   return (
     <span className="rg-logo" style={{ fontSize: scale }} aria-hidden="true">
       <BrandMark width={Math.round(MARK.width * scale)} className="rg-logo__mark" style={MARK.style} />
@@ -85,7 +101,7 @@ export function Wordmark({ scale = 10 }: { scale?: number }) {
 /** Logo link home, sized as on the reference: 160 × 58.7 (desktop header, footer), 142.9 × 52.4 (phone menu), 125.5 × 46 (phone header). */
 export function Logo({ size = "lg" }: { size?: "lg" | "md" | "sm" }) {
   return (
-    <Link to="/" className="block w-fit shrink-0" aria-label="黄月短剧 首页">
+    <Link to="/" className="block w-fit shrink-0" aria-label={t("header.homeLabel", { brand: BRAND })}>
       <Wordmark scale={size === "sm" ? 7.84 : size === "md" ? 8.93 : 10} />
     </Link>
   );
@@ -102,9 +118,9 @@ export function SearchPanel({ onPick }: { onPick: (q: string) => void }) {
   return (
     <div className="p-5 lg:p-6">
       <div className="flex items-center">
-        <h3 className="text-[16px] font-bold text-on">搜索记录</h3>
+        <h3 className="text-[16px] font-bold text-on">{t("searchPanel.history")}</h3>
         {searches.length > 0 && (
-          <button onClick={clearSearches} className="ml-auto text-[12px] text-dim hover:text-mut flex items-center gap-1"><Trash2 size={12} />清空</button>
+          <button onClick={clearSearches} className="ml-auto text-[12px] text-dim hover:text-mut flex items-center gap-1"><Trash2 size={12} />{t("searchPanel.clear")}</button>
         )}
       </div>
       {searches.length ? (
@@ -113,9 +129,9 @@ export function SearchPanel({ onPick }: { onPick: (q: string) => void }) {
             <button key={q} onClick={() => onPick(q)} className="h-8 px-3.5 rounded-full bg-white/[.06] hover:bg-white/10 text-[13px] text-on/85">{q}</button>
           ))}
         </div>
-      ) : <p className="mt-3 text-[13px] text-dim">暂无搜索记录</p>}
+      ) : <p className="mt-3 text-[13px] text-dim">{t("searchPanel.noHistory")}</p>}
 
-      <h3 className="mt-6 text-[16px] font-bold text-on">热搜榜</h3>
+      <h3 className="mt-6 text-[16px] font-bold text-on">{t("searchPanel.hot")}</h3>
       <ol className="mt-2">
         {(hot.data?.items ?? []).slice(0, 6).map((r, i) => (
           <li key={r.video_id}>
@@ -126,18 +142,18 @@ export function SearchPanel({ onPick }: { onPick: (q: string) => void }) {
             </Link>
           </li>
         ))}
-        {hot.data && hot.data.items.length === 0 && <li className="text-[13px] text-dim py-2">榜单更新中</li>}
+        {hot.data && hot.data.items.length === 0 && <li className="text-[13px] text-dim py-2">{t("searchPanel.hotUpdating")}</li>}
       </ol>
 
       {(suggest.data?.recommended.length ?? 0) > 0 && (
         <>
-          <h3 className="mt-6 text-[16px] font-bold text-on">猜你喜欢</h3>
+          <h3 className="mt-6 text-[16px] font-bold text-on">{t("series.forYou")}</h3>
           <div className="mt-3 grid grid-cols-3 gap-3">
             {suggest.data!.recommended.slice(0, 3).map((v) => (
               <Link key={v.id} to={href.video(v.id)} className="min-w-0 group">
                 <div className="relative rounded-[10px] overflow-hidden bg-s2" style={{ aspectRatio: "3 / 4" }}>
                   <Img src={v.cover} />
-                  {v.score > 0 && <span className="absolute top-1.5 right-1.5 px-1.5 h-5 rounded bg-black/65 text-primary text-[11px] font-bold flex items-center">{v.score.toFixed(1)}分</span>}
+                  {v.score > 0 && <span className="absolute top-1.5 right-1.5 px-1.5 h-5 rounded bg-black/65 text-primary text-[11px] font-bold flex items-center">{t("common.score", { score: v.score.toFixed(1) })}</span>}
                 </div>
                 <div className="mt-1.5 text-[12.5px] text-on truncate group-hover:text-primary">{v.title}</div>
               </Link>
@@ -165,7 +181,8 @@ function DesktopSearch() {
   const { query } = useLocation();
   const [value, setValue] = useState(query.get("q") ?? "");
   const [open, setOpen] = useState(false);
-  const roomy = useMedia("(min-width: 1366px)");
+  // Chinese labels are short; other languages need the room the search box takes until a wide window.
+  const roomy = useMedia(SITE.locale.startsWith("zh") ? "(min-width: 1366px)" : "(min-width: 1680px)");
   const box = useRef<HTMLDivElement>(null);
   const submit = useSearchSubmit(() => setOpen(false));
   useEffect(() => {
@@ -179,7 +196,7 @@ function DesktopSearch() {
   const frost = "bg-[rgba(221,221,221,.15)] border border-white/[.094] backdrop-blur-md";
   if (!roomy) {
     return (
-      <Link to={href.search()} aria-label="搜索" className={`w-9 h-9 rounded-full ${frost} flex items-center justify-center text-white shrink-0`}>
+      <Link to={href.search()} aria-label={t("search.title")} className={`w-9 h-9 rounded-full ${frost} flex items-center justify-center text-white shrink-0`}>
         <SearchIcon size={16} />
       </Link>
     );
@@ -189,9 +206,9 @@ function DesktopSearch() {
       <form role="search" onSubmit={(e: FormEvent) => { e.preventDefault(); submit(value); }}
         className={`h-[38px] rounded-[24px] ${frost} flex items-center pl-4 pr-[11px]`}>
         <input value={value} onChange={(e) => setValue(e.target.value)} onFocus={() => setOpen(true)} maxLength={50}
-          placeholder="搜索你感兴趣的内容" aria-label="搜索"
+          placeholder={t("header.searchPlaceholder")} aria-label={t("search.title")}
           className="flex-1 min-w-0 h-9 bg-transparent text-[14px] font-bold text-white placeholder:text-white/50 placeholder:font-bold outline-none" />
-        <button type="submit" aria-label="搜索" className="w-4 h-4 flex items-center justify-center text-white/80 hover:text-white"><SearchIcon size={16} /></button>
+        <button type="submit" aria-label={t("search.title")} className="w-4 h-4 flex items-center justify-center text-white/80 hover:text-white"><SearchIcon size={16} /></button>
       </form>
       {open && (
         <div className="absolute right-0 top-[calc(100%+10px)] w-[400px] max-h-[75vh] overflow-y-auto rounded-[16px] bg-[#1a1a1a] border border-white/[.08] elev-3 a-scale-in z-50">
@@ -208,7 +225,7 @@ function AccountButton({ wide }: { wide: boolean }) {
   const openLogin = useAuth((s) => s.openLogin);
   if (user) {
     return (
-      <Link to={href.me()} className="flex items-center gap-2 shrink-0 hover:opacity-90" aria-label="个人中心">
+      <Link to={href.me()} className="flex items-center gap-2 shrink-0 hover:opacity-90" aria-label={t("header.me")}>
         <Avatar size={wide ? 32 : 28} name={user.nickname} color={user.avatar_color} />
         {wide && <span className="text-[14px] font-semibold text-[#d9d9d9] max-w-[96px] truncate">{user.nickname}</span>}
       </Link>
@@ -216,8 +233,8 @@ function AccountButton({ wide }: { wide: boolean }) {
   }
   return (
     <button onClick={openLogin}
-      className="shrink-0 h-9 min-[1366px]:h-[38px] px-[13px] min-[1366px]:px-[14px] rounded-[24px] bg-[#ffd321] text-[#14130e] text-[14px] font-semibold">
-      登录/注册
+      className="shrink-0 h-9 min-[1366px]:h-[38px] px-[13px] min-[1366px]:px-[14px] rounded-[24px] bg-[#ffd321] text-[#14130e] text-[14px] font-semibold whitespace-nowrap">
+      {t("header.login")}
     </button>
   );
 }
@@ -229,12 +246,12 @@ function DesktopHeader() {
   return (
     <div className="rg-wrap h-[76px] flex items-center">
       <Logo />
-      <nav aria-label="主导航" className="ml-4 flex items-center gap-1 min-w-0">
+      <nav aria-label={t("header.mainNav")} className={`${CHINESE ? "ml-4 gap-1" : "ml-3 gap-0.5 min-[1680px]:gap-1"} flex items-center min-w-0 overflow-x-auto no-bar`}>
         {items.map((it) => {
           const on = it.active(path, sort);
           return (
             <Link key={it.to} to={it.to} aria-current={on ? "page" : undefined}
-              className={`h-[41px] px-[3px] min-[1366px]:px-[5.5px] min-[1680px]:px-[9px] flex items-center gap-1.5 text-[14px] font-semibold leading-[21px] whitespace-nowrap transition-colors ${on ? "text-[#ffd321]" : "text-[#d9d9d9] hover:text-white"}`}>
+              className={`h-[41px] px-[3px] ${NAV_ROOMY} flex items-center gap-1.5 ${NAV_TEXT} font-semibold leading-[21px] whitespace-nowrap transition-colors ${on ? "text-[#ffd321]" : "text-[#d9d9d9] hover:text-white"}`}>
               {it.label}{it.caret && <ChevronDown size={9} className="opacity-70" />}
             </Link>
           );
@@ -290,28 +307,28 @@ function MobileHeader() {
   return (
     <>
       <div className="relative h-14 flex items-center pl-[18px] pr-[12px]">
-        <button onClick={openMenu} aria-label="菜单" className="w-7 h-7 flex items-center justify-center text-white"><Menu size={24} /></button>
+        <button onClick={openMenu} aria-label={t("header.menu")} className="w-7 h-7 flex items-center justify-center text-white"><Menu size={24} /></button>
         <div className="ml-[8px] shrink-0"><Logo size="sm" /></div>
         <span className="flex-1 min-w-[10px]" />
         {/* 搜索短剧, as on the reference: a 160 × 32 pill with the placeholder (narrower on small screens) that opens search. */}
-        <button onClick={openSearch} aria-label="搜索短剧"
+        <button onClick={openSearch} aria-label={t("header.searchDramas")}
           className="w-[160px] min-w-[96px] shrink h-[32px] px-[10px] gap-[5px] rounded-[30px] bg-[#272727] text-[#aaa] text-[13px] flex items-center">
-          <SearchIcon size={14} strokeWidth={2.6} className="shrink-0 mx-px" /><span className="truncate">搜索短剧</span>
+          <SearchIcon size={14} strokeWidth={2.6} className="shrink-0 mx-px" /><span className="truncate">{t("header.searchDramas")}</span>
         </button>
         {user
-          ? <Link to={href.me()} aria-label="个人中心" className="ml-3 w-[24px] h-[32px] flex items-center justify-center"><Avatar size={24} name={user.nickname} color={user.avatar_color} /></Link>
-          : <button onClick={openLogin} aria-label="登录/注册" className="ml-3 w-[24px] h-[32px] flex items-center justify-center text-white"><CircleUserRound size={24} strokeWidth={2} /></button>}
+          ? <Link to={href.me()} aria-label={t("header.me")} className="ml-3 w-[24px] h-[32px] flex items-center justify-center"><Avatar size={24} name={user.nickname} color={user.avatar_color} /></Link>
+          : <button onClick={openLogin} aria-label={t("header.login")} className="ml-3 w-[24px] h-[32px] flex items-center justify-center text-white"><CircleUserRound size={24} strokeWidth={2} /></button>}
       </div>
 
       <Drawer open={menu} side="left" onClose={closeOverlay}>
-        <div className="p-4 flex items-center justify-between"><Logo size="md" /><button onClick={closeOverlay} aria-label="关闭" className="w-9 h-9 rounded-full flex items-center justify-center text-mut"><X size={18} /></button></div>
+        <div className="p-4 flex items-center justify-between"><Logo size="md" /><button onClick={closeOverlay} aria-label={t("common.close")} className="w-9 h-9 rounded-full flex items-center justify-center text-mut"><X size={18} /></button></div>
         <button onClick={() => { closeOverlay(); if (user) navigate(href.me()); else window.setTimeout(openLogin, 50); }}
           className="mx-4 mb-3 w-[calc(100%-32px)] flex items-center gap-3 p-3 rounded-[12px] bg-white/[.05] text-left">
           {user ? <Avatar size={36} name={user.nickname} color={user.avatar_color} />
             : <span className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-mut"><UserRound size={18} /></span>}
           <span className="flex-1 min-w-0">
-            <span className="block text-[14px] font-semibold text-on truncate">{user ? user.nickname : "登录 / 注册"}</span>
-            <span className="block text-[11.5px] text-dim">{user ? "个人中心" : "登录后可收藏、评论和同步记录"}</span>
+            <span className="block text-[14px] font-semibold text-on truncate">{user ? user.nickname : t("header.loginSpaced")}</span>
+            <span className="block text-[11.5px] text-dim">{user ? t("header.me") : t("header.loginHint")}</span>
           </span>
           <ChevronRight size={16} className="text-dim" />
         </button>
@@ -327,10 +344,10 @@ function MobileHeader() {
       <Drawer open={search} side="top" onClose={closeOverlay}>
         <div className="p-3 border-b border-white/[.06] flex items-center gap-2" style={{ paddingTop: "max(env(safe-area-inset-top), 12px)" }}>
           <form role="search" className="flex-1" onSubmit={(e) => { e.preventDefault(); submit(value); }}>
-            <input autoFocus value={value} onChange={(e) => setValue(e.target.value)} maxLength={50} placeholder="搜索你感兴趣的内容" aria-label="搜索"
+            <input autoFocus value={value} onChange={(e) => setValue(e.target.value)} maxLength={50} placeholder={t("header.searchPlaceholder")} aria-label={t("search.title")}
               className="w-full h-11 px-5 rounded-full bg-[#1a1a1a] border border-primary text-[14px] text-on placeholder:text-dim outline-none" />
           </form>
-          <button onClick={closeOverlay} className="h-11 px-3 text-[14px] text-mut">取消</button>
+          <button onClick={closeOverlay} className="h-11 px-3 text-[14px] text-mut">{t("common.cancel")}</button>
         </div>
         <SearchPanel onPick={submit} />
       </Drawer>
@@ -351,14 +368,13 @@ export function SiteHeader() {
  * ------------------------------------------------------------------------------------------- */
 
 export function SiteFooter() {
-  const { t } = useTranslation();
   const site = useSite();
   const s = site.data;
   const bare = (u: string) => u.replace(/^https?:\/\//, "").replace(/\/$/, "");
   const lines: [string, string, string][] = [];
-  if (s?.mirrors[1]) lines.push(["备用入口：", bare(s.mirrors[1]), s.mirrors[1]]);
-  if (s?.mirrors[0]) lines.push(["最新地址：", bare(s.mirrors[0]), s.mirrors[0]]);
-  lines.push(["永久地址发布页：", s?.permanent_domain ? bare(s.permanent_domain) : `${window.location.host}${href.wayHome()}`, s?.permanent_domain || href.wayHome()]);
+  if (s?.mirrors[1]) lines.push([t("footer.backup"), bare(s.mirrors[1]), s.mirrors[1]]);
+  if (s?.mirrors[0]) lines.push([t("landing.footer.latest"), bare(s.mirrors[0]), s.mirrors[0]]);
+  lines.push([t("footer.permanentPage"), s?.permanent_domain ? bare(s.permanent_domain) : `${window.location.host}${href.wayHome()}`, s?.permanent_domain || href.wayHome()]);
   const col = (title: string, links: { label: string; to: string; external?: boolean }[]) => (
     <div className="w-[110px]">
       <div className="text-[12.25px] font-medium leading-[17px] text-white">{title}</div>
@@ -386,21 +402,21 @@ export function SiteFooter() {
               </div>
             ))}
           </div>
-          <p className="mt-[14px] text-[12px] leading-[19px] text-white/35">© {BRAND} · ALL RIGHTS RESERVED · 本站内容仅面向年满 18 周岁的成年人</p>
+          <p className="mt-[14px] text-[12px] leading-[19px] text-white/35">{t("footer.rights", { brand: BRAND })}</p>
         </div>
         <div className="flex gap-6 lg:gap-[73px]">
-          {col("关于", [
-            { label: "回家的路", to: href.wayHome() },
-            { label: "下载 App", to: href.download() },
-            { label: "最近上新", to: href.channel("all") },
-            { label: "热门推荐", to: href.ranks() },
-            { label: "专题合集", to: href.topics() },
+          {col(t("footer.about"), [
+            { label: t("nav.wayHome"), to: href.wayHome() },
+            { label: t("way.appTitle"), to: href.download() },
+            { label: t("footer.latest"), to: href.channel("all") },
+            { label: t("footer.hot"), to: href.ranks() },
+            { label: t("footer.topics"), to: href.topics() },
           ])}
-          {col("政策", (Object.keys(LEGAL_PATHS) as LegalPath[]).map((p) => ({ label: t(LEGAL_PATHS[p]), to: p, external: true })))}
-          {col("其他", [
-            { label: "个人中心", to: href.me() },
-            { label: "设置", to: href.settings() },
-            { label: "搜索", to: href.search() },
+          {col(t("footer.policy"), (Object.keys(LEGAL_PATHS) as LegalPath[]).map((p) => ({ label: t(LEGAL_PATHS[p]), to: p, external: true })))}
+          {col(t("footer.other"), [
+            { label: t("header.me"), to: href.me() },
+            { label: t("settings.title"), to: href.settings() },
+            { label: t("search.title"), to: href.search() },
           ])}
         </div>
       </div>
@@ -419,7 +435,7 @@ export function FloatDock() {
     try { return !nativeApp && sessionStorage.getItem(DOCK_KEY) !== "1"; } catch { return !nativeApp; }
   });
   const hide = () => { setCard(false); try { sessionStorage.setItem(DOCK_KEY, "1"); } catch { /* ignore */ } };
-  const btn = "w-[56px] h-[56px] rounded-[9px] flex flex-col items-center justify-center gap-[2px] text-[12px] font-medium leading-[18px]";
+  const btn = "w-[56px] h-[56px] rounded-[9px] flex flex-col items-center justify-center gap-[2px] text-[12px] font-medium leading-[18px] text-center";
   return (
     <div className="fixed right-2 lg:right-[19px] bottom-6 lg:bottom-[30px] z-30 flex flex-col items-end gap-[30px] scale-[.82] lg:scale-100 origin-bottom-right">
       {card && (
@@ -428,14 +444,14 @@ export function FloatDock() {
             style={{ background: "linear-gradient(149.42deg, rgba(71,66,46,.72) 19.3%, rgba(46,43,30,.72) 46.4%, rgba(43,40,25,.72) 80.5%)" }}>
             <span className="w-[60px] h-[59px] flex items-center justify-center"><BrandMark fit={58} /></span>
             <span className="-mt-[5px] h-6 px-2 rounded-full text-[12px] font-medium text-black flex items-center"
-              style={{ background: "linear-gradient(90deg,#ffd21c,#f5a623)" }}>下载 APP</span>
+              style={{ background: "linear-gradient(90deg,#ffd21c,#f5a623)" }}>{t("dock.download")}</span>
           </Link>
-          <button onClick={hide} aria-label="关闭" className="absolute -top-1 -right-4 w-5 h-5 rounded-full bg-black/60 text-white/80 flex items-center justify-center"><X size={12} /></button>
+          <button onClick={hide} aria-label={t("common.close")} className="absolute -top-1 -right-4 w-5 h-5 rounded-full bg-black/60 text-white/80 flex items-center justify-center"><X size={12} /></button>
         </div>
       )}
       <div className="w-[68px] p-[5px] rounded-[12px] bg-white/5 border border-white/10 backdrop-blur-md flex flex-col items-center gap-[4px]">
-        <Link to={href.me()} className={`${btn} bg-[#ffd321] text-black`}><History size={18} />最近浏览</Link>
-        <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} className={`${btn} text-[#a1a1aa] hover:text-white`}><ArrowUpToLine size={18} />回到顶部</button>
+        <Link to={href.me()} className={`${btn} bg-[#ffd321] text-black`}><History size={18} />{t("dock.recent")}</Link>
+        <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} className={`${btn} text-[#a1a1aa] hover:text-white`}><ArrowUpToLine size={18} />{t("dock.top")}</button>
       </div>
     </div>
   );

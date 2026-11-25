@@ -94,15 +94,20 @@ ReelGuo/
     src/ReelGuo.Worker           job runner, ffprobe parsing, encode plan, transcoder
     tests/ReelGuo.Api.Tests      unit, API, database and end-to-end pipeline tests
   web/
-    apps/client                  the PWA: portal pages (src/portal), players (src/feed, src/player), account, billing
-    apps/admin                   admin console
+    apps/client                  the PWA: portal pages (src/portal), players (src/feed, src/player), account, billing;
+                                 src/i18n: one dictionary per site language (zh-CN, id, vi, pt-BR)
+    apps/admin                   admin console (Chinese on every site)
     packages/api-client          generated types + typed fetch client
     packages/ui                  design tokens (tokens.css) and shared primitives
+    sites/                       one folder per site (§9.16): site.json (name, language, domain), its mark and icons;
+                                 plugin.mjs makes a build for one site (REELGUO_SITE)
   edge/                          Cloudflare Worker for the media host (+ tests)
   native/                        Tauri 2 desktop and Android shell: boot/ (bundled start page), src-tauri/ (Rust)
-  Assets/                        brand source picture; scripts/brand-icons.mjs (`pnpm brand:icons`) makes the page
-                                 logo (web/packages/ui/src/brand, BrandMark), favicons, install and app icons from it
+  Assets/                        brand source pictures (Assets/sites/<key>.jpg for the country sites);
+                                 scripts/brand-icons.mjs (`pnpm brand:icons`) makes each site's page mark (BrandMark),
+                                 favicons and install icons, and 黄月短剧's app icons, into web/sites/<key>
   scripts/seed-demo.mjs          generates labelled demo episodes and runs them through the real pipeline
+  scripts/seed-story-demo.mjs    the same for a demo 互动剧 (interactive series) with its story (§9.15)
   scripts/staging/               staging on a Windows server, natively as Windows services (no Docker): setup,
                                  update, rollback, ops, backup, demo content (docs/STAGING.md)
   infra/                         docker-compose, Caddyfile, web Dockerfile; staging/ holds the native staging
@@ -752,6 +757,88 @@ private Tencent COS bucket, and plays the uploaded MP4 itself (`ReelGuo.Data/Med
   PlaybackUrlMinutes, UploadUrlMinutes}`. With `Cos` and any of the first four missing, or a bucket name without its
   APPID, the API and the worker refuse to start and say which. `Video:Cos:Endpoint` exists only for tests (a local
   fake bucket).
+
+### 9.15 Interactive series (互动剧) ✅
+
+A series of `Kind = Interactive` tells a branching story. Its episodes are **scenes**: uploaded, encoded, stored in COS,
+priced and unlocked exactly like episodes (S1, S2, … are their episode numbers). When a scene ends, its `Outcome` says
+what happens next:
+
+| Outcome | Fields | Viewer sees |
+|---|---|---|
+| `Choice` | `ChoicePrompt` (≤ 40 chars), `ChoiceLeadSeconds` (0–10), `ChoiceCountdown` (null or 5–30 s), 2–4 `StoryOption` rows (label ≤ 12, description ≤ 30, target scene, `IsDefault`) | The question and the options over the last frame (or `lead` seconds early, while it plays); the countdown plays the default |
+| `Continue` | `NextEpisodeId` | The next scene straight away (branches meet again) |
+| `Ending` | `EndingTitle` (≤ 20) | 结局 n / N 「名称」, the endings found, 回到上一个选择 / 重新开始 / 剧情图 |
+
+`Series.StoryStartEpisodeId` picks the first scene (null: the lowest number; not a foreign key). Option targets and
+`NextEpisodeId` are NO ACTION foreign keys: a whole series still deletes in one statement, while deleting a single
+scene that something leads to is refused by the admin API first (`scene_in_use`).
+
+- **Rules** (`ReelGuo.Data/Catalog/StoryRules.cs`). Only scenes reachable from the start are checked: each must be
+  ready and set up, choices need 2–4 labelled options (and one default with a countdown), endings need a name, at least
+  one ending must be reachable. Unreachable scenes and loops with no way out are warnings. Errors block publishing and
+  block saving a published series' story.
+- **Viewer API.** `GET /api/v1/series/{id}/story` (scenes, options, prices, endings, the signed-in viewer's
+  `progress`; names of endings they haven't found are left out, also from the series detail and SEO page).
+  `POST …/story/next {from, option?, timed_out}` returns the next scene, counts the choice (`ChosenCount`,
+  `TimeoutCount`), returns 「n% 的观众也这么选」 once a choice point has 100 choices, and saves a signed-in viewer's place.
+  `PUT …/story/progress` saves going back, starting over, an ending that played, or a guest's progress after sign-in.
+  Video links still come from `/episodes/{ep}/play`, so locked scenes stay locked.
+- **Viewer progress.** `story_progress` (user, series, current scene, path of `{scene, option}` steps as jsonb, endings
+  found as `integer[]`). Guests keep the same on the device (`rg.story.v1`), merged into the account on sign-in. An
+  ending counts as found once it plays: a paid one reached through a choice stops at the unlock card first.
+- **Player** (`web/apps/client/src/story`). `useStoryPlayer` plugs into both players (the mobile feed and the desktop
+  series player): it shows the options at `duration − lead`, runs the countdown, preloads the first seconds of up to two
+  target scenes (one on data saver) 8 s before, moves on with the same video element (so iPhone sound keeps playing after
+  a timed-out choice), and turns the 选集 panel into the story map. The paywall gets 换个选择 (back to that choice).
+- **Admin** (`web/apps/admin/src/pages/StoryEditor.tsx`). Series editor → 类型 互动剧 → 剧情编辑: the map, the
+  scene list, each scene's form with option statistics, the problems, and 试玩 (plays the unsaved draft through the
+  admin preview links, everything unlocked, following the scores). `GET/PUT /api/admin/series/{id}/story` load and save
+  the whole story; options keep their ids (and statistics) across saves.
+- **Scene prices.** `Episode.CustomPrice` (any series) replaces the series' rule for that episode, also inside the free
+  episodes or in an otherwise free series: a special ending at 60 coins. `Pricing.EpisodePrice` takes it everywhere a
+  price matters (detail, play, unlock, story), so a paid branch stays locked however it is reached. A price on the
+  option alone could be skipped by playing the target scene directly; the option shows its target's price instead.
+- **Hidden scores (隐藏数值).** `Series.StoryVariablesJson`: up to 5 scores (stable `key`, name ≤ 8, initial value).
+  Options carry `EffectsJson` (≤ 3, e.g. 好感度 +1) and `ConditionsJson` (≤ 2, gte/lte/eq, all must hold to show). A
+  viewer's scores aren't stored: they are the initial values plus the effects of the options on their path, so going
+  back recomputes them. Conditions decide what the player shows (the API doesn't enforce them); when none of a choice's
+  options qualify, all show, and the editor warns about choices whose options all have conditions. The countdown plays
+  the default option when it shows, else the first one shown.
+- **Map layout.** `Series.StoryLayoutJson` keeps where the admin dragged each box; boxes not placed are laid out by
+  distance from the start. Dragging from the dot on a box's right edge onto another box adds an option leading there
+  (or, for a scene that continues, changes where it continues). 自动排列 clears the layout.
+- **Share card** (`web/apps/client/src/story/shareCard.ts`). The ending card's 分享结局 draws a 1080×1440 image on a
+  canvas (cover, 「我解锁了结局 · 名称」, 结局 n / N, a QR code to the series): the system share sheet where it takes
+  images (phones), else a download plus the link copied. Covers on another origin without CORS are left out.
+
+### 9.16 Country sites (one codebase, several sites) ✅
+
+The same code runs several sites, each under its own domain, name, icon and language: 黄月短剧 (zh-CN, the main site),
+Yelrama (id), VpineDrama (vi) and ApineDrama (pt-BR). **Each site is a separate deployment** with its own database,
+admin console and admins, videos, channels, viewers, coins and orders; nothing is shared at runtime, so one site's data
+can never show on another and no query needs a site filter. On staging they run side by side on one server
+(docs/STAGING.md §6b): one API and worker pair per site, one Caddy choosing by host name.
+
+- **Web builds per site.** `web/sites/<key>/site.json` holds the site's facts (name, short name, language, domain,
+  the logo's two-colour text). `web/sites/plugin.mjs` (both Vite configs) builds for `REELGUO_SITE` (default
+  huangyue): it points `@reelguo/site` at the site's folder (name, mark), `@reelguo/locale` at the client's dictionary
+  for its language, merges the site's public files (favicon, install icons) into the build, and sets `<html lang>`
+  and the title. Only that language's dictionary is in the bundle. Type checks use 黄月短剧 and Chinese.
+- **Viewer text.** Every string of the client is in `src/i18n/<locale>.ts`; `zh-CN.ts` is the source and its type
+  (`Dict`) makes the other dictionaries carry exactly its keys (plural `_one` forms allowed; a test also checks
+  placeholders and markup). Code outside components uses `t` and `tList` from `src/i18n`. Server error messages: the
+  Chinese site shows the server's own text, the others the translation of its error code (`errors.<code>`).
+  Numbers use the language's short form (1,2 rb, 1,2 mil) instead of 万/亿.
+- **Server text.** `Brand` settings (Key, Name, Short, Locale; 黄月短剧 by default) make `SiteBrand`, a singleton
+  with the language's texts (`Sites/Texts/<locale>.json`, embedded): search-engine pages, the iPhone profile (its name,
+  icon `Apps/WebClip/<key>.png` and identifier `com.reelguo.webclip.<key>`, so installing one site doesn't replace
+  another's icon), legal page names and texts (`Legal/Texts/<locale>/`), wallet entries, the hot-tag padding, the
+  default tagline. Tests check every language has the Chinese keys and placeholders, and every legal page.
+- **Default content.** The migrations seed Chinese channels and coin packs. `SiteSeed` renames them to the site's
+  language at start-up, once, only while they are still exactly as seeded, and hides the face-swap placeholder channel.
+- **The admin console** stays Chinese on every site; its build carries the site's name and icon.
+- **Not per site yet:** native apps (黄月短剧's only), payment currencies and providers, `PublishRules.DefaultRightsHolder`.
 
 ## 10. Web / PWA specifics
 

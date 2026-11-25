@@ -1,0 +1,12 @@
+{
+  "key": "yelrama",
+  "name": "Yelrama",
+  "short": "Yelrama",
+  "locale": "id",
+  "domain": "yelrama.com",
+  "wordmark": ["yel", "rama"],
+  "description": "Yelrama · Drama pendek AI dan orisinal, tonton online",
+  "icon": "Assets/sites/yelrama.jpg",
+  "iconStyle": "tile",
+  "nativeApps": false
+}

@@ -14,6 +14,7 @@ import { AccountPage, AddressReminder } from "./Account";
 import { FloatDock, SiteFooter, SiteHeader } from "./chrome";
 import { HomePage } from "./Home";
 import { Breadcrumb, Container, EmptyState } from "./kit";
+import { t } from "../i18n";
 import { ChannelPage, PostsPage, RanksPage, SearchPage, TopicPage, TopicsPage, WayHomePage } from "./Pages";
 import { SeriesPage } from "./SeriesPage";
 import type { RankKind } from "../api";
@@ -43,8 +44,8 @@ function Route() {
   if (path === "/settings") return <SettingsPage />;
   return (
     <Container>
-      <Breadcrumb items={[{ label: BRAND, to: "/" }, { label: "页面不存在" }]} />
-      <EmptyState title="页面不存在" sub="链接可能已失效，回到首页看看吧" />
+      <Breadcrumb items={[{ label: BRAND, to: "/" }, { label: t("notFound.title") }]} />
+      <EmptyState title={t("notFound.title")} sub={t("notFound.sub")} />
     </Container>
   );
 }

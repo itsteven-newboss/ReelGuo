@@ -12,6 +12,7 @@ import { useReport } from "../social/Report";
 import { togglePost, useAuth } from "../state/auth";
 import { useUi } from "../state/ui";
 import { BRAND, BRAND_SHORT } from "../brand";
+import { t } from "../i18n";
 
 /** Second sanitising layer (the API already sanitises on save). Links open in a new tab. */
 function cleanHtml(html: string): string {
@@ -48,13 +49,13 @@ export function PostPage({ id }: { id: number }) {
 
   return (
     <Container>
-      <Breadcrumb items={[{ label: BRAND, to: "/" }, { label: "热点吃瓜", to: href.posts() }, { label: post.data?.title ?? "帖子" }]} />
-      {post.isError ? <EmptyState title="内容不存在或已下架" /> : !post.data ? <div className="flex justify-center py-16"><Spinner /></div> : (
+      <Breadcrumb items={[{ label: BRAND, to: "/" }, { label: t("post.crumb"), to: href.posts() }, { label: post.data?.title ?? t("post.fallbackTitle") }]} />
+      {post.isError ? <EmptyState title={t("series.missing")} /> : !post.data ? <div className="flex justify-center py-16"><Spinner /></div> : (
         <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <article className="min-w-0">
             <h1 className="text-[24px] lg:text-[30px] font-bold text-on leading-snug">{post.data.title}</h1>
             <div className="mt-2.5 flex items-center gap-3 text-[13px] text-mut">
-              <span>{BRAND_SHORT}吃瓜</span>
+              <span>{t("nav.gossip", { short: BRAND_SHORT })}</span>
               {post.data.published_at && <span>{new Date(post.data.published_at).toLocaleDateString("sv-SE")}</span>}
               <span className="flex items-center gap-1"><Flame size={13} />{fmtCount(post.data.hot)}</span>
             </div>
@@ -62,7 +63,7 @@ export function PostPage({ id }: { id: number }) {
               {playing && play.data ? (
                 <VideoSurface src={play.data.video_url} poster={play.data.poster} active muted={muted} volume={volume} rate={1} fit="contain" controls />
               ) : (
-                <button className="absolute inset-0" aria-label="播放" onClick={() => (linked ? setPlaying(true) : toast("该帖子没有视频"))}>
+                <button className="absolute inset-0" aria-label={t("player.play")} onClick={() => (linked ? setPlaying(true) : toast(t("post.noVideo")))}>
                   <Img src={post.data.cover} eager />
                   {linked && (
                     <span className="absolute inset-0 flex items-center justify-center">
@@ -82,21 +83,21 @@ export function PostPage({ id }: { id: number }) {
             <div className="article-body mt-4 !text-[15px]" dangerouslySetInnerHTML={{ __html: html }} />
             <div className="flex items-center gap-2.5 mt-6">
               <Action on={liked} onClick={() => void toggle("like")} icon={<Heart size={15} className={liked ? "text-like fill-current" : ""} />}>{fmtCount(counts.like ?? post.data.like_count)}</Action>
-              <Action on={faved} onClick={() => void toggle("collect")} icon={<Star size={15} className={faved ? "text-star fill-current" : ""} />}>{faved ? "已收藏" : "收藏"}</Action>
-              <button onClick={() => openReport({ type: "post", id, label: `文章：${post.data!.title}` })}
-                className="ml-auto h-10 px-4 rounded-[10px] text-[13px] text-dim hover:text-mut flex items-center gap-1.5"><Flag size={13} />举报</button>
+              <Action on={faved} onClick={() => void toggle("collect")} icon={<Star size={15} className={faved ? "text-star fill-current" : ""} />}>{faved ? t("actions.faved") : t("actions.fav")}</Action>
+              <button onClick={() => openReport({ type: "post", id, label: t("report.postLabel", { title: post.data!.title }) })}
+                className="ml-auto h-10 px-4 rounded-[10px] text-[13px] text-dim hover:text-mut flex items-center gap-1.5"><Flag size={13} />{t("comments.report")}</button>
             </div>
           </article>
           <aside className="flex flex-col gap-4">
             {linked && (
               <Panel className="p-4">
-                <div className="text-[13px] text-mut mb-3">本文相关剧集</div>
+                <div className="text-[13px] text-mut mb-3">{t("post.related")}</div>
                 <Link to={href.video(linked.id)} className="flex gap-3 group">
                   <span className="relative w-[72px] h-[96px] rounded-[8px] overflow-hidden bg-s2 shrink-0"><Img src={linked.cover} /></span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-[15px] font-bold text-on truncate group-hover:text-primary">{linked.title}</span>
-                    <span className="block mt-1 text-[12px] text-dim">共 {linked.episode_count} 集</span>
-                    <span className="mt-3 inline-flex h-8 px-4 rounded-full bg-primary text-on-primary text-[12.5px] font-bold items-center">观看正片</span>
+                    <span className="block mt-1 text-[12px] text-dim">{t("detail.episodeCount", { count: linked.episode_count })}</span>
+                    <span className="mt-3 inline-flex h-8 px-4 rounded-full bg-primary text-on-primary text-[12.5px] font-bold items-center">{t("post.watch")}</span>
                   </span>
                 </Link>
               </Panel>

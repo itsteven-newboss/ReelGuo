@@ -32,6 +32,7 @@ Staging is a copy of production for testing and review:
 | `C:\reelguo-staging\releases\<time>-<commit>\` | One folder per built version: `api`, `worker`, `web\client`, `web\admin`, `Caddyfile`. The last 5 are kept. |
 | `C:\reelguo-staging\current` | A link to the running release. A rollback points it back. |
 | `C:\reelguo-staging\data\storage` | Videos and images. |
+| `C:\reelguo-staging\sites\<key>\` | Each other site on this server (§6b): `site.env` (its settings) and `storage`. |
 | `C:\reelguo-staging\backups` | Database backups (nightly, kept 14 days). |
 | `C:\reelguo-staging\tools` | Caddy (web server) and ffmpeg. |
 | `C:\reelguo-staging\logs\caddy.log` | Web server log. The API and worker log to the Windows Event Log (Application). |
@@ -47,6 +48,7 @@ Staging is a copy of production for testing and review:
 | `rollback.ps1` | When an update went wrong |
 | `ops.ps1` | Day to day: status, logs, restart, settings, backups |
 | `seed-demo.ps1` | (Re)load the demo content |
+| `add-site.ps1` | Add another site (domain, name, language) to this server (§6b) |
 | `backup.ps1` | One database backup (run nightly by the scheduled task) |
 
 ---
@@ -466,6 +468,89 @@ about US$12 for a month.
 
 ---
 
+## 6b. More sites on this server (country sites)
+
+The server can run other sites next to the main one (黄月短剧): **yelrama.com** (Indonesia, Bahasa Indonesia),
+**vpinedrama.com** (Vietnam, Tiếng Việt) and **apinedrama.com** (Brazil, Português). Each is the same app under its own
+name, icon and language (`web\sites\<key>\site.json`), with **its own database, admin console and admin accounts,
+videos, channels, viewers, coins and orders**. Nothing is shared between sites except the code and the server: a
+video uploaded in Yelrama's admin console only exists on Yelrama.
+
+- Viewers see the site in its language. The **admin console stays in Chinese** on every site, with the site's name
+  and icon at the top (`Yelrama 后台`), so the team knows which site it is working on.
+- Each site has a Windows service pair (`ReelGuoApi-<key>`, `ReelGuoWorker-<key>`), a database (`reelguo_<key>`),
+  a local admin port (8082, 8083, ...) and, through Cloudflare, its own admin address (`admin.yelrama.com`).
+- One `update.ps1` updates every site; `rollback.ps1`, the nightly backup and `ops.ps1` cover them all.
+
+### Add a site
+
+1. **Cloudflare:** *Add a site* → `yelrama.com` (Free plan). At the domain's registrar, switch the name servers to the
+   two Cloudflare shows. Then, as for the main site (public-port mode, §2):
+   - **DNS:** `A` records to the server's public IP, all **Proxied** (orange cloud): `@`, `www` and `admin`.
+   - **SSL/TLS → Overview → Flexible.**
+   - **Zero Trust → Access → Applications:** protect `admin.yelrama.com` (only your team's emails).
+   - Tunnel mode instead: in the tunnel's *Public hostname* tab, `yelrama.com`, `www.yelrama.com` and
+     `admin.yelrama.com` → `HTTP localhost:8080`.
+2. **On the server**, from `C:\reelguo`:
+
+   ```powershell
+   .\scripts\staging\add-site.ps1 -Site yelrama -AppUrl https://yelrama.com -AdminHost admin.yelrama.com
+   .\scripts\staging\add-site.ps1 -Site vpinedrama -AppUrl https://vpinedrama.com -AdminHost admin.vpinedrama.com
+   .\scripts\staging\add-site.ps1 -Site apinedrama -AppUrl https://apinedrama.com -AdminHost admin.apinedrama.com
+   .\scripts\staging\update.ps1
+   ```
+
+   `add-site.ps1` writes the site's settings (generated keys, database password, ports) and **prints its admin
+   password once**: store it. `update.ps1` then creates its database, builds its web app and admin console in its
+   language, installs its services and serves it on its host names. The first update after adding sites takes a few
+   minutes longer: every site's web app is built.
+3. **Check:** `https://yelrama.com` shows the 18+ notice in Indonesian; `https://admin.yelrama.com` (or
+   `http://localhost:8082` on the server) signs in as `admin` with the printed password. The channels start as 「Drama
+   AI」, 「Animasi AI」 and 「AI Remix」 (rename them in 频道管理); add content as on the main site.
+
+### Videos for a site
+
+- **On this server** (default, `Hls`): uploads are stored in `C:\reelguo-staging\sites\<key>\storage` and encoded by
+  the site's own worker. Every site's worker encodes on the same CPU, and the disk holds every site's videos: watch
+  `ops.ps1 disk`.
+- **Tencent COS:** **each site needs its own bucket** (`yelrama-1300000000`, ...). The scripts refuse two sites on one
+  bucket: deleting content in one site deletes its files in the bucket, which another site could still be playing.
+  Create the bucket as in §6 (private, CORS for the site's admin address), give the CAM key access to it (one key may
+  cover several buckets), then:
+
+  ```powershell
+  .\scripts\staging\add-site.ps1 -Site yelrama -VideoProvider Cos -CosBucket yelrama-1300000000
+  .\scripts\staging\ops.ps1 config
+  ```
+
+### Day to day
+
+- **Settings:** `C:\reelguo-staging\sites\<key>\site.env` (§7). Run `add-site.ps1` again to change the address or
+  admin address (it keeps the keys), or edit the file and run `ops.ps1 config`.
+- **Logs:** the Windows Event Log sources `ReelGuo.Api.<key>` and `ReelGuo.Worker.<key>` (`ops.ps1 logs` shows all).
+- **Backups:** one file per site's database, `reelguo_<key>-<time>.dump`. To restore after a failed update, pass the
+  ones you need: `rollback.ps1 -RestoreBackup reelguo-….dump,reelguo_yelrama-….dump`; each goes back to its own site.
+- **Take a site off the server:** `add-site.ps1 -Site yelrama -Remove`, then `ops.ps1 config`. Its services are
+  removed; its database and files are kept.
+- **Name, icon, language:** `web\sites\<key>\site.json` (name, short name, domain, language, logo text) and its icon
+  `Assets\sites\<key>.jpg` (`pnpm brand:icons` writes every site's icons). The viewer site's text is in
+  `web\apps\client\src\i18n\<locale>.ts`, the server's (search-engine pages, iPhone profile, default channels) in
+  `backend\src\ReelGuo.Api\Sites\Texts\<locale>.json`, the legal pages in `backend\src\ReelGuo.Api\Legal\Texts\<locale>\`.
+  These translations need a native speaker's review before launch.
+
+### Before opening a country site
+
+- **Law.** Distributing pornography is a criminal offence in **Indonesia** (Law 44/2008, the ITE law; Kominfo also
+  blocks such sites) and in **Vietnam** (Penal Code art. 326). **Brazil** allows adult content but, since March 2026,
+  requires real age verification for it (ECA Digital, Law 15.211/2025), and data processing under the LGPD. Get local
+  legal advice before opening any of them. Each site has its own 地区屏蔽 and 年龄验证 pages; the legal pages are
+  translations of the Chinese drafts and still show the "awaiting legal review" notice.
+- **Apps.** The desktop and Android apps are 黄月短剧's; the other sites have none yet, so their download page says the
+  versions are coming. iPhone home-screen install (the profile) works for every site under its own name and icon.
+- **Payments** are off, as on the main site. Local currencies and payment methods (QRIS, MoMo, PIX) are a later step.
+
+---
+
 ## 7. Settings reference (`C:\reelguo-staging\staging.env`)
 
 | Setting | Meaning |
@@ -492,8 +577,14 @@ about US$12 for a month.
 | `REELGUO_COS_FOLDER` | Storage folder under `videos/` for uploads from the series editor (`reelguo`). The folder upload page picks its own. |
 | `REELGUO_COS_CDN_HOST` | Optional: a CDN domain bound to the bucket that forwards the query string. Empty plays from the bucket. |
 | `REELGUO_COS_PLAYBACK_MINUTES`, `REELGUO_COS_UPLOAD_MINUTES` | How long a viewer's link (30) and an upload link (360) work. |
+| `REELGUO_SITES` | The other sites on this server (§6b), for example `yelrama,vpinedrama,apinedrama`. Written by `add-site.ps1`. |
 
-After editing the file, run `ops.ps1 config`.
+After editing the file, run `ops.ps1 config`. Each other site has its own settings in
+`C:\reelguo-staging\sites\<key>\site.env`, with the same names: its address (`REELGUO_APP_URL`), admin address,
+ports, database login, keys, admin password, videos (`REELGUO_VIDEO_PROVIDER`, `REELGUO_COS_BUCKET`, `REELGUO_COS_FOLDER`),
+contacts (`REELGUO_PERMANENT_DOMAIN`, `REELGUO_TELEGRAM`, `REELGUO_CONTACT_EMAIL`), payments and indexing. Everything
+else (staging mode, web port, the COS key and region, monitoring, backups) comes from `staging.env`. After editing a
+site.env, run `ops.ps1 config` too.
 
 ---
 

@@ -1,11 +1,13 @@
 import { Img } from "@reelguo/ui";
 import { Bell, Trophy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Trans } from "react-i18next";
 import { useRanks, useSeriesList, useSite, useSuggest, useTopics, type TopicCard, type VideoCard } from "../api";
 import { href, Link, navigate } from "../router";
 import { useMedia } from "./chrome";
 import { Container, fmtPlays, PosterGrid, PosterSkeleton, progressLabel, SectionTitle } from "./kit";
 import { BRAND } from "../brand";
+import { t } from "../i18n";
 
 /* ---------------------------------------------------------------------------------------------
  * Hero, as on the reference: the cover full width under the header, its bottom edge cut by a wide ellipse with a
@@ -57,7 +59,7 @@ function PhoneHero({ slides, index, go, paused, tagline }: {
   };
 
   return (
-    <section aria-roledescription="carousel" aria-label="推荐" className={`relative mt-[9px] ${PHONE_SLIDE} overflow-hidden select-none`}
+    <section aria-roledescription="carousel" aria-label={t("home.carousel")} className={`relative mt-[9px] ${PHONE_SLIDE} overflow-hidden select-none`}
       style={{ touchAction: "pan-y pinch-zoom" }}
       onDragStart={(e) => e.preventDefault()}
       onPointerDown={(e) => {
@@ -109,7 +111,7 @@ function PhoneHero({ slides, index, go, paused, tagline }: {
       {count > 1 && (
         <div className="absolute right-[32px] bottom-[14.5px] flex items-center gap-[4px]">
           {slides.map((s, i) => (
-            <button key={s.id} onClick={() => go(i)} aria-label={`第 ${i + 1} 张`} aria-current={i === index || undefined}
+            <button key={s.id} onClick={() => go(i)} aria-label={t("home.slide", { n: i + 1 })} aria-current={i === index || undefined}
               className={`h-[4px] ${i === index ? "w-[10px] rounded-[2px] bg-white" : "w-[4px] rounded-full bg-white/40"} transition-all`} />
           ))}
         </div>
@@ -135,7 +137,7 @@ function Hero({ slides }: { slides: VideoCard[] }) {
   if (!count) return wide ? <div className="h-[37.8vw] shimmer" style={CURVE} /> : <div className={`mx-[20px] mt-[9px] ${PHONE_SLIDE} rounded-[8px] shimmer`} />;
   const cur = slides[Math.min(index, count - 1)]!;
   const rank = (hot.data?.items ?? []).findIndex((r) => r.video_id === cur.id) + 1;
-  const tagline = site.data?.tagline ?? "AI短剧与原创短剧在线观看";
+  const tagline = site.data?.tagline ?? t("home.tagline");
 
   if (!wide) return <PhoneHero slides={slides} index={Math.min(index, count - 1)} go={(i) => setIndex(((i % count) + count) % count)} paused={paused} tagline={tagline} />;
 
@@ -143,7 +145,7 @@ function Hero({ slides }: { slides: VideoCard[] }) {
   const start = Math.max(0, Math.min(index - 1, count - 6));
   const strip = slides.slice(start, start + 6);
   return (
-    <section aria-roledescription="carousel" aria-label="推荐" className="relative h-[37.8vw]"
+    <section aria-roledescription="carousel" aria-label={t("home.carousel")} className="relative h-[37.8vw]"
       onMouseEnter={() => { paused.current = true; }} onMouseLeave={() => { paused.current = false; }}>
       <div className="absolute inset-x-0 top-0 h-[35.2vw] overflow-hidden bg-[#0b0b0d]" style={CURVE}>
         <Link to={href.video(cur.id)} className="absolute inset-0" aria-label={cur.title}>
@@ -160,13 +162,13 @@ function Hero({ slides }: { slides: VideoCard[] }) {
           <div className="rg-wrap">
             <p className="text-[1.125rem] leading-[1.52] text-[#ffd321]">{BRAND} · {tagline}</p>
             <div className="mt-[3px] max-w-[60%] text-[3.0625rem] font-semibold leading-[1.4] text-white truncate">{cur.title}</div>
-            <p className="mt-[2px] max-w-[25rem] text-[1.0625rem] leading-[1.48] text-white/80 truncate">{cur.description || "暂无简介"}</p>
+            <p className="mt-[2px] max-w-[25rem] text-[1.0625rem] leading-[1.48] text-white/80 truncate">{cur.description || t("series.noSynopsis")}</p>
             <p className="mt-[14px] flex items-center text-[1.1875rem] leading-[1.5]">
-              {rank > 0 && <span className="flex items-center gap-1 text-[#ffd321]"><Trophy size={15} />热播总榜No. {rank}</span>}
+              {rank > 0 && <span className="flex items-center gap-1 text-[#ffd321]"><Trophy size={15} />{t("home.rank", { rank })}</span>}
               {rank > 0 && cur.score > 0 && <span className="mx-[9px] h-[14px] w-px bg-white/40" />}
-              {cur.score > 0 && <span className="text-white">{cur.score.toFixed(1)}分</span>}
+              {cur.score > 0 && <span className="text-white">{t("common.score", { score: cur.score.toFixed(1) })}</span>}
               <span className="mx-[9px] h-[14px] w-px bg-white/40" />
-              <span className="text-[#ededee]">{fmtPlays(cur.hot)}次播放</span>
+              <span className="text-[#ededee]">{t("home.plays", { count: fmtPlays(cur.hot) })}</span>
             </p>
             <div className="mt-[13px] flex gap-2">
               {[...cur.tags.slice(0, 2), progressLabel(cur)].map((t) => (
@@ -199,7 +201,7 @@ function AnnouncementBar() {
   const site = useSite();
   const notices = site.data?.announcements.length
     ? site.data.announcements
-    : [{ text: `欢迎来到${BRAND}：请收藏「回家的路」，地址变更时也能找到我们`, url: href.wayHome() }];
+    : [{ text: t("home.welcome", { brand: BRAND }), url: href.wayHome() }];
   const line = (
     <span className="flex items-center shrink-0">
       {notices.map((n, i) => (
@@ -207,17 +209,17 @@ function AnnouncementBar() {
           <span className="mx-[10px] text-white/60">•</span>
           <span>{n.text}</span>
           {n.url && (n.url.startsWith("/")
-            ? <Link to={n.url} className="ml-1 text-[#ffd21c] lg:text-[#ffd321] hover:underline">查看详情</Link>
-            : <a href={n.url} target="_blank" rel="noreferrer" className="ml-1 text-[#ffd21c] lg:text-[#ffd321] hover:underline">查看详情</a>)}
+            ? <Link to={n.url} className="ml-1 text-[#ffd21c] lg:text-[#ffd321] hover:underline">{t("home.details")}</Link>
+            : <a href={n.url} target="_blank" rel="noreferrer" className="ml-1 text-[#ffd21c] lg:text-[#ffd321] hover:underline">{t("home.details")}</a>)}
         </span>
       ))}
     </span>
   );
   return (
     <div className="mt-[9.5px] lg:mt-[2.0833vw] h-[37px] lg:h-[max(36px,2.0833vw)] rounded-[8px] lg:rounded-[.3125vw] flex overflow-hidden bg-[#19191b] lg:bg-[#131315]"
-      role="region" aria-label="公告">
-      <span className="w-[63px] lg:w-[67px] pl-[11px] lg:px-[.75rem] gap-[5px] lg:gap-[.3125rem] flex items-center bg-[#242321] text-[12px] lg:text-[max(12px,.677vw)] font-medium lg:font-normal text-white shrink-0">
-        <Bell size={13} strokeWidth={2.2} className="text-[#ffd321] shrink-0" />公告
+      role="region" aria-label={t("home.notice")}>
+      <span className="min-w-[63px] lg:min-w-[67px] pl-[11px] pr-[10px] lg:px-[.75rem] gap-[5px] lg:gap-[.3125rem] flex items-center bg-[#242321] text-[12px] lg:text-[max(12px,.677vw)] font-medium lg:font-normal text-white shrink-0">
+        <Bell size={13} strokeWidth={2.2} className="text-[#ffd321] shrink-0" />{t("home.notice")}
       </span>
       <div className="flex-1 overflow-hidden flex items-center">
         <div className="rg-marquee flex w-max text-[12px] lg:text-[max(12px,.677vw)] text-white lg:text-[#bbb] whitespace-nowrap">{line}{line}</div>
@@ -233,7 +235,7 @@ function HotTags() {
   return (
     <section className="pt-[23px] lg:pt-[1.4583vw]">
       <div className="lg:h-[2.6rem] lg:mb-[.78125vw]">
-        <h2 className="text-[16px] lg:text-[1.625rem] font-semibold leading-[22.4px] lg:leading-[2.25rem] text-white">热门标签</h2>
+        <h2 className="text-[16px] lg:text-[1.625rem] font-semibold leading-[22.4px] lg:leading-[2.25rem] text-white">{t("home.hotTags")}</h2>
       </div>
       {/* Phones: the row runs to the screen's right edge. */}
       <div className="mt-[7.5px] lg:mt-0 -mr-[13px] pr-[13px] lg:mr-0 lg:pr-0 lg:pb-[.10417vw] flex gap-[5px] lg:gap-[.52083vw] overflow-x-auto no-bar">
@@ -252,15 +254,15 @@ function HotTags() {
  * 专题 tile and the 官方入口 block.
  * ------------------------------------------------------------------------------------------- */
 
-export function TopicTile({ t }: { t: TopicCard }) {
+export function TopicTile({ t: topic }: { t: TopicCard }) {
   return (
-    <Link to={href.topic(t.id)} className="group relative block rounded-[12px] overflow-hidden bg-[#171616]" style={{ aspectRatio: "16 / 9" }}>
-      <div className="absolute inset-0 transition-transform duration-300 group-hover:scale-[1.04]"><Img src={t.cover} /></div>
+    <Link to={href.topic(topic.id)} className="group relative block rounded-[12px] overflow-hidden bg-[#171616]" style={{ aspectRatio: "16 / 9" }}>
+      <div className="absolute inset-0 transition-transform duration-300 group-hover:scale-[1.04]"><Img src={topic.cover} /></div>
       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
       <div className="absolute left-3 lg:left-[11px] right-3 lg:right-4 bottom-[10px]">
-        <div className="text-[11px] lg:text-[12px] lg:font-medium leading-4 text-white">{t.count}部剧集</div>
-        <h3 className="mt-1 lg:mt-[5px] text-[14px] lg:text-[1.125rem] font-semibold leading-5 lg:leading-[22px] text-white truncate">{t.title}</h3>
-        {t.description && <p className="mt-1 lg:mt-[3px] text-[11px] lg:text-[0.875rem] leading-[17px] lg:leading-[18px] text-white/60 clamp-2 lg:clamp-1">{t.description}</p>}
+        <div className="text-[11px] lg:text-[12px] lg:font-medium leading-4 text-white">{t("topics.count", { count: topic.count })}</div>
+        <h3 className="mt-1 lg:mt-[5px] text-[14px] lg:text-[1.125rem] font-semibold leading-5 lg:leading-[22px] text-white truncate">{topic.title}</h3>
+        {topic.description && <p className="mt-1 lg:mt-[3px] text-[11px] lg:text-[0.875rem] leading-[17px] lg:leading-[18px] text-white/60 clamp-2 lg:clamp-1">{topic.description}</p>}
       </div>
     </Link>
   );
@@ -272,20 +274,20 @@ function EntryBlock() {
   const host = s?.permanent_domain?.replace(/^https?:\/\//, "") || window.location.host;
   return (
     <section className="mt-10 lg:mt-[31px] border-t border-white/10 pt-6 lg:pt-[31px] pb-6 lg:pb-[31px]">
-      <h2 className="text-[16px] lg:text-[1.25rem] font-semibold leading-[25px] text-[#e6e6e6]">{BRAND}官方入口</h2>
+      <h2 className="text-[16px] lg:text-[1.25rem] font-semibold leading-[25px] text-[#e6e6e6]">{t("way.entryTitle", { brand: BRAND })}</h2>
       <div className="mt-[11px] space-y-[10px] text-[13px] lg:text-[14px] font-medium leading-[18px] text-[#999]">
-        <p>{BRAND}官方网站为 <strong className="font-semibold text-[#ffd321]">{host}</strong>。地址如有变更，请到「回家的路」查看最新入口。</p>
+        <p><Trans i18nKey="home.entryText" values={{ brand: BRAND, host }} components={{ host: <strong className="font-semibold text-[#ffd321]" /> }} /></p>
         {(s?.telegram || s?.email) && (
           <p>
-            官方渠道：
-            {s.telegram && <a href={s.telegram} target="_blank" rel="noreferrer" className="text-[#ffd321]">Telegram 频道</a>}
+            {t("home.channels")}
+            {s.telegram && <a href={s.telegram} target="_blank" rel="noreferrer" className="text-[#ffd321]">{t("home.telegram")}</a>}
             {s.telegram && s.email && " · "}
-            {s.email && <>客服邮箱 <span className="text-[#ffd321]">{s.email}</span></>}
+            {s.email && <>{t("home.supportEmail")} <span className="text-[#ffd321]">{s.email}</span></>}
           </p>
         )}
         <p>
-          <Link to={href.wayHome()} className="text-[#ffd321]">回家的路</Link>{" · "}
-          <Link to={href.download()} className="text-[#ffd321]">下载 App</Link>
+          <Link to={href.wayHome()} className="text-[#ffd321]">{t("nav.wayHome")}</Link>{" · "}
+          <Link to={href.download()} className="text-[#ffd321]">{t("way.appTitle")}</Link>
         </p>
       </div>
     </section>
@@ -322,15 +324,15 @@ export function HomePage() {
       <Container>
         <AnnouncementBar />
         <HotTags />
-        <CardSection title="精选推荐" more={{ label: "更多推荐", to: href.ranks("recommend") }}
+        <CardSection title={t("channel.sortPicks")} more={{ label: t("home.morePicks"), to: href.ranks("recommend") }}
           items={picks.data?.items ?? []} pending={picks.isPending} count={wide ? 7 : 6} />
-        <CardSection title="最近上新" more={{ label: "全部上新", to: href.channel("all") }}
+        <CardSection title={t("footer.latest")} more={{ label: t("home.allLatest"), to: href.channel("all") }}
           items={updated.data?.items ?? []} pending={updated.isPending} count={14} />
-        <CardSection title="热播短剧" more={{ label: "更多热播", to: href.ranks("hot") }}
+        <CardSection title={t("home.hotDramas")} more={{ label: t("home.moreHot"), to: href.ranks("hot") }}
           items={hot.data?.items ?? []} pending={hot.isPending} count={14} />
         {(topics.data?.items.length ?? 0) > 0 && (
           <section className={SECTION_GAP}>
-            <SectionTitle title="专题推荐" more={{ label: "查看全部", to: href.topics() }} />
+            <SectionTitle title={t("home.topicPicks")} more={{ label: t("home.viewAll"), to: href.topics() }} />
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-[18px]">
               {topics.data!.items.slice(0, 3).map((t) => <TopicTile key={t.id} t={t} />)}
             </div>

@@ -1,4 +1,4 @@
-import { ApiError, unwrap, type Schemas } from "@reelguo/api-client";
+import { unwrap, type Schemas } from "@reelguo/api-client";
 import { create } from "zustand";
 import { api, queryClient, type SeriesDetail } from "../api";
 import { resetEntitlements } from "../billing/actions";
@@ -7,6 +7,7 @@ import { useLibrary, type WatchProgress } from "./library";
 import { closeOverlay, openOverlay } from "./nav";
 import { clearAccess, onRefresh, refreshAccess, setAccess, type AuthResponse } from "./token";
 import { useUi } from "./ui";
+import { apiErrorText, t } from "../i18n";
 
 export type MeUser = Schemas["MeUserDto"];
 type Me = Schemas["MeDto"];
@@ -90,7 +91,7 @@ export const useAuth = create<AuthState>((set, get) => ({
     await flushHistory().catch(() => undefined);
     await api.POST("/api/v1/auth/logout").catch(() => undefined);
     signedOut();
-    useUi.getState().toast("已退出登录", "ok");
+    useUi.getState().toast(t("auth.loggedOut"), "ok");
   },
 }));
 
@@ -100,7 +101,7 @@ onRefresh((result) => {
   if (result.kind === "ok") useAuth.setState({ user: result.auth.user });
   else if (result.kind === "signed_out" && state.status === "signed_in") {
     signedOut();
-    useUi.getState().toast("登录已过期，请重新登录");
+    useUi.getState().toast(t("errors.session_expired"));
   }
 });
 
@@ -199,7 +200,7 @@ export async function clearWatchHistory() {
  * ------------------------------------------------------------------------------------------- */
 
 export function errorMessage(e: unknown): string {
-  return e instanceof ApiError ? e.message : "网络异常，请稍后重试";
+  return apiErrorText(e);
 }
 
 const signedInNow = () => useAuth.getState().status === "signed_in";
@@ -256,13 +257,13 @@ function toggleIn(list: number[], id: number, on: boolean) {
 export async function toggleFollow(userId: number, name: string) {
   const auth = useAuth.getState();
   if (auth.status !== "signed_in") return auth.openLogin();
-  if (auth.user?.id === userId) return useUi.getState().toast("不能关注自己");
+  if (auth.user?.id === userId) return useUi.getState().toast(t("errors.cannot_follow_self"));
   const on = !auth.follows.includes(userId);
   useAuth.setState({ follows: toggleIn(auth.follows, userId, on) });
   try {
     const path = { params: { path: { id: userId } } };
     unwrap(on ? await api.PUT("/api/v1/users/{id}/follow", path) : await api.DELETE("/api/v1/users/{id}/follow", path));
-    useUi.getState().toast(on ? `已关注 ${name}` : "已取消关注", on ? "ok" : "info");
+    useUi.getState().toast(on ? t("actions.followed", { name }) : t("actions.unfollowed"), on ? "ok" : "info");
   } catch (e) {
     useAuth.setState({ follows: toggleIn(useAuth.getState().follows, userId, !on) });
     useUi.getState().toast(errorMessage(e));
@@ -284,7 +285,7 @@ export async function togglePost(kind: "like" | "collect", id: number): Promise<
     const r = kind === "like"
       ? unwrap(on ? await api.PUT("/api/v1/posts/{id}/like", path) : await api.DELETE("/api/v1/posts/{id}/like", path))
       : unwrap(on ? await api.PUT("/api/v1/posts/{id}/collect", path) : await api.DELETE("/api/v1/posts/{id}/collect", path));
-    useUi.getState().toast(kind === "like" ? (on ? "已加入喜欢" : "已取消喜欢") : (on ? "已收藏" : "已取消收藏"),
+    useUi.getState().toast(kind === "like" ? (on ? t("actions.liked") : t("actions.unliked")) : (on ? t("actions.faved") : t("actions.unfaved")),
       on ? (kind === "like" ? "heart" : "star") : "info");
     return r.count;
   } catch (e) {

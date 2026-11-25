@@ -1,12 +1,16 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { markAspect, markFiles } from "./brand/mark";
+import { markAspect, markFiles, SITE } from "@reelguo/site";
 
-export { BRAND, BRAND_SHORT } from "./brand/name";
+export { BRAND, BRAND_DOMAIN, BRAND_SHORT } from "./brand/name";
 
-export { markAspect };
+export { markAspect, SITE };
+export type { SiteInfo } from "../../../sites/types";
+
+/** Words the shared components say, in the site's language: the web app sets them from its translations at start-up. */
+export const uiText = { loading: "加载中" };
 
 /**
- * The brand mark (黄月短剧). Give its displayed width or height in CSS px, or `fit`: the largest size that fits a square
+ * The site's mark (web/sites/<key>/mark). Give its displayed width or height in CSS px, or `fit`: the largest size that fits a square
  * of that many px whatever the mark's shape. The browser picks the sharpest of the generated files for that size and
  * the screen's pixel density. To change the mark: `pnpm brand:icons`.
  */
@@ -24,7 +28,7 @@ export function BrandMark({ width, height, fit, className, style }: { width?: nu
 }
 
 export function Spinner({ size = 32 }: { size?: number }) {
-  return <div className="spinner" style={{ width: size, height: size }} role="status" aria-label="加载中" />;
+  return <div className="spinner" style={{ width: size, height: size }} role="status" aria-label={uiText.loading} />;
 }
 
 /** Empty / error state: icon tile, title, optional detail and one action. */

@@ -1,0 +1,12 @@
+{
+  "key": "apinedrama",
+  "name": "ApineDrama",
+  "short": "ApineDrama",
+  "locale": "pt-BR",
+  "domain": "apinedrama.com",
+  "wordmark": ["apine", "drama"],
+  "description": "ApineDrama · Dramas curtos de IA e originais para assistir online",
+  "icon": "Assets/sites/apinedrama.jpg",
+  "iconStyle": "tile",
+  "nativeApps": false
+}

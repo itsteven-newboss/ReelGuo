@@ -10,7 +10,12 @@ public static class Pricing
     public const int MaxEpisodePrice = 10_000;
     public const int DefaultFreeEpisodes = 3;
 
-    /// <summary>Coins needed to watch the episode, or 0 when it is free for everyone.</summary>
-    public static int EpisodePrice(bool monetization, int seriesPrice, int freeEpisodes, int episodeNumber, bool episodeIsFree) =>
-        !monetization || seriesPrice <= 0 || episodeIsFree || episodeNumber <= freeEpisodes ? 0 : seriesPrice;
+    /// <summary>
+    /// Coins needed to watch the episode, or 0 when it is free for everyone. <paramref name="customPrice"/> (the episode's
+    /// own price) replaces the series' rule, also within the free episodes and in an otherwise free series.
+    /// </summary>
+    public static int EpisodePrice(bool monetization, int seriesPrice, int freeEpisodes, int episodeNumber, bool episodeIsFree, int? customPrice = null) =>
+        !monetization || episodeIsFree ? 0
+        : customPrice is { } own ? Math.Max(0, own)
+        : seriesPrice <= 0 || episodeNumber <= freeEpisodes ? 0 : seriesPrice;
 }

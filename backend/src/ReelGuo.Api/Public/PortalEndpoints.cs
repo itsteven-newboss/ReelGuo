@@ -15,8 +15,8 @@ public sealed class SiteOptions
 {
     public const string Section = "Site";
 
-    /// <summary>Line under the site name (hero, footer).</summary>
-    public string Tagline { get; set; } = "AI短剧与原创短剧在线观看";
+    /// <summary>Line under the site name (hero, footer). Empty: the site language's default (Sites/Texts site.tagline).</summary>
+    public string Tagline { get; set; } = "";
     /// <summary>Official community link (e.g. a Telegram channel), shown with the official addresses.</summary>
     public string Telegram { get; set; } = "";
     /// <summary>Contact address that auto-replies with the latest addresses.</summary>
@@ -69,14 +69,15 @@ public static class PortalEndpoints
         return stats is null ? new RatingDto(null, 0) : new RatingDto(Math.Round(stats.Average, 1), stats.Count);
     }
 
-    private static async Task<Ok<SiteDto>> Site(ReelGuoDbContext db, IOptions<SiteOptions> site, IOptions<AppOptions> app, CancellationToken ct)
+    private static async Task<Ok<SiteDto>> Site(ReelGuoDbContext db, IOptions<SiteOptions> site, IOptions<AppOptions> app, SiteBrand brand, CancellationToken ct)
     {
         var s = site.Value;
         var notices = await db.Announcements.AsNoTracking().Where(a => a.Active).OrderBy(a => a.SortOrder).ThenByDescending(a => a.Id)
             .Select(a => new AnnouncementDto(a.Text, a.Url)).ToListAsync(ct);
         var mirrors = app.Value.Mirrors.Select(m => m.Trim().TrimEnd('/')).Where(m => m.Length > 0).Distinct().ToList();
         static string? Clean(string v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
-        return TypedResults.Ok(new SiteDto(Brand.Name, s.Tagline, notices, mirrors, Clean(s.PermanentDomain), Clean(s.Telegram), Clean(s.Email)));
+        var tagline = string.IsNullOrWhiteSpace(s.Tagline) ? brand.T("site.tagline") : s.Tagline;
+        return TypedResults.Ok(new SiteDto(brand.Name, tagline, notices, mirrors, Clean(s.PermanentDomain), Clean(s.Telegram), Clean(s.Email)));
     }
 
     private static async Task<Ok<TopicPage>> ListTopics(

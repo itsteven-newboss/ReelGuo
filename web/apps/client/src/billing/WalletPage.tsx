@@ -18,7 +18,7 @@ export function WalletPage() {
   const items = entries.data?.pages.flatMap((p) => p.items) ?? [];
 
   return (
-    <AccountFrame crumbs={[{ label: "个人中心", to: href.me() }, { label: t("billing.wallet") }]} title={t("billing.wallet")} sub={t("billing.walletSub")}>
+    <AccountFrame crumbs={[{ label: t("header.me"), to: href.me() }, { label: t("billing.wallet") }]} title={t("billing.wallet")} sub={t("billing.walletSub")}>
         <div>
           <BalanceCard action={
             <button onClick={() => navigate(href.store())} className="h-9 px-4 rounded-full bg-primary text-on-primary text-[12.5px] font-bold pressable shrink-0">

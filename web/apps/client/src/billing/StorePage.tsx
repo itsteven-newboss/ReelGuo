@@ -13,6 +13,7 @@ import { CloseButton, Modal } from "../ui/Overlays";
 import { startCheckout } from "./actions";
 import { fmtCoins, fmtDay, fmtMoney } from "./money";
 import { BRAND } from "../brand";
+import { apiErrorText } from "../i18n";
 
 /** Portal page frame for the account pages: breadcrumb, title, a readable column. */
 export function AccountFrame({ crumbs, title, sub, children }: { crumbs: { label: string; to?: string }[]; title: string; sub?: string; children: ReactNode }) {
@@ -96,7 +97,7 @@ export function StorePage() {
       // The page is navigating away to the payment page.
     } catch (e) {
       setBusy(false);
-      toast(e instanceof ApiError ? e.message : "网络异常，请稍后重试");
+      toast(apiErrorText(e));
     }
   };
 
@@ -126,7 +127,7 @@ export function StorePage() {
   );
 
   return (
-    <AccountFrame crumbs={[{ label: "个人中心", to: "/me" }, { label: t("billing.storeTitle") }]} title={t("billing.storeTitle")} sub={t("billing.storeSub")}>
+    <AccountFrame crumbs={[{ label: t("header.me"), to: "/me" }, { label: t("billing.storeTitle") }]} title={t("billing.storeTitle")} sub={t("billing.storeSub")}>
         <div>
           {signedIn && <BalanceCard />}
           {resume && <p className="mt-3 text-[11.5px] text-mut">{t("billing.resumeHint", { title: resume.title, ep: resume.ep })}</p>}

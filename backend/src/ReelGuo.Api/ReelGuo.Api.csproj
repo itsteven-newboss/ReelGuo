@@ -23,14 +23,23 @@
     <ProjectReference Include="..\ReelGuo.Data\ReelGuo.Data.csproj" />
   </ItemGroup>
 
-  <!-- The legal pages' text (用户协议, 隐私政策, 内容政策, 充值协议), read as legal/<slug>.md. -->
+  <!-- The legal pages' text (用户协议, 隐私政策, 内容政策, 充值协议) in each site language, read as legal/<locale>/<slug>.md. -->
   <ItemGroup>
-    <EmbeddedResource Include="Legal\Texts\*.md" LogicalName="legal/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Legal\Texts\zh-CN\*.md" LogicalName="legal/zh-CN/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Legal\Texts\id\*.md" LogicalName="legal/id/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Legal\Texts\vi\*.md" LogicalName="legal/vi/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Legal\Texts\pt-BR\*.md" LogicalName="legal/pt-BR/%(Filename)%(Extension)" />
   </ItemGroup>
 
-  <!-- The iPhone home-screen icon in the install profile (Apps/WebClipProfile.cs); scripts/brand-icons.mjs writes it. -->
+  <!-- The server's viewer-facing text in each site language (Brand.cs SiteText), read as texts/<locale>.json. -->
   <ItemGroup>
-    <EmbeddedResource Include="Apps\webclip-icon.png" LogicalName="apps/webclip-icon.png" />
+    <EmbeddedResource Include="Sites\Texts\*.json" LogicalName="texts/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- Each site's iPhone home-screen icon in the install profile (Apps/WebClipProfile.cs), read as apps/webclip/<site>.png;
+       scripts/brand-icons.mjs writes them. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Apps\WebClip\*.png" LogicalName="apps/webclip/%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

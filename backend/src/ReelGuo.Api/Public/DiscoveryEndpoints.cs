@@ -49,10 +49,8 @@ public static partial class DiscoveryEndpoints
     /// <summary>How many tags the home page's 热门标签 row shows: one row of 20, as on the reference.</summary>
     public const int HotTagCount = 20;
 
-    /// <summary>Common genres that pad the tag row while the catalog is too small to fill it with its own tags.</summary>
-    private static readonly string[] FallbackTags =
-        ["都市", "逆袭", "古风", "重生", "豪门", "校园", "仙侠", "职场", "奇幻", "脑洞", "热血", "甜宠",
-         "现代", "悬疑", "武侠", "穿越", "复仇", "虐恋", "战神", "萌宝", "神医", "喜剧", "家庭", "末世"];
+    // Common genres pad the tag row while the catalog is too small to fill it with its own tags: the site language's
+    // list (Sites/Texts search.fallbackTags).
 
     public static RouteGroupBuilder MapDiscovery(this RouteGroupBuilder v1)
     {
@@ -126,15 +124,16 @@ public static partial class DiscoveryEndpoints
 
     // ---------- ranks ----------
 
-    private static readonly Dictionary<string, (RankKind Kind, string Label)> RankKinds = new()
+    /// <summary>The boards and the text key of what each one measures.</summary>
+    private static readonly Dictionary<string, (RankKind Kind, string LabelKey)> RankKinds = new()
     {
-        ["hot"] = (RankKind.Hot, "热度"),
-        ["recommend"] = (RankKind.Recommend, "推荐值"),
-        ["potential"] = (RankKind.Potential, "潜力值"),
+        ["hot"] = (RankKind.Hot, "ranks.metric.hot"),
+        ["recommend"] = (RankKind.Recommend, "ranks.metric.recommend"),
+        ["potential"] = (RankKind.Potential, "ranks.metric.potential"),
     };
 
     private static async Task<Results<Ok<RankListDto>, NotFound<ApiErrorResponse>>> Ranks(
-        string kind, HttpContext http, ReelGuoDbContext db, ICountryResolver resolver, MediaUrlSigner signer, TimeProvider time, CancellationToken ct)
+        string kind, HttpContext http, ReelGuoDbContext db, ICountryResolver resolver, MediaUrlSigner signer, TimeProvider time, SiteBrand brand, CancellationToken ct)
     {
         if (!RankKinds.TryGetValue(kind, out var k)) return TypedResults.NotFound(ApiErrorResponse.Of("not_found", "榜单不存在"));
 
@@ -152,7 +151,7 @@ public static partial class DiscoveryEndpoints
 
         var items = rows.Select((r, i) => new RankItemDto(
             i + 1, r.Id, r.Title, signer.PublicUrlOrNull(r.CoverKey), r.Tags, r.Score, r.Category, r.EpisodeCount, r.IsFinished,
-            k.Label, r.MetricValue, new RankMetricsDto(r.CollectCount, r.CommentCount, r.LikeCount, r.PlayCount), r.Description)).ToList();
+            brand.Text[k.LabelKey], r.MetricValue, new RankMetricsDto(r.CollectCount, r.CommentCount, r.LikeCount, r.PlayCount), r.Description)).ToList();
         return TypedResults.Ok(new RankListDto(kind, rows.FirstOrDefault()?.ComputedAt, items));
     }
 
@@ -181,7 +180,7 @@ public static partial class DiscoveryEndpoints
     }
 
     private static async Task<Ok<SearchSuggestDto>> Suggest(
-        HttpContext http, ReelGuoDbContext db, ICountryResolver resolver, MediaUrlSigner signer, TimeProvider time,
+        HttpContext http, ReelGuoDbContext db, ICountryResolver resolver, MediaUrlSigner signer, TimeProvider time, SiteBrand brand,
         [FromQuery] int? seed, CancellationToken ct)
     {
         var popular = await db.Series.AsNoTracking().VisibleTo(resolver.Resolve(http), PublicEndpoints.Today(time))
@@ -191,7 +190,7 @@ public static partial class DiscoveryEndpoints
         // Tags weighted by how popular their series are, padded with common genres.
         var tags = popular.SelectMany((s, i) => s.Tags.Select(t => (Tag: t, Weight: 30 - i)))
             .GroupBy(x => x.Tag).OrderByDescending(g => g.Sum(x => x.Weight)).Select(g => g.Key)
-            .Concat(FallbackTags).Distinct().Take(HotTagCount).ToList();
+            .Concat(brand.Text.List("search.fallbackTags")).Distinct().Take(HotTagCount).ToList();
 
         // "换一批": a different deterministic sample for each seed.
         var rng = new Random(seed ?? 0);

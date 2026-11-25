@@ -128,7 +128,10 @@ export function SeriesListPage({ onOpen }: { onOpen: (id: number | "new") => voi
                       {s.cover_url && <img src={s.cover_url} alt="" className="w-full h-full object-cover" />}
                     </div>
                   </td>
-                  <td className="px-4 py-2.5 font-medium">{s.title}</td>
+                  <td className="px-4 py-2.5 font-medium">
+                    {s.title}
+                    {s.kind === "interactive" && <span className="ml-2 px-1.5 py-0.5 rounded bg-primary/20 text-primary text-[10.5px] font-semibold align-middle">互动剧</span>}
+                  </td>
                   <td className="px-4 py-2.5 text-mut">{s.category_name}</td>
                   <td className="px-4 py-2.5"><StatusBadge status={s.status} /></td>
                   <td className="px-4 py-2.5"><CardBadgePills original={s.is_original} badge={s.card_badge} /></td>

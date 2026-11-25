@@ -2,11 +2,12 @@ import { ApiError, unwrap } from "@reelguo/api-client";
 import { api, queryClient, type Product, type Wallet } from "../api";
 import type { ResumeTarget } from "../state/nav";
 import { useUi } from "../state/ui";
+import { apiErrorText, t } from "../i18n";
 
 const RETURN_KEY = "rg.pay.return.v1";
 
 function message(e: unknown) {
-  return e instanceof ApiError ? e.message : "网络异常，请稍后重试";
+  return apiErrorText(e);
 }
 
 /** After an unlock or a purchase, everything that depends on entitlements is refetched. */
@@ -36,7 +37,7 @@ export async function unlockEpisode(id: number, ep: number, opts: { auto?: boole
     void queryClient.invalidateQueries({ queryKey: ["access", id] });
     void queryClient.invalidateQueries({ queryKey: ["wallet-entries"] });
     await queryClient.invalidateQueries({ queryKey: ["play", id, ep] });
-    if (r.result === "unlocked") toast(`${opts.auto ? "已自动解锁" : "已解锁"}第 ${ep} 集 · 消耗 ${r.spent} 金币`, "ok");
+    if (r.result === "unlocked") toast(t(opts.auto ? "billing.autoUnlocked" : "billing.unlocked", { ep, coins: r.spent }), "ok");
     return "ok";
   } catch (e) {
     if (e instanceof ApiError && e.code === "insufficient_coins") {
@@ -52,7 +53,7 @@ export async function setAutoUnlock(on: boolean) {
   try {
     const w = unwrap(await api.PUT("/api/v1/me/wallet/settings", { body: { auto_unlock: on } }));
     queryClient.setQueryData<Wallet>(["wallet"], w);
-    useUi.getState().toast(on ? "已开启自动解锁" : "已关闭自动解锁", on ? "ok" : "info");
+    useUi.getState().toast(on ? t("billing.autoOn") : t("billing.autoOff"), on ? "ok" : "info");
   } catch (e) {
     useUi.getState().toast(message(e));
   }

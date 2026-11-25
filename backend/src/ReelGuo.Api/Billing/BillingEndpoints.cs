@@ -137,20 +137,20 @@ public static class BillingEndpoints
 
     private static async Task<Results<Ok<UnlockResponse>, NotFound<ApiErrorResponse>, JsonHttpResult<ApiErrorResponse>>> Unlock(
         long id, int ep, HttpContext http, ReelGuoDbContext db, ICountryResolver resolver, WalletService wallets,
-        IOptions<BillingOptions> options, TimeProvider time, CancellationToken ct)
+        IOptions<BillingOptions> options, TimeProvider time, SiteBrand brand, CancellationToken ct)
     {
         var uid = UserAuth.UserId(http);
         // Only what the viewer could actually watch here can be bought.
         var row = await db.Episodes.AsNoTracking()
             .Where(e => e.SeriesId == id && e.EpisodeNumber == ep && e.Status == EpisodeStatus.Ready && (e.HlsPrefix != null || e.VideoKey != null))
             .Where(e => db.Series.VisibleTo(resolver.Resolve(http), PublicEndpoints.Today(time)).Any(s => s.Id == e.SeriesId))
-            .Select(e => new { e.IsFree, e.Series.EpisodePrice, e.Series.FreeEpisodes, e.Series.Title })
+            .Select(e => new { e.IsFree, e.CustomPrice, e.Series.EpisodePrice, e.Series.FreeEpisodes, e.Series.Title })
             .FirstOrDefaultAsync(ct);
         if (row is null) return TypedResults.NotFound(ApiErrorResponse.Of("not_found", "该集暂时无法购买"));
 
-        var price = Pricing.EpisodePrice(options.Value.Enabled, row.EpisodePrice, row.FreeEpisodes, ep, row.IsFree);
+        var price = Pricing.EpisodePrice(options.Value.Enabled, row.EpisodePrice, row.FreeEpisodes, ep, row.IsFree, row.CustomPrice);
         var title = row.Title.Length > 60 ? row.Title[..60] + "…" : row.Title;
-        var outcome = await wallets.UnlockAsync(uid, id, ep, price, $"解锁《{title}》第 {ep} 集", ct);
+        var outcome = await wallets.UnlockAsync(uid, id, ep, price, brand.T("wallet.unlock", ("title", title), ("ep", ep)), ct);
         if (outcome.Status == UnlockStatus.Insufficient)
             return TypedResults.Json(ApiErrorResponse.Of("insufficient_coins", "金币不足，请先充值"), statusCode: StatusCodes.Status402PaymentRequired);
         return TypedResults.Ok(new UnlockResponse(ep, outcome.Status, outcome.Spent, ToDto(outcome.Wallet, time.GetUtcNow())));
