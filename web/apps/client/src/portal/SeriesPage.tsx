@@ -7,7 +7,7 @@ import { api, useAppConfig, useChannelList, useMyRating, usePlay, useSeries, use
 import { isLocked } from "../billing/money";
 import { Paywall } from "../billing/Paywall";
 import { Feed } from "../feed/Feed";
-import { DesktopControls, ErrorCard, PauseIndicator } from "../feed/overlays";
+import { DesktopControls, ErrorCard, PauseIndicator, SoundBlockedPill } from "../feed/overlays";
 import { nativeApp } from "../native";
 import { playEvents } from "../player/events";
 import { fmtCount, fmtTime } from "../player/format";
@@ -19,7 +19,7 @@ import { CommentsPanel } from "../social/Comments";
 import { useReport } from "../social/Report";
 import { errorMessage, toggleFollow, toggleSeriesFav, toggleSeriesLike, useAuth, useCountBump } from "../state/auth";
 import { useLibrary } from "../state/library";
-import { useUi } from "../state/ui";
+import { soundOff, useUi } from "../state/ui";
 import { useMedia } from "./chrome";
 import { Breadcrumb, Container, EmptyState, PosterGrid } from "./kit";
 import { BRAND } from "../brand";
@@ -67,7 +67,7 @@ function MobileSeries({ series, ep, startTime }: { series: SeriesDetail; ep: num
   const card = useMemo(() => toCard(series), [series]);
   return (
     <div className="fixed inset-0 z-50 bg-black" style={{ "--sat": "max(env(safe-area-inset-top), 12px)", "--sab": "env(safe-area-inset-bottom, 0px)" } as React.CSSProperties}>
-      <Feed items={[card]} startEp={ep} startTime={startTime} title={series.title} mode="context" active wide={false} bottomInset={0} onBack={() => goBack()} />
+      <Feed items={[card]} startEp={ep} startTime={startTime} title={series.title} mode="context" active wide={false} bottomInset={0} onBack={() => goBack()} episodeSwipe />
     </div>
   );
 }
@@ -174,7 +174,9 @@ function SeriesPlayer({ series, ep, startTime, intent, next, onEp, theater, onTh
   const locked = play.error instanceof ApiError && play.error.code === "episode_locked";
   const video = useRef<VideoSurfaceHandle>(null);
   const root = useRef<HTMLDivElement>(null);
-  const { muted, setMuted, volume, setVolume, toast } = useUi();
+  const { volume, setVolume, toggleSound, blockSound, toast } = useUi();
+  const muted = useUi(soundOff);
+  const soundBlocked = useUi((s) => s.soundBlocked);
   const recordProgress = useLibrary((s) => s.recordProgress);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -264,7 +266,7 @@ function SeriesPlayer({ series, ep, startTime, intent, next, onEp, theater, onTh
           case "ArrowLeft": seekTo(Math.max(0, time - 5)); return true;
           case "ArrowRight": seekTo(time + 5); return true;
           case "f": case "F": toggleFullscreen(); return true;
-          case "m": case "M": setMuted(!muted); return true;
+          case "m": case "M": toggleSound(); return true;
           case "t": case "T": onTheater(); return true;
           default: return false;
         }
@@ -280,7 +282,11 @@ function SeriesPlayer({ series, ep, startTime, intent, next, onEp, theater, onTh
       className={`player-desktop relative mt-[9px] w-full bg-black rounded-[9px] overflow-hidden ${idle ? "is-idle" : ""}`} style={{ aspectRatio: fullscreen ? undefined : "16 / 9" }}>
       {info ? (
         <>
-          <div className="absolute inset-0" onClick={() => video.current?.toggle()}>
+          <div className="absolute inset-0" onClick={() => {
+            // The first click while sound is blocked turns it on instead of pausing.
+            if (useUi.getState().soundBlocked) toggleSound();
+            else video.current?.toggle();
+          }}>
             <VideoSurface ref={video} src={info.video_url} poster={info.poster ?? series.cover} active muted={muted} volume={volume} rate={rate}
               fit="contain" startAt={startOverride ?? startAt}
               onTime={onTime} onDuration={(d) => Number.isFinite(d) && setDuration(d)} onBuffered={setBuffered}
@@ -295,16 +301,17 @@ function SeriesPlayer({ series, ep, startTime, intent, next, onEp, theater, onTh
               }}
               onError={(m) => { qoe.current?.fail(m); setError(m); }}
               onExpired={(at) => { setStartAt(at); void qc.invalidateQueries({ queryKey: ["play", series.id, ep] }); }}
-              onAutoplayMuted={() => setMuted(true)} />
+              onAutoplayMuted={blockSound} />
           </div>
           {paused && !error && !story?.open && <PauseIndicator />}
           {waiting && !paused && !error && <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none"><Spinner size={36} /></div>}
           {error && <ErrorCard detail={error} onReload={() => { setError(""); setWaiting(true); video.current?.reload(); }} />}
           {story?.overlay}
+          {soundBlocked && <SoundBlockedPill onClick={toggleSound} />}
           <DesktopControls paused={paused} time={time} duration={duration} buffered={buffered} rate={rate} muted={muted} volume={volume}
             theater={theater} fullscreen={fullscreen} nextTitle={story ? t("player.nextAfterChoice") : next ? t("player.next") : t("player.last")} nextDisabled={!next}
             onToggle={() => video.current?.toggle()} onSeek={(t) => { setTime(t); seekTo(t); }} onNext={() => next && onEp(next)}
-            onRate={setRate} onMute={() => setMuted(!muted)} onVolume={setVolume}
+            onRate={setRate} onMute={toggleSound} onVolume={setVolume}
             onPip={() => { const v = video.current?.el(); if (v && document.pictureInPictureEnabled) void v.requestPictureInPicture().catch(() => toast(t("player.pipFailed"))); }}
             onTheater={onTheater} onFullscreen={toggleFullscreen} />
         </>

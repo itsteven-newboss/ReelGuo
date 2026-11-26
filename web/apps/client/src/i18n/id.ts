@@ -185,7 +185,7 @@ const id: Dict = {
     sub: "Pemutaran · Data lokal · Tentang",
     playback: "Pemutaran",
     muteOnStartup: "Bisukan saat dibuka",
-    muteOnStartupSub: "Aktif secara bawaan: selalu dibisukan setiap kali dibuka. Jika dimatikan, status bisu terakhir diingat. Berlaku saat dibuka berikutnya.",
+    muteOnStartupSub: "Jika aktif, selalu dibisukan setiap kali dibuka. Jika mati (bawaan), suara menyala dan pilihan terakhir Anda diingat. Berlaku saat dibuka berikutnya.",
     localData: "Data lokal",
     library: "Riwayat di perangkat ini",
     librarySub: "{{favs}} favorit · {{history}} riwayat tontonan",
@@ -452,6 +452,8 @@ const id: Dict = {
     prev: "Ep. sebelumnya",
     next: "Ep. berikutnya",
     last: "Ini episode terakhir",
+    first: "Ini episode pertama",
+    soundOn: "Nyalakan suara",
     pipFailed: "Gagal membuka gambar-dalam-gambar",
   },
   nav: {

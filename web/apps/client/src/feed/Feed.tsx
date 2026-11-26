@@ -22,7 +22,7 @@ import { CommentsPanel } from "../social/Comments";
 import { toggleSeriesFav, toggleSeriesLike, useAuth, useCountBump } from "../state/auth";
 import { useLibrary } from "../state/library";
 import { closeOverlay, openOverlay } from "../state/nav";
-import { useUi } from "../state/ui";
+import { soundOff, useUi } from "../state/ui";
 import { Sheet } from "../ui/Overlays";
 import { useStoryPlayer } from "../story/StoryLayer";
 import { useStory } from "../story/useStory";
@@ -30,7 +30,7 @@ import { DetailPanel, EpisodeGrid, type LockedFn, type Panel } from "./DetailShe
 import { BRAND } from "../brand";
 import {
   ContextHeader, ControlsLock, DesktopContextHeader, DesktopControls, DesktopMeta, DesktopRail, ErrorCard, FullscreenControls,
-  LockHint, MobileInfo, MobileRail, MobileTopChips, PauseIndicator, ScrubOverlay, SeekLine, SpeedChip,
+  LockHint, MobileInfo, MobileRail, MobileTopChips, PauseIndicator, ScrubOverlay, SeekLine, SoundBlockedPill, SpeedChip,
 } from "./overlays";
 
 type Props = {
@@ -50,18 +50,23 @@ type Props = {
   onBack?: () => void;
   /** Called when the viewer is 3 items from the end, to load more. */
   onNearEnd?: () => void;
+  /** Phones: swiping up plays the next episode, down the previous one (the series page, which holds one series). */
+  episodeSwipe?: boolean;
 };
 
 const SAVE_EVERY_S = 5;
 const NEAR_END_S = 0.35;
 const IDLE_MS = 2800;
 const RATES = [1, 1.25, 1.5, 2];
+/** While dragging, the video follows the finger by this share of the distance, up to PULL_MAX_PX. */
+const PULL_FOLLOW = 0.4;
+const PULL_MAX_PX = 140;
 
 /**
  * Full-screen vertical feed (UI-REFERENCE §3-5). Native scroll-snap does the paging; only the
  * active item mounts a video, the others show their cover.
  */
-export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTime, active, wide, bottomInset, onBack, onNearEnd }: Props) {
+export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTime, active, wide, bottomInset, onBack, onNearEnd, episodeSwipe = false }: Props) {
   const qc = useQueryClient();
   const box = useRef<HTMLDivElement>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -94,7 +99,9 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
   // The episode the viewer chose (picked, or played on into); auto-unlock may spend coins only for that one.
   const [chosen, setChosen] = useState<string | null>(null);
 
-  const { clean, setClean, fullscreen, setFullscreen, muted, setMuted, volume, setVolume, theater, setTheater, toast } = useUi();
+  const { clean, setClean, fullscreen, setFullscreen, volume, setVolume, toggleSound, blockSound, theater, setTheater, toast } = useUi();
+  const muted = useUi(soundOff);
+  const soundBlocked = useUi((s) => s.soundBlocked);
   const { isFav, isLiked, recordProgress } = useLibrary();
   const bump = useCountBump();
 
@@ -116,6 +123,8 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
   const [landscapeFit, setLandscapeFit] = useState<"contain" | "cover">("contain");
   const [idle, setIdle] = useState(false);
   const [docFullscreen, setDocFullscreen] = useState(false);
+  /** How far the video follows the finger while swiping between episodes (0 = at rest). */
+  const [pull, setPull] = useState(0);
 
   const effectiveRate = holding || speedLock ? 2 : rate;
   // The screen stays on while a video plays (phones would otherwise dim mid-episode).
@@ -234,25 +243,28 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [curId, curEp]);
 
-  // Once the current item plays, warm up the next one's first segment.
+  // Once the current item plays, warm up what comes next: the next episode when swiping between episodes (it also
+  // plays on by itself), else the next item.
+  const nextEpNum = interactive ? undefined : episodes.find((e) => e.ep_num > curEp)?.ep_num;
   useEffect(() => {
     if (paused || waiting || !active) return undefined;
-    const next = items[index + 1];
-    if (!next) return undefined;
+    const nextItem = items[index + 1];
+    const nextOfSeries = episodeSwipe && curId && nextEpNum ? { id: curId, ep: nextEpNum } : null;
+    if (!nextOfSeries && !nextItem) return undefined;
     const ctrl = new AbortController();
     void (async () => {
       try {
-        const detail = await qc.fetchQuery(seriesQuery(next.id));
-        const ep = detail.episodes[0]?.ep_num;
+        const id = nextOfSeries ? nextOfSeries.id : nextItem!.id;
+        const ep = nextOfSeries ? nextOfSeries.ep : (await qc.fetchQuery(seriesQuery(id))).episodes[0]?.ep_num;
         if (!ep) return;
-        const info = await qc.fetchQuery(playQuery(next.id, ep));
+        const info = await qc.fetchQuery(playQuery(id, ep));
         await prefetchStart(info.video_url, ctrl.signal);
       } catch {
-        /* best effort */
+        /* best effort (a locked episode answers 402) */
       }
     })();
     return () => ctrl.abort();
-  }, [paused, waiting, active, index, items, qc]);
+  }, [paused, waiting, active, index, items, qc, episodeSwipe, curId, nextEpNum]);
 
   // ---------- playback events ----------
 
@@ -264,7 +276,8 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
     if (panel) closeOverlay();
   }, [curId, panel]);
 
-  const nextEp = interactive ? undefined : episodes.find((e) => e.ep_num > curEp)?.ep_num;
+  const nextEp = nextEpNum;
+  const prevEp = interactive ? undefined : episodes.filter((e) => e.ep_num < curEp).at(-1)?.ep_num;
 
   const sceneLocked = useCallback((ep: number) => {
     const e = episodes.find((x) => x.ep_num === ep);
@@ -311,6 +324,14 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
     }
   };
 
+  const swipeEpisode = (dir: "next" | "prev") => {
+    // 互动剧: the viewer's choices decide what plays next.
+    if (interactive) { toast(t("player.nextAfterChoice")); return; }
+    const target = dir === "next" ? nextEp : prevEp;
+    if (target) pickEp(target);
+    else toast(dir === "next" ? t("player.last") : t("player.first"));
+  };
+
   const onExpired = (at: number) => {
     // The signed URL ran out mid-episode: get a fresh one and resume where we were.
     if (curId) setResume({ id: curId, ep: curEp, t: at });
@@ -323,6 +344,8 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
   const longTimer = useRef<number | undefined>(undefined);
   const tapTimer = useRef<number | undefined>(undefined);
   const wasPlaying = useRef(false);
+  /** The press began while sound was blocked: its tap turns sound on (state/ui) and does nothing else. */
+  const tapForSound = useRef(false);
 
   const apply = (effects: GestureEffect[]) => {
     for (const e of effects) {
@@ -367,11 +390,22 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
           break;
         case "single-tap-pending":
           window.clearTimeout(tapTimer.current);
+          if (tapForSound.current) break;
           tapTimer.current = window.setTimeout(() => setClean(!useUi.getState().clean), SINGLE_TAP_DELAY_MS);
           break;
         case "double-tap":
           window.clearTimeout(tapTimer.current);
           video.current?.toggle();
+          break;
+        case "pan":
+          if (episodeSwipe && !fullscreen) setPull(Math.max(-PULL_MAX_PX, Math.min(PULL_MAX_PX, e.dy * PULL_FOLLOW)));
+          break;
+        case "pan-end":
+          setPull(0);
+          break;
+        case "swipe":
+          setPull(0);
+          if (episodeSwipe && !fullscreen) swipeEpisode(e.dir);
           break;
       }
     }
@@ -386,6 +420,7 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
     if (wide || locked || !active || !e.isPrimary || e.button !== 0) return;
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     wasPlaying.current = video.current?.el()?.paused === false;
+    tapForSound.current = useUi.getState().soundBlocked;
     const rect = e.currentTarget.getBoundingClientRect();
     run(pointerDown(gesture.current, {
       x: e.clientX, y: e.clientY, t: e.timeStamp, base: time, duration, width: rect.width, viewportWidth: window.innerWidth,
@@ -527,7 +562,7 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
           case "ArrowRight": seekTo(time + 5); return true;
           case "f": case "F": toggleDesktopFullscreen(); return true;
           case "t": case "T": setTheater(!theater); return true;
-          case "m": case "M": setMuted(!muted); return true;
+          case "m": case "M": toggleSound(); return true;
           case "l": case "L": onLike(); return true;
           case "s": case "S": onFav(); return true;
           case "c": case "C": onComments(); return true;
@@ -575,15 +610,24 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
           {items.map((v, i) => {
             const isActive = i === index;
             const stage = rotated ? "fs-landscape" : !wide && fullscreen ? "fs-immersive" : "absolute inset-0";
+            // Swiping between episodes: the video follows the finger, and springs back on release.
+            const stageStyle = isActive && episodeSwipe && !fullscreen
+              ? { transform: pull ? `translateY(${pull}px)` : undefined, transition: pull ? "none" : "transform .22s cubic-bezier(.2,0,0,1)" }
+              : undefined;
             return (
               <section key={v.id} style={!isActive && fullscreen ? { display: "none" } : undefined}
                 className={`relative w-full h-full snap-start snap-always ${fullscreen && isActive ? "" : "overflow-hidden"}`}>
                 {isActive && info ? (
-                  <div className={stage}>
-                    <div className="absolute inset-0 overflow-hidden" style={{ touchAction: fullscreen ? "none" : "pan-y" }}
+                  <div className={stage} style={stageStyle}>
+                    <div className="absolute inset-0 overflow-hidden" style={{ touchAction: fullscreen || episodeSwipe ? "none" : "pan-y" }}
                       onPointerDown={onDown} onPointerMove={onMove}
                       onPointerUp={(e) => onUp(e, false)} onPointerCancel={(e) => onUp(e, true)}
-                      onClick={() => { if (wide) video.current?.toggle(); }}>
+                      onClick={() => {
+                        if (!wide) return;
+                        // The first click while sound is blocked turns it on instead of pausing.
+                        if (useUi.getState().soundBlocked) toggleSound();
+                        else video.current?.toggle();
+                      }}>
                       <VideoSurface
                         ref={video}
                         src={info.video_url}
@@ -620,7 +664,7 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
                           setError(message);
                         }}
                         onExpired={onExpired}
-                        onAutoplayMuted={() => setMuted(true)}
+                        onAutoplayMuted={blockSound}
                       />
                     </div>
 
@@ -631,6 +675,7 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
                     )}
                     {error && <ErrorCard detail={error} onReload={() => { setError(""); setWaiting(true); video.current?.reload(); }} />}
                     {story?.overlay}
+                    {wide && soundBlocked && <SoundBlockedPill onClick={toggleSound} />}
 
                     {!wide && (!clean || holding) && (holding || speedLock || rate !== 1) && (
                       <SpeedChip rate={effectiveRate} locked={speedLock} holding={holding}
@@ -720,7 +765,7 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
           <DesktopControls paused={paused} time={time} duration={duration} buffered={buffered} rate={rate} muted={muted} volume={volume}
             theater={theater} fullscreen={docFullscreen} nextTitle={nextEp ? t("player.next") : `${t("player.nextSeries")} ↓`} nextDisabled={!nextEp && index >= items.length - 1}
             onToggle={() => video.current?.toggle()} onSeek={(t) => { setTime(t); seekTo(t); }}
-            onNext={() => (nextEp ? pickEp(nextEp) : go(1))} onRate={setRate} onMute={() => setMuted(!muted)} onVolume={setVolume}
+            onNext={() => (nextEp ? pickEp(nextEp) : go(1))} onRate={setRate} onMute={toggleSound} onVolume={setVolume}
             onPip={() => void togglePip()} onLock={() => setLocked(true)} onTheater={() => setTheater(!theater)} onFullscreen={toggleDesktopFullscreen} />
         )}
 
@@ -755,7 +800,7 @@ export function Feed({ items, mode, title = "", startIndex = 0, startEp, startTi
       </div>
 
       {!wide && showUi && !locked && active && (
-        <MobileTopChips muted={muted} onMute={() => setMuted(!muted)}
+        <MobileTopChips muted={muted} blocked={soundBlocked} onMute={toggleSound}
           onReport={() => cur && useReport.getState().open({ type: "series", id: cur.id, label: t("report.seriesLabel", { title: cur.title }) })} />
       )}
       {locked && <ControlsLock onUnlock={() => { setLocked(false); wake(); }} />}

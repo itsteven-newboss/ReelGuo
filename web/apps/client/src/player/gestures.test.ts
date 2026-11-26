@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  DOUBLE_TAP_MS, LOCK_SLIDE_PX, initialGesture, longPressElapsed, pointerDown, pointerMove, pointerUp,
+  DOUBLE_TAP_MS, FLICK_MS, LOCK_SLIDE_PX, SWIPE_MIN_PX, initialGesture, longPressElapsed, pointerDown, pointerMove, pointerUp,
   type GestureEffect, type GestureState,
 } from "./gestures";
 
@@ -55,10 +55,31 @@ describe("gesture machine", () => {
     expect(moved.effects.find((e) => e.type === "scrub")).toMatchObject({ target: 0 });
   });
 
-  it("vertical drag is left to scrolling", () => {
-    const moved = pointerMove(down(initialGesture).state, { x: 205, y: 300 });
+  it("vertical drag follows the finger", () => {
+    const moved = pointerMove(down(initialGesture).state, { x: 205, y: 380 });
     expect(moved.state.phase).toBe("pan");
-    expect(types(pointerUp(moved.state, { x: 205, y: 300, t: 200, cancelled: false }).effects)).toEqual([]);
+    expect(moved.effects).toEqual([{ type: "cancel-long-press-timer" }, { type: "pan", dy: -20 }]);
+    expect(pointerMove(moved.state, { x: 205, y: 350 }).effects).toEqual([{ type: "pan", dy: -50 }]);
+  });
+
+  it("swipe up far enough is the next episode, down the previous", () => {
+    const up = pointerMove(down(initialGesture).state, { x: 205, y: 300 });
+    expect(pointerUp(up.state, { x: 205, y: 400 - SWIPE_MIN_PX, t: 900, cancelled: false }).effects).toEqual([{ type: "swipe", dir: "next" }]);
+    const downward = pointerMove(down(initialGesture).state, { x: 205, y: 500 });
+    expect(pointerUp(downward.state, { x: 205, y: 400 + SWIPE_MIN_PX, t: 900, cancelled: false }).effects).toEqual([{ type: "swipe", dir: "prev" }]);
+  });
+
+  it("a short slow drag springs back; a short quick flick still swipes", () => {
+    const moved = pointerMove(down(initialGesture).state, { x: 205, y: 360 });
+    expect(pointerUp(moved.state, { x: 205, y: 360, t: 900, cancelled: false }).effects).toEqual([{ type: "pan-end" }]);
+    expect(pointerUp(moved.state, { x: 205, y: 360, t: FLICK_MS - 50, cancelled: false }).effects).toEqual([{ type: "swipe", dir: "next" }]);
+  });
+
+  it("a diagonal or cancelled drag is not a swipe", () => {
+    const diagonal = pointerMove(down(initialGesture, 10).state, { x: 120, y: 300 });
+    expect(pointerUp(diagonal.state, { x: 120, y: 300, t: 900, cancelled: false }).effects).toEqual([{ type: "pan-end" }]);
+    const moved = pointerMove(down(initialGesture).state, { x: 205, y: 300 });
+    expect(pointerUp(moved.state, { x: 205, y: 300, t: 900, cancelled: true }).effects).toEqual([{ type: "pan-end" }]);
   });
 
   it("presses at the screen edge never scrub (iOS back swipe)", () => {

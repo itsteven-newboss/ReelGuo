@@ -42,13 +42,33 @@ function RailButton({ label, icon, count, onClick, pressed }: { label: string; i
   );
 }
 
-/** Top-right: mute, and 反馈 (opens the report sheet), as on the reference's phone player. */
-export function MobileTopChips({ muted, onMute, onReport }: { muted: boolean; onMute: () => void; onReport: () => void }) {
+/**
+ * Top-right: sound, and 反馈 (opens the report sheet), as on the reference's phone player. While the browser holds
+ * the sound back (state/ui soundBlocked), a labelled button under them says so (the header title keeps its room).
+ */
+export function MobileTopChips({ muted, blocked = false, onMute, onReport }: { muted: boolean; blocked?: boolean; onMute: () => void; onReport: () => void }) {
   return (
-    <div className="absolute right-3 z-40 flex items-center gap-2" style={{ top: "calc(var(--sat) + 6px)" }}>
-      <Chip label={muted ? t("player.unmute") : t("player.mute")} onClick={onMute}>{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</Chip>
-      <button onClick={onReport} className="ov-chip h-9 px-3.5 rounded-full text-[13px] font-semibold pressable elev-1 backdrop-blur-md">{t("actions.feedback")}</button>
+    <div className="absolute right-3 z-40 flex flex-col items-end gap-2" style={{ top: "calc(var(--sat) + 6px)" }}>
+      <div className="flex items-center gap-2">
+        <Chip label={muted ? t("player.unmute") : t("player.mute")} onClick={onMute}>{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</Chip>
+        <button onClick={onReport} className="ov-chip h-9 px-3.5 rounded-full text-[13px] font-semibold pressable elev-1 backdrop-blur-md">{t("actions.feedback")}</button>
+      </div>
+      {blocked && (
+        <button onClick={onMute} className="ov-chip-strong h-8 pl-2.5 pr-3 rounded-full text-[12.5px] font-semibold flex items-center gap-1.5 pressable elev-1 backdrop-blur-md whitespace-nowrap">
+          <VolumeX size={15} />{t("player.soundOn")}
+        </button>
+      )}
     </div>
+  );
+}
+
+/** Desktop: the browser held the sound back until the first click (state/ui soundBlocked). */
+export function SoundBlockedPill({ onClick }: { onClick: () => void }) {
+  return (
+    <button onClick={(e) => { e.stopPropagation(); onClick(); }}
+      className="absolute left-4 top-4 z-30 ov-chip-strong h-9 pl-3 pr-3.5 rounded-full text-[13px] font-semibold flex items-center gap-1.5 pressable elev-1 backdrop-blur-md">
+      <VolumeX size={16} />{t("player.soundOn")}
+    </button>
   );
 }
 

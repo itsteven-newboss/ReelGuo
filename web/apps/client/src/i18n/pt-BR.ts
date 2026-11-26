@@ -190,7 +190,7 @@ const ptBR: Dict = {
     sub: "Reprodução · Dados locais · Sobre",
     playback: "Reprodução",
     muteOnStartup: "Começar sem som",
-    muteOnStartupSub: "Ativado por padrão: sempre abre sem som. Desativado, lembra o último estado do som. Vale na próxima abertura.",
+    muteOnStartupSub: "Ativado, sempre abre sem som. Desativado (padrão), abre com som e lembra sua última escolha. Vale na próxima abertura.",
     localData: "Dados locais",
     library: "Registros neste aparelho",
     librarySub: "{{favs}} favoritos · {{history}} no histórico",
@@ -465,6 +465,8 @@ const ptBR: Dict = {
     prev: "Ep. anterior",
     next: "Próximo ep.",
     last: "Este é o último episódio",
+    first: "Este é o primeiro episódio",
+    soundOn: "Ativar som",
     pipFailed: "Não foi possível abrir o picture-in-picture",
   },
   nav: {

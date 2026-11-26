@@ -1,5 +1,6 @@
 import Hls, { ErrorTypes, Events, type ErrorData } from "hls.js";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { registerVideo } from "./sound";
 
 export type VideoSurfaceHandle = {
   el: () => HTMLVideoElement | null;
@@ -35,7 +36,7 @@ type Props = {
   onError?: (message: string) => void;
   /** The signed URL expired (403 from the edge): fetch a fresh one. */
   onExpired?: (at: number) => void;
-  /** The browser refused unmuted autoplay; the player falls back to muted. */
+  /** The browser refused to start with sound; the video plays muted until the viewer taps (state/ui soundBlocked). */
   onAutoplayMuted?: () => void;
 };
 
@@ -146,6 +147,12 @@ export const VideoSurface = forwardRef<VideoSurfaceHandle, Props>(function Video
     });
   };
 
+  // Sound changes reach the element inside the viewer's tap (player/sound.ts).
+  useEffect(() => {
+    const video = videoRef.current;
+    return video ? registerVideo(video) : undefined;
+  }, []);
+
   useEffect(() => {
     attach(props.src, props.startAt ?? 0);
     return () => {
@@ -214,7 +221,7 @@ export const VideoSurface = forwardRef<VideoSurfaceHandle, Props>(function Video
       ref={videoRef}
       poster={props.poster ?? undefined}
       playsInline
-      // Starts muted so autoplay is allowed everywhere; unmuting is remembered.
+      // With sound unless the viewer muted it; tryPlay falls back to muted where the browser requires it.
       muted={props.muted}
       preload="auto"
       controls={props.controls}

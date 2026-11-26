@@ -10,7 +10,7 @@ import { href, Link } from "../router";
 import { CommentsPanel } from "../social/Comments";
 import { useReport } from "../social/Report";
 import { togglePost, useAuth } from "../state/auth";
-import { useUi } from "../state/ui";
+import { soundOff, useUi } from "../state/ui";
 import { BRAND, BRAND_SHORT } from "../brand";
 import { t } from "../i18n";
 
@@ -30,7 +30,8 @@ function cleanHtml(html: string): string {
 
 /** One 吃瓜 post: cover (plays the linked series inline), article, actions and comments. */
 export function PostPage({ id }: { id: number }) {
-  const { muted, volume, toast } = useUi();
+  const { volume, blockSound, toast } = useUi();
+  const muted = useUi(soundOff);
   const post = usePost(id);
   const [playing, setPlaying] = useState(false);
   const linked = post.data?.series ?? null;
@@ -61,7 +62,7 @@ export function PostPage({ id }: { id: number }) {
             </div>
             <div className="relative mt-5 w-full rounded-[14px] overflow-hidden bg-black" style={{ aspectRatio: "16 / 9" }}>
               {playing && play.data ? (
-                <VideoSurface src={play.data.video_url} poster={play.data.poster} active muted={muted} volume={volume} rate={1} fit="contain" controls />
+                <VideoSurface src={play.data.video_url} poster={play.data.poster} active muted={muted} volume={volume} rate={1} fit="contain" controls onAutoplayMuted={blockSound} />
               ) : (
                 <button className="absolute inset-0" aria-label={t("player.play")} onClick={() => (linked ? setPlaying(true) : toast(t("post.noVideo")))}>
                   <Img src={post.data.cover} eager />

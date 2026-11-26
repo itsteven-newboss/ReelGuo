@@ -187,7 +187,7 @@ const zhCN = {
     sub: "外观 · 播放 · 本地数据 · 关于",
     playback: "播放",
     muteOnStartup: "启动时静音",
-    muteOnStartupSub: "默认开启，每次打开都静音；关闭后记住上次的静音状态。下次打开生效。",
+    muteOnStartupSub: "开启后每次打开都静音；关闭时（默认）有声音，并记住你上次的选择。下次打开生效。",
     localData: "本地数据",
     library: "本机记录",
     librarySub: "{{favs}} 部收藏 · {{history}} 条观看记录",
@@ -454,6 +454,8 @@ const zhCN = {
     prev: "上一集",
     next: "下一集",
     last: "已是最后一集",
+    first: "已是第一集",
+    soundOn: "开启声音",
     pipFailed: "画中画开启失败",
   },
   nav: {

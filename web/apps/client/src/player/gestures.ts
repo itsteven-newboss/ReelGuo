@@ -6,7 +6,8 @@
  *   double tap     -> play / pause
  *   long press     -> 2x speed while held; slide up past LOCK_SLIDE_PX and release to lock 2x
  *   horizontal drag-> scrub (full width = full duration), seek on release
- *   vertical drag  -> left to the native scroll-snap (next / previous item)
+ *   vertical drag  -> follows the finger (pan); released far or fast enough it is a swipe: up = next episode,
+ *                     down = previous episode (the series player; the surface sets touch-action: none for it)
  */
 
 export const TAP_MAX_MS = 260;
@@ -19,6 +20,11 @@ export const DRAG_START_PX = 16;
 export const HORIZONTAL_RATIO = 1.2;
 /** ReelGuo addition: scrubbing never starts within this distance of a screen edge (iOS back swipe). */
 export const EDGE_GUARD_PX = 24;
+/** A vertical drag released at least this far is a swipe. */
+export const SWIPE_MIN_PX = 72;
+/** A quick flick (released within FLICK_MS) needs only this far. */
+export const FLICK_PX = 36;
+export const FLICK_MS = 300;
 
 export type GesturePhase = "idle" | "pressing" | "hold" | "scrub" | "pan";
 
@@ -47,7 +53,13 @@ export type GestureEffect =
   | { type: "scrub"; target: number; fraction: number }
   | { type: "scrub-end"; target: number | null }
   | { type: "single-tap-pending" }
-  | { type: "double-tap" };
+  | { type: "double-tap" }
+  /** A vertical drag in progress: dy from the press point (negative = up). */
+  | { type: "pan"; dy: number }
+  /** The drag ended without being a swipe. */
+  | { type: "pan-end" }
+  /** Swipe up = next, down = previous. */
+  | { type: "swipe"; dir: "next" | "prev" };
 
 export const initialGesture: GestureState = {
   phase: "idle", startX: 0, startY: 0, startT: 0, base: 0, duration: 0, width: 1,
@@ -92,11 +104,12 @@ export function pointerMove(s: GestureState, e: { x: number; y: number }): Resul
       return scrubTo({ ...s, phase: "scrub" }, dx, [{ type: "cancel-long-press-timer" }]);
     }
     if (Math.abs(dy) > DRAG_START_PX || Math.abs(dx) > DRAG_START_PX) {
-      return { state: { ...s, phase: "pan" }, effects: [{ type: "cancel-long-press-timer" }] };
+      return { state: { ...s, phase: "pan" }, effects: [{ type: "cancel-long-press-timer" }, { type: "pan", dy }] };
     }
     return { state: s, effects: [] };
   }
 
+  if (s.phase === "pan") return { state: s, effects: [{ type: "pan", dy }] };
   if (s.phase === "scrub") return scrubTo(s, dx, []);
   return { state: s, effects: [] };
 }
@@ -124,6 +137,14 @@ export function pointerUp(s: GestureState, e: { x: number; y: number; t: number;
         return { state: { ...reset, lastTapAt: -Infinity }, effects: [...effects, { type: "double-tap" }] };
       }
       return { state: { ...reset, lastTapAt: e.t }, effects: [...effects, { type: "single-tap-pending" }] };
+    }
+    case "pan": {
+      const dx = e.x - s.startX;
+      const dy = e.y - s.startY;
+      const vertical = Math.abs(dy) > Math.abs(dx) * HORIZONTAL_RATIO;
+      const far = Math.abs(dy) >= SWIPE_MIN_PX || (Math.abs(dy) >= FLICK_PX && e.t - s.startT <= FLICK_MS);
+      if (!e.cancelled && vertical && far) return { state: reset, effects: [{ type: "swipe", dir: dy < 0 ? "next" : "prev" }] };
+      return { state: reset, effects: [{ type: "pan-end" }] };
     }
     default:
       return { state: reset, effects: [] };

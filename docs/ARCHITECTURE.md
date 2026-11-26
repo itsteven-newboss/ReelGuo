@@ -847,12 +847,13 @@ can never show on another and no query needs a site filter. On staging they run 
 | Hosting | One origin: static app files plus `/api/*` and `/media/*` routed to ASP.NET (Caddy in `infra/`). With a CDN, media moves to its own host (`Media:PublicBaseUrl`). |
 | PWA | Manifest with PNG icons (192, 512, maskable, Apple touch icon) and a service worker. The service worker caches only the app files and never caches `/api` or `/media`. |
 | HLS | hls.js where MediaSource or ManagedMediaSource exists; the browser's native HLS otherwise. Fatal network and media errors get up to 4 recoveries. |
-| Autoplay | Starts muted and inline; unmuting is remembered. |
+| Autoplay and sound | Plays inline **with sound** by default; the sound button (phone: top right; desktop: control bar, or M) mutes, and the choice is remembered on the device (`rg.sound`). Where the browser refuses to start with sound (no tap on the page yet, e.g. a link opened straight into a series), the video plays muted with a 开启声音 button, and the viewer's first tap, click or key press anywhere turns sound on (`state/ui.ts` `soundBlocked`). Sound changes reach the video inside that gesture (`player/sound.ts`), as iOS Safari and Chrome require. |
+| Episode swipe (phones) | On the series page, swiping up plays the next episode and down the previous one; the video follows the finger and springs back on a short drag (72 px, or 36 px within 300 ms; `player/gestures.ts`). 互动剧 are not swiped: the choices decide. The next episode's start is fetched ahead while one plays. |
 | Fullscreen | Mobile uses a fixed full-viewport stage. Landscape video tries the device's orientation lock and otherwise rotates the stage with CSS. Desktop uses element fullscreen and picture-in-picture. |
 | Routing | Every page has a real URL (History API, `src/router.ts`); back and forward move between pages. Sheets, fullscreen and dialogs take their own history entry and close first on back. |
 | iOS edge swipe | Scrubbing never starts within 24 px of the screen edge. |
 | Shareable links | Every route is shareable: `/video/{id}/ep-{n}` (old `?ep=` links still work), `/c/{slug}?sort=`, `/topics/{id}`, `/ranks/{kind}`, `/post/{id}`, `/search?q=`, `/go-home`, … (full list in UI-REFERENCE §2). |
-| Settings | 启动时静音 (mute on start; on by default, as in the reference), clear caches and on-device records, version, legal links. The site is dark only, like the reference. |
+| Settings | 启动时静音 (mute on start; off by default, so sound is on), clear caches and on-device records, version, legal links. The site is dark only, like the reference. |
 | Age gate | Asked on the first visit and remembered on the device. Nothing is visible behind it: the server-rendered page text (§9.13) sits beneath it, covered, for search engines. |
 | App stores | Apple and Google don't accept adult apps. Distribution is the web/PWA plus the 下载 App landing page (`/app/home`): the APK, the desktop installers, and how to add the site to the iPhone home screen. |
 | Wake lock | The screen stays on while a video plays (Screen Wake Lock API, taken again when the page comes back). |

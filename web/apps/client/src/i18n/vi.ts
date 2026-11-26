@@ -185,7 +185,7 @@ const vi: Dict = {
     sub: "Phát video · Dữ liệu trên máy · Giới thiệu",
     playback: "Phát video",
     muteOnStartup: "Tắt tiếng khi mở",
-    muteOnStartupSub: "Bật mặc định: luôn tắt tiếng mỗi lần mở. Khi tắt, ứng dụng nhớ trạng thái tiếng lần trước. Có hiệu lực ở lần mở sau.",
+    muteOnStartupSub: "Khi bật, luôn tắt tiếng mỗi lần mở. Khi tắt (mặc định), có âm thanh và nhớ lựa chọn lần trước của bạn. Có hiệu lực ở lần mở sau.",
     localData: "Dữ liệu trên máy",
     library: "Lịch sử trên thiết bị này",
     librarySub: "{{favs}} phim đã lưu · {{history}} lượt xem",
@@ -452,6 +452,8 @@ const vi: Dict = {
     prev: "Tập trước",
     next: "Tập sau",
     last: "Đây là tập cuối",
+    first: "Đây là tập đầu tiên",
+    soundOn: "Bật âm thanh",
     pipFailed: "Không mở được hình trong hình",
   },
   nav: {
