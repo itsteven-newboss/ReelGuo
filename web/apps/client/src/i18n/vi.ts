@@ -1,6 +1,6 @@
 import type { Dict } from "./zh-CN";
 
-/** Tiếng Việt (vpinedrama.com). The same keys as zh-CN.ts; machine-checked, to be reviewed by a native speaker. */
+/** Tiếng Việt (ypinedrama.com). The same keys as zh-CN.ts; machine-checked, to be reviewed by a native speaker. */
 const vi: Dict = {
   common: {
     loading: "Đang tải…",

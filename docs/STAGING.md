@@ -471,7 +471,7 @@ about US$12 for a month.
 ## 6b. More sites on this server (country sites)
 
 The server can run other sites next to the main one (黄月短剧): **yelrama.com** (Indonesia, Bahasa Indonesia),
-**vpinedrama.com** (Vietnam, Tiếng Việt) and **apinedrama.com** (Brazil, Português). Each is the same app under its own
+**ypinedrama.com** (Vietnam, Tiếng Việt) and **apinedrama.com** (Brazil, Português). Each is the same app under its own
 name, icon and language (`web\sites\<key>\site.json`), with **its own database, admin console and admin accounts,
 videos, channels, viewers, coins and orders**. Nothing is shared between sites except the code and the server: a
 video uploaded in Yelrama's admin console only exists on Yelrama.
@@ -495,7 +495,7 @@ video uploaded in Yelrama's admin console only exists on Yelrama.
 
    ```powershell
    .\scripts\staging\add-site.ps1 -Site yelrama -AppUrl https://yelrama.com -AdminHost admin.yelrama.com
-   .\scripts\staging\add-site.ps1 -Site vpinedrama -AppUrl https://vpinedrama.com -AdminHost admin.vpinedrama.com
+   .\scripts\staging\add-site.ps1 -Site ypinedrama -AppUrl https://ypinedrama.com -AdminHost admin.ypinedrama.com
    .\scripts\staging\add-site.ps1 -Site apinedrama -AppUrl https://apinedrama.com -AdminHost admin.apinedrama.com
    .\scripts\staging\update.ps1
    ```
@@ -532,6 +532,10 @@ video uploaded in Yelrama's admin console only exists on Yelrama.
   ones you need: `rollback.ps1 -RestoreBackup reelguo-….dump,reelguo_yelrama-….dump`; each goes back to its own site.
 - **Take a site off the server:** `add-site.ps1 -Site yelrama -Remove`, then `ops.ps1 config`. Its services are
   removed; its database and files are kept.
+- **A site renamed in the code** (its `web\sites` folder has a new key, as vpinedrama became ypinedrama on
+  2026-11-27): update the code first, then `add-site.ps1 -Site <old key> -Remove` (it works without the old folder),
+  add the new key with `add-site.ps1` as above and run `update.ps1`. The new key starts with its own empty database
+  and a new admin password; the old site's database (`reelguo_<old key>`) and settings stay until you remove them.
 - **Name, icon, language:** `web\sites\<key>\site.json` (name, short name, domain, language, logo text) and its icon
   `Assets\sites\<key>.jpg` (`pnpm brand:icons` writes every site's icons). The viewer site's text is in
   `web\apps\client\src\i18n\<locale>.ts`, the server's (search-engine pages, iPhone profile, default channels) in
@@ -577,7 +581,7 @@ video uploaded in Yelrama's admin console only exists on Yelrama.
 | `REELGUO_COS_FOLDER` | Storage folder under `videos/` for uploads from the series editor (`reelguo`). The folder upload page picks its own. |
 | `REELGUO_COS_CDN_HOST` | Optional: a CDN domain bound to the bucket that forwards the query string. Empty plays from the bucket. |
 | `REELGUO_COS_PLAYBACK_MINUTES`, `REELGUO_COS_UPLOAD_MINUTES` | How long a viewer's link (30) and an upload link (360) work. |
-| `REELGUO_SITES` | The other sites on this server (§6b), for example `yelrama,vpinedrama,apinedrama`. Written by `add-site.ps1`. |
+| `REELGUO_SITES` | The other sites on this server (§6b), for example `yelrama,ypinedrama,apinedrama`. Written by `add-site.ps1`. |
 
 After editing the file, run `ops.ps1 config`. Each other site has its own settings in
 `C:\reelguo-staging\sites\<key>\site.env`, with the same names: its address (`REELGUO_APP_URL`), admin address,

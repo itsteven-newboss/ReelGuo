@@ -346,7 +346,7 @@ viewers once a choice point has 100 choices.
 seven-scene example 《深夜来客（互动剧示例）》 with three endings, the last one paid; 好感度 rises when you open the
 door and help her, and 「替她隐瞒」 only shows at 好感度 ≥ 2.
 
-## 9c. Country sites (Yelrama, VpineDrama, ApineDrama)
+## 9c. Country sites (Yelrama, Ypinedrama, ApineDrama)
 
 Each country site is its own deployment: its own admin console and admins, videos, channels, viewers and orders. On
 staging they share the server (docs/STAGING.md §6b: `add-site.ps1`, then `update.ps1`).

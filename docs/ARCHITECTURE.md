@@ -815,7 +815,7 @@ scene that something leads to is refused by the admin API first (`scene_in_use`)
 ### 9.16 Country sites (one codebase, several sites) ✅
 
 The same code runs several sites, each under its own domain, name, icon and language: 黄月短剧 (zh-CN, the main site),
-Yelrama (id), VpineDrama (vi) and ApineDrama (pt-BR). **Each site is a separate deployment** with its own database,
+Yelrama (id), Ypinedrama (vi) and ApineDrama (pt-BR). **Each site is a separate deployment** with its own database,
 admin console and admins, videos, channels, viewers, coins and orders; nothing is shared at runtime, so one site's data
 can never show on another and no query needs a site filter. On staging they run side by side on one server
 (docs/STAGING.md §6b): one API and worker pair per site, one Caddy choosing by host name.

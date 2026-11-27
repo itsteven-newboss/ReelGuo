@@ -1,0 +1,12 @@
+{
+  "key": "ypinedrama",
+  "name": "Ypinedrama",
+  "short": "Ypinedrama",
+  "locale": "vi",
+  "domain": "ypinedrama.com",
+  "wordmark": ["Ypine", "drama"],
+  "description": "Ypinedrama · Phim ngắn AI và phim ngắn độc quyền, xem trực tuyến",
+  "icon": "Assets/sites/ypinedrama.jpg",
+  "iconStyle": "tile",
+  "nativeApps": false
+}

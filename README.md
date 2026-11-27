@@ -42,7 +42,7 @@ Purchases in development use a sandbox payment provider: 充值 (top up) opens a
 | Everything in containers | `REELGUO_MEDIA_KEY=… REELGUO_JWT_KEY=… REELGUO_ADMIN_PASSWORD=… docker compose -f infra/docker-compose.yml --profile app up --build` |
 | Prepare videos for the folder upload | `powershell -ExecutionPolicy Bypass -File scripts\prepare-videos.ps1 -Source <folder>`: H.264/AAC, faststart, about 2 Mbit/s, into `<folder>-upload` (docs/STAGING.md §6) |
 | Change a site's icon | Replace its picture (`"icon"` in `web/sites/<key>/site.json`: `Assets/huangyueai-moon-icon.png` for 黄月短剧, any transparent PNG, 1024 px or more keeps the app icons sharp; `Assets/sites/<key>.jpg` for the country sites, a square app icon), run `pnpm brand:icons` (or `--site <key>`), commit what it writes. It makes the page mark (lossless WebP), favicons, install icons, the iPhone profile icon and 黄月短剧's app icons. |
-| Build a country site | `REELGUO_SITE=yelrama pnpm --filter @reelguo/client build` (also `vpinedrama`, `apinedrama`; the admin console the same way). Staging does it for every site (docs/STAGING.md §6b). |
+| Build a country site | `REELGUO_SITE=yelrama pnpm --filter @reelguo/client build` (also `ypinedrama`, `apinedrama`; the admin console the same way). Staging does it for every site (docs/STAGING.md §6b). |
 | Deploy the media edge | see `edge/wrangler.toml` |
 | Takedown drill | `node scripts/takedown-drill.mjs --series <test id> --restore` (RUNBOOK §3) |
 | Staging: first setup / update / rollback | `scripts\staging\setup.ps1` / `update.ps1` / `rollback.ps1` (docs/STAGING.md) |

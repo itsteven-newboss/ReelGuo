@@ -20,7 +20,7 @@
     and files are kept.
 
 .PARAMETER Site
-    The site's key: a folder of web\sites (yelrama, vpinedrama, apinedrama).
+    The site's key: a folder of web\sites (yelrama, ypinedrama, apinedrama).
 
 .PARAMETER AppUrl
     The site's address, for example https://yelrama.com (www. is served as well).
@@ -57,9 +57,13 @@ if (-not (Test-Path $SettingsFile)) { Stop-WithError "$SettingsFile does not exi
 
 $key = $Site.Trim().ToLowerInvariant()
 $known = @(Get-ChildItem $WebSitesDir -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'site.json') } | ForEach-Object { $_.Name })
-if ($key -notmatch '^[a-z0-9-]+$' -or $known -notcontains $key) { Stop-WithError "There is no site '$Site' in web\sites. Sites: $($known -join ', ')." }
+# -Remove also takes a site this server still lists whose web\sites folder is gone (renamed or deleted in the code).
+$listed = @(Get-SiteKeys) -contains $key
+if ($key -notmatch '^[a-z0-9-]+$' -or ($known -notcontains $key -and -not ($Remove -and $listed))) {
+    if ($Remove) { Write-Ok "Site '$key' is not on this server (REELGUO_SITES): nothing to remove."; exit 0 }
+    Stop-WithError "There is no site '$Site' in web\sites. Sites: $($known -join ', ')."
+}
 if ($key -eq 'huangyue') { Stop-WithError 'huangyue is the main site of this server (staging.env), not one to add.' }
-$info = Get-SiteInfo $key
 
 if ($Remove) {
     Write-Step "Removing site $key from this server"
@@ -78,6 +82,7 @@ if ($Remove) {
     exit 0
 }
 
+$info = Get-SiteInfo $key
 Write-Step "Site ${key}: $($info.name) ($($info.locale))"
 New-Item -ItemType Directory -Force -Path (Join-Path $SitesDir $key) | Out-Null
 $isNew = -not (Test-Path (Get-SiteSettingsFile $key))
@@ -87,6 +92,8 @@ $taken = @(foreach ($k in @('') + @(Get-SiteKeys | Where-Object { $_ -ne $key })
     Use-Site $k { [pscustomobject]@{ Api = [int](Get-Setting 'REELGUO_API_PORT' '5080'); Admin = [int](Get-Setting 'REELGUO_ADMIN_PORT' '8081') } }
 })
 $webPort = [int](Get-MainSetting 'REELGUO_WEB_PORT' '80')
+# Read here: inside the Use-Site block, $PSBoundParameters is that block's own (always empty).
+$adminHostGiven = $PSBoundParameters.ContainsKey('AdminHost')
 
 Use-Site $key {
     if ($AppUrl) { Set-Setting 'REELGUO_APP_URL' $AppUrl.Trim().TrimEnd('/') }
@@ -95,7 +102,7 @@ Use-Site $key {
         Set-Setting 'REELGUO_APP_URL' $answer.Trim().TrimEnd('/')
     }
     if ((Get-Setting 'REELGUO_APP_URL') -notmatch '^https://[^/\s]+$') { Stop-WithError "The address must look like https://$($info.domain) (got '$(Get-Setting 'REELGUO_APP_URL')')." }
-    if ($PSBoundParameters.ContainsKey('AdminHost')) { Set-Setting 'REELGUO_ADMIN_HOST' $AdminHost.Trim() }
+    if ($adminHostGiven) { Set-Setting 'REELGUO_ADMIN_HOST' $AdminHost.Trim() }
 
     if ((Get-Setting 'REELGUO_API_PORT') -eq '') {
         $p = 5081
@@ -128,6 +135,7 @@ Use-Site $key {
 
 Set-Setting 'REELGUO_SITES' ((@(Get-SiteKeys) + @($key) | Select-Object -Unique) -join ',')
 Protect-StagingHome
+Write-Step "Checking the settings of every site on this server ($key's are saved)"
 Test-SettingsReady
 Add-DeployRecord 'add-site' "$key $(Use-Site $key { Get-Setting 'REELGUO_APP_URL' })"
 

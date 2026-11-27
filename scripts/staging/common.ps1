@@ -131,7 +131,7 @@ function Get-AppHost {
 # Sites (REELGUO_SITES in staging.env; each with C:\reelguo-staging\sites\<key>\site.env)
 # ---------------------------------------------------------------------------------------------------------------
 
-# The keys of the other sites on this server, as in web\sites\<key> (REELGUO_SITES=yelrama,vpinedrama).
+# The keys of the other sites on this server, as in web\sites\<key> (REELGUO_SITES=yelrama,ypinedrama).
 function Get-SiteKeys {
     return @((Get-MainSetting 'REELGUO_SITES') -split '[,;\s]+' | Where-Object { $_ } | ForEach-Object { $_.Trim().ToLowerInvariant() } | Select-Object -Unique)
 }
@@ -266,7 +266,7 @@ function Test-SettingsReady {
     $ports = @{}
     $buckets = @{}
     foreach ($key in Get-SiteKeys) {
-        if (-not (Test-Path (Join-Path $WebSitesDir "$key\site.json"))) { Stop-WithError "REELGUO_SITES lists '$key', but the code has no web\sites\$key\site.json." }
+        if (-not (Test-Path (Join-Path $WebSitesDir "$key\site.json"))) { Stop-WithError "REELGUO_SITES lists '$key', but the code has no web\sites\$key\site.json. If the site was renamed or dropped: .\scripts\staging\add-site.ps1 -Site $key -Remove" }
         if (-not (Test-Path (Get-SiteSettingsFile $key))) { Stop-WithError "Site '$key' has no settings yet ($(Get-SiteSettingsFile $key)). Run .\scripts\staging\add-site.ps1 -Site $key ..." }
         Use-Site $key { Test-SiteSettings }
     }
