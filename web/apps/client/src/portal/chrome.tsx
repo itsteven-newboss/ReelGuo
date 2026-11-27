@@ -75,16 +75,15 @@ const MARK = (() => {
  * Brand lockup, laid out like the reference's logo: the mark, 黄月短剧 with a small AI, and the address under it.
  * `scale` is px per em: 10 gives 160 × 58.7. Styles: .rg-logo in index.css.
  * A site with a Latin name ("wordmark" in its site.json) shows its app icon and the name in two colours, as on the
- * icon: "yel" white, "rama" yellow, ".com" small under its end.
+ * icon: "yel" white, "rama" yellow. No ".com": the icon already carries the address.
  */
 export function Wordmark({ scale = 10 }: { scale?: number }) {
   if (SITE.wordmark) {
     const [light, accent] = SITE.wordmark;
-    const tld = SITE.domain.startsWith(light + accent) ? SITE.domain.slice(light.length + accent.length) : "";
     return (
       <span className="rg-logo rg-logo--latin" style={{ fontSize: scale }} aria-hidden="true">
         <BrandMark fit={Math.round(4.4 * scale)} className="rg-logo__tile" />
-        <span className="rg-logo__word"><span className="rg-logo__wt">{light}</span><span className="rg-logo__hl">{accent}</span>{tld && <span className="rg-logo__tld">{tld}</span>}</span>
+        <span className="rg-logo__word"><span className="rg-logo__wt">{light}</span><span className="rg-logo__hl">{accent}</span></span>
       </span>
     );
   }

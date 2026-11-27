@@ -8,7 +8,7 @@ export interface SiteInfo {
   short: string;
   /** BCP 47 language of the viewer site (the admin console stays Chinese): zh-CN, id, vi, pt-BR. */
   locale: string;
-  /** The site's address without https://, shown in the logo. */
+  /** The site's address without https:// (BRAND_DOMAIN). The header logo leaves it out: the icon carries it. */
   domain: string;
   /** Latin logo text in two parts, drawn white then yellow ("yel" + "rama"). Absent: the Chinese lockup. */
   wordmark?: [string, string];
