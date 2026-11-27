@@ -37,8 +37,16 @@ export function setSession(session: AdminSession | null) {
   queryClient.setQueryData(SESSION_KEY, session);
 }
 
+/**
+ * Signs out, then shows the login form. The session entry is set to null, never removed: App watches that entry, and
+ * queryClient.clear() would detach it (the page then stayed on the console until a reload). The other cached data
+ * (the previous admin's lists) is dropped. The form comes back even if the server can't be reached.
+ */
 export async function signOut() {
-  await api.POST("/api/admin/auth/logout");
-  queryClient.clear();
-  setSession(null);
+  try {
+    await api.POST("/api/admin/auth/logout");
+  } finally {
+    setSession(null);
+    queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== SESSION_KEY[0] || query.queryKey[1] !== SESSION_KEY[1] });
+  }
 }

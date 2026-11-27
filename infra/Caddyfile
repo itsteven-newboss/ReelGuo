@@ -65,6 +65,8 @@
 	}
 	handle {
 		root * /srv/admin
+		# sw.js only removes a viewer service worker left on an admin address; browsers must always see the latest.
+		header /sw.js Cache-Control "no-cache"
 		try_files {path} /index.html
 		file_server
 	}
